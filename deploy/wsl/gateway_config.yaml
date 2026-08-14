@@ -1,0 +1,8 @@
+# Documentation-only template; Compose supplies these as Gateway-only environment values.
+upstream_base_url_env: MODEL_UPSTREAM_BASE_URL
+upstream_model_env: MODEL_UPSTREAM_MODEL
+upstream_api_key_env: MODEL_API_KEY
+runtime_aliases_env: MODEL_ALIASES
+allowed_route: /v1/chat/completions
+runtime_holds_api_key: false
+

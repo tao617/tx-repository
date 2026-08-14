@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+env_file="${1:-}"
+profile="${2:-}"
+task_name="${3:-}"
+run_name="${4:-}"
+command_name="${5:-run}"
+config_name="${6:-}"
+
+if [[ -z "$env_file" || -z "$task_name" || -z "$run_name" ]]; then
+  echo "usage: $0 PATH_TO_ENV_AGENT {api|local} PUBLIC_TASK_FILENAME RUN_NAME [run|baseline] [CONFIG_FILENAME]" >&2
+  exit 2
+fi
+if [[ "$profile" != "api" && "$profile" != "local" ]]; then
+  echo "profile must be api or local" >&2
+  exit 2
+fi
+if [[ "$command_name" != "run" && "$command_name" != "baseline" ]]; then
+  echo "command must be run or baseline" >&2
+  exit 2
+fi
+if [[ -z "$config_name" ]]; then
+  if [[ "$command_name" == "run" ]]; then
+    config_name="agent_${profile}.yaml"
+  else
+    config_name="baseline_${profile}.yaml"
+  fi
+fi
+if [[ ! "$task_name" =~ ^[A-Za-z0-9._-]+$ || ! "$run_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "task and run names must be plain filenames" >&2
+  exit 2
+fi
+if [[ ! -f "$env_file" || "$(stat -c %a "$env_file")" != "600" ]]; then
+  echo "credential file must exist with mode 0600" >&2
+  exit 2
+fi
+if [[ ! "$config_name" =~ ^[A-Za-z0-9._-]+\.yaml$ || ! -f "$repo_root/configs/$config_name" ]]; then
+  echo "configuration must be a plain YAML filename under configs" >&2
+  exit 2
+fi
+exec 9>/run/lock/findver-evaluation.lock
+if ! flock -n 9; then
+  echo "another FinDVer Agent, handoff, or Scorer operation holds the evaluation lock" >&2
+  exit 2
+fi
+if [[ ! -f "$repo_root/runtime_data/public/$task_name" ]]; then
+  echo "public task file does not exist" >&2
+  exit 2
+fi
+if [[ -e "$repo_root/runs/$run_name" ]]; then
+  echo "run directory already exists" >&2
+  exit 2
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
+: "${MODEL_BASE_URL:?MODEL_BASE_URL is required}"
+: "${MODEL_API_KEY:?MODEL_API_KEY is required}"
+: "${MODEL_NAME:?MODEL_NAME is required}"
+
+export MODEL_UPSTREAM_BASE_URL="$MODEL_BASE_URL"
+export MODEL_UPSTREAM_MODEL="$MODEL_NAME"
+if [[ "$profile" == "api" ]]; then
+  export MODEL_ALIASES="external-model-name"
+else
+  export MODEL_ALIASES="local-small-model"
+fi
+
+proxy_url="${GATEWAY_PROXY_URL:-}"
+export GATEWAY_HTTP_PROXY="$proxy_url"
+export GATEWAY_HTTPS_PROXY="$proxy_url"
+export GATEWAY_NO_PROXY="127.0.0.1,localhost,model-gateway"
+
+runtime_uid="${FINDVER_UID:-1000}"
+runtime_gid="${FINDVER_GID:-1000}"
+install -d -m 0700 -o "$runtime_uid" -g "$runtime_gid" "$repo_root/runs/$run_name"
+export FINDVER_RUN_OUTPUT_DIR="$repo_root/runs/$run_name"
+export FINDVER_RUN_NAME="$run_name"
+
+compose=(
+  docker compose --project-name findver-agent
+  -f "$repo_root/deploy/wsl/docker-compose.agent.yaml" --profile "$profile"
+)
+cleanup() {
+  "${compose[@]}" down --remove-orphans >/dev/null
+}
+trap cleanup EXIT
+
+if docker ps -q --filter label=com.docker.compose.project=findver-scorer | grep -q .; then
+  echo "refusing to run while the Private Scorer project is active" >&2
+  exit 2
+fi
+"${compose[@]}" up -d model-gateway
+"${compose[@]}" run --rm agent-runtime \
+  python -m findver_agent.cli "$command_name" \
+  --config "/app/configs/$config_name" \
+  --tasks "/public/$task_name" \
+  --reports /reports \
+  --run-dir "/output/$run_name"
+if [[ "${GATEWAY_DIAGNOSTICS:-0}" == "1" ]]; then
+  "${compose[@]}" logs --no-color --tail 50 model-gateway >&2
+fi

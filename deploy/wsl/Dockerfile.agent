@@ -1,0 +1,20 @@
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN groupadd --gid 65532 runtime \
+    && useradd --uid 65532 --gid 65532 --no-create-home --shell /usr/sbin/nologin runtime
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src/findver_agent ./src/findver_agent
+RUN python -m pip install .
+COPY configs ./configs
+COPY contracts ./contracts
+
+USER 65532:65532
+CMD ["python", "-m", "findver_agent.cli", "--help"]
+

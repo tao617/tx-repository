@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+src/findver_agent/__init__.py
+src/findver_agent/schemas.py
+src/findver_agent.egg-info/PKG-INFO
+src/findver_agent.egg-info/SOURCES.txt
+src/findver_agent.egg-info/dependency_links.txt
+src/findver_agent.egg-info/entry_points.txt
+src/findver_agent.egg-info/requires.txt
+src/findver_agent.egg-info/top_level.txt

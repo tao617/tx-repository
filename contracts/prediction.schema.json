@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://findver.local/contracts/prediction.schema.json",
+  "title": "FinDVer prediction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["example_id", "label", "status", "evidence_ids", "explanation"],
+  "properties": {
+    "example_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "label": {"type": ["string", "null"], "enum": ["entailed", "refuted", null]},
+    "status": {"type": "string", "enum": ["completed", "invalid", "error"]},
+    "evidence_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "explanation": {"type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "completed"}}},
+      "then": {"properties": {"label": {"enum": ["entailed", "refuted"]}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["invalid", "error"]}}},
+      "then": {"properties": {"label": {"type": "null"}}}
+    }
+  ]
+}
+

@@ -1,0 +1,85 @@
+name: findver-agent
+
+services:
+  agent-runtime:
+    profiles: [api, local]
+    build:
+      context: ../..
+      dockerfile: deploy/wsl/Dockerfile.agent
+    image: findver-agent-runtime:dev
+    user: "${FINDVER_UID:-1000}:${FINDVER_GID:-1000}"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    volumes:
+      - type: bind
+        source: ../../runtime_data/public
+        target: /public
+        read_only: true
+      - type: bind
+        source: ../../financial_reports
+        target: /reports
+        read_only: true
+      - type: bind
+        source: "${FINDVER_RUN_OUTPUT_DIR:-../../runs/run}"
+        target: "/output/${FINDVER_RUN_NAME:-run}"
+    networks:
+      - agent-internal
+    depends_on:
+      model-gateway:
+        condition: service_healthy
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+  model-gateway:
+    profiles: [api, local]
+    build:
+      context: ../..
+      dockerfile: deploy/wsl/Dockerfile.gateway
+    image: findver-model-gateway:dev
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    networks:
+      agent-internal:
+        aliases:
+          - model-gateway
+      gateway-egress: {}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      FINDVER_GATEWAY_UPSTREAM_BASE_URL: "${MODEL_UPSTREAM_BASE_URL:-http://host.docker.internal:8000/v1}"
+      FINDVER_GATEWAY_UPSTREAM_MODEL: "${MODEL_UPSTREAM_MODEL:-external-model-name}"
+      FINDVER_GATEWAY_MODEL_ALIASES: "${MODEL_ALIASES:-external-model-name,local-small-model}"
+      FINDVER_GATEWAY_UPSTREAM_API_KEY: "${MODEL_API_KEY:-}"
+      FINDVER_GATEWAY_TIMEOUT_SECONDS: "${MODEL_TIMEOUT_SECONDS:-180}"
+      HTTP_PROXY: "${GATEWAY_HTTP_PROXY:-}"
+      HTTPS_PROXY: "${GATEWAY_HTTPS_PROXY:-}"
+      NO_PROXY: "${GATEWAY_NO_PROXY:-127.0.0.1,localhost,model-gateway}"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).read()"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+networks:
+  agent-internal:
+    internal: true
+  gateway-egress:
+    internal: false
+

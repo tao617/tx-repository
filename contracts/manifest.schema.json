@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://findver.local/contracts/manifest.schema.json",
+  "title": "FinDVer sealed submission manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "status",
+    "model",
+    "backend",
+    "agent_enabled",
+    "git_commit",
+    "config_sha256",
+    "public_tasks_sha256",
+    "predictions_sha256",
+    "expected_examples",
+    "submitted_examples",
+    "started_at",
+    "completed_at"
+  ],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "status": {"const": "sealed"},
+    "model": {"type": "string", "minLength": 1},
+    "backend": {"type": "string", "enum": ["api", "local", "mock"]},
+    "agent_enabled": {"type": "boolean"},
+    "git_commit": {"type": "string", "minLength": 1},
+    "config_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "public_tasks_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "predictions_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "expected_examples": {"type": "integer", "minimum": 0},
+    "submitted_examples": {"type": "integer", "minimum": 0},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"}
+  }
+}
+

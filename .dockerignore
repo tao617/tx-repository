@@ -1,0 +1,14 @@
+# Runtime images use an explicit allowlist. Public tasks and reports are mounted.
+**
+!pyproject.toml
+!README.md
+!src/
+!src/**
+!configs/
+!configs/**
+!contracts/
+!contracts/**
+!deploy/
+!deploy/wsl/
+!deploy/wsl/**
+

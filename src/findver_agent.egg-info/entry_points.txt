@@ -1,0 +1,2 @@
+[console_scripts]
+findver-agent = findver_agent.cli:main

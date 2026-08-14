@@ -1,0 +1,102 @@
+project: findver-agent
+current_phase: final-hardening-and-experiment-matrix
+current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
+  Scorer experiment system.
+last_completed_phase: final-hardening-and-experiment-matrix
+last_git_commit: 817d1eaf7c5ca7c427192441640223ff662bbe3a
+fixed_constraints:
+- runtime_has_no_gold_feedback_or_scorer_access
+- separate_agent_and_scorer_compose_projects
+- separate_networks_mounts_and_build_contexts
+- scorer_network_mode_none
+- host_only_one_way_submission_handoff
+- fixed_gateway_is_only_model_network_path
+- one_session_per_question
+- no_example_specific_answer_rules
+decisions:
+- preserve_original_single_call_path_as_baseline
+- use_shared_text_json_action_protocol
+- use_structured_question_state_and_raw_jsonl_traces
+- use_dev_feedback_dev_holdout_final_hidden_split_policy
+- Python 3.12 is used on Ubuntu 24.04; package metadata will support 3.11 and newer.
+- The released testmini annotations are development-only and are not represented as
+  final hidden evaluation.
+- Runtime model requests carry no provider credential; only Model Gateway owns upstream
+  authentication.
+- Runtime exposes exactly search_report, read_paragraphs, calculator, and submit_answer;
+  no generic file or execution skill exists.
+- Both Agent and Baseline use the same text JSON submit protocol; native provider
+  tool calling is excluded from the primary experiment.
+- Sealed archives contain exactly predictions.jsonl, manifest.json, and SHA256SUMS
+  and are chmod 0444.
+- Docker remains root-controlled in WSL; the development user was not added to the
+  docker group.
+- Use mirror.gcr.io as the Docker Hub pull-through cache.
+- The external .env.agent is sourced only at Gateway launch; secrets are never copied
+  into the repository or image.
+- The external .env.scorer remains unused because the deterministic scorer is networkless
+  and must not hold API credentials.
+- Gateway egress is direct by default; host proxy variables are not inherited.
+- Use one host flock across Agent, handoff, and Scorer operations.
+- Mount only the exact per-run output directory into Agent Runtime.
+- Publish a history-free allowlisted Agent release; exclude legacy gold, scorer, outputs,
+  and unrestricted inference paths.
+files_changed:
+- README.md
+- configs/agent_no_calculator_api.yaml
+- configs/agent_no_calculator_local.yaml
+- configs/agent_review_api.yaml
+- configs/agent_review_local.yaml
+- configs/baseline_bm25_api.yaml
+- configs/baseline_bm25_local.yaml
+- configs/baseline_cot_api.yaml
+- configs/baseline_cot_local.yaml
+- docs/EXPERIMENT_PLAN.md
+- docs/EXPERIMENT_REPORT.md
+- docs/RUNBOOK_WSL.md
+- docs/SCORER_PROTOCOL.md
+- docs/SESSION_HANDOFF.md
+- docs/STATE.yaml
+- scripts/context_checkpoint.py
+- scripts/summarize_run.py
+- src/findver_agent/config.py
+- src/findver_agent/orchestrator.py
+- src/findver_agent/prompt_builder.py
+- src/findver_agent/state.py
+- tests/integration/test_agent_ablations.py
+- tests/unit/test_context_checkpoint.py
+- tests/unit/test_experiment_configs.py
+- tests/unit/test_summarize_run.py
+tests_passed:
+- 9 unit tests
+- three JSON Schemas validate
+- 700 public tasks contain only allowed fields
+- 15 unit tests
+- 32 unit tests
+- 39 unit and integration tests
+- all four configs load and CLI help succeeds
+- 47 unit, integration, and security tests
+- deterministic archive and runtime context allowlist checks
+- 55 pytest tests; Compose expands; both images build; container hardening metadata
+  matches the contract.
+- 61 Agent tests and 10 independent Scorer tests
+- Mock API/local Docker paths, real API direct Gateway path, one-way handoff, dev
+  scoring, and aggregate-only final mode
+- 68 Agent tests and 10 independent Scorer tests
+- Rebuilt Agent, Gateway, and Scorer images; post-audit Mock Agent and aggregate-only
+  Scorer runs passed
+- Two real API direct-egress smoke runs completed without inherited host proxy variables
+- 69 Agent tests and 10 independent Scorer tests
+tests_failed:
+- pytest unavailable before development environment bootstrap
+known_issues:
+- repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
+- Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
+  only its prompt semantics will be retained.
+- One upstream Starlette deprecation warning.
+- One upstream Starlette TestClient deprecation warning remains.
+next_actions:
+- Create a history-free public release commit from the strict allowlist and force-with-lease
+  push it to tao617/tx-repository main.
+blocked_items: []
+last_updated: '2026-08-14T19:40:36+08:00'

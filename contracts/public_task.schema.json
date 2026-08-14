@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://findver.local/contracts/public_task.schema.json",
+  "title": "FinDVer public task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["example_id", "statement", "report"],
+  "properties": {
+    "example_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "statement": {"type": "string", "minLength": 1},
+    "report": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^/\\\\]+\\.json$"
+    }
+  }
+}
+

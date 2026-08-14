@@ -1,0 +1,13 @@
+httpx<1,>=0.27
+pydantic<3,>=2.8
+PyYAML<7,>=6
+
+[dev]
+jsonschema<5,>=4.23
+pytest<9,>=8.3
+pytest-asyncio<1,>=0.24
+pytest-cov<7,>=5
+
+[gateway]
+fastapi<1,>=0.115
+uvicorn<1,>=0.30
