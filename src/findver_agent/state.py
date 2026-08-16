@@ -69,6 +69,8 @@ class QuestionState(BaseModel):
     last_observation: dict[str, Any] | None = None
     prediction: Prediction | None = None
     review_requested: bool = False
+    review_completed: bool = False
+    draft_submission: dict[str, Any] | None = None
     closed: bool = False
 
     @classmethod

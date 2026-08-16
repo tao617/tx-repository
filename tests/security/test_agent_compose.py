@@ -25,12 +25,16 @@ def test_agent_runtime_has_only_internal_network_and_allowed_mounts():
     assert agent["cap_drop"] == ["ALL"]
     assert "no-new-privileges:true" in agent["security_opt"]
     targets = {volume["target"] for volume in agent["volumes"]}
-    assert targets == {"/public", "/reports", "/output/${FINDVER_RUN_NAME:-run}"}
+    assert targets == {
+        "/public", "/reports", "/retrieval", "/output/${FINDVER_RUN_NAME:-run}"
+    }
     assert all("docker.sock" not in str(volume) for volume in agent["volumes"])
     assert all("scorer" not in str(volume).lower() for volume in agent["volumes"])
     output = next(volume for volume in agent["volumes"] if volume["target"].startswith("/output/"))
     assert output["source"] == "${FINDVER_RUN_OUTPUT_DIR:-../../runs/run}"
     assert output.get("read_only") is not True
+    retrieval = next(volume for volume in agent["volumes"] if volume["target"] == "/retrieval")
+    assert retrieval["read_only"] is True
     assert all(volume.get("read_only") is True for volume in agent["volumes"] if volume is not output)
 
 

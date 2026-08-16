@@ -58,9 +58,18 @@ class BaselineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     prompt_type: Literal["direct", "cot"] = "direct"
-    retrieval: Literal["none", "fixed_bm25"] = "none"
+    retrieval: Literal["none", "fixed_bm25", "fixed_embedding"] = "none"
+    retrieval_file: Path | None = None
     top_k: int = Field(default=10, ge=1, le=10)
     concurrency: int = Field(default=1, ge=1, le=32)
+
+    @model_validator(mode="after")
+    def fixed_embedding_requires_file(self) -> "BaselineConfig":
+        if self.retrieval == "fixed_embedding" and self.retrieval_file is None:
+            raise ValueError("retrieval_file is required for fixed_embedding")
+        if self.retrieval != "fixed_embedding" and self.retrieval_file is not None:
+            raise ValueError("retrieval_file is only valid for fixed_embedding")
+        return self
 
 
 class AppConfig(BaseModel):

@@ -8,9 +8,10 @@ task_name="${3:-}"
 run_name="${4:-}"
 command_name="${5:-run}"
 config_name="${6:-}"
+resume_flag="${7:-}"
 
 if [[ -z "$env_file" || -z "$task_name" || -z "$run_name" ]]; then
-  echo "usage: $0 PATH_TO_ENV_AGENT {api|local} PUBLIC_TASK_FILENAME RUN_NAME [run|baseline] [CONFIG_FILENAME]" >&2
+  echo "usage: $0 PATH_TO_ENV_AGENT {api|local} PUBLIC_TASK_FILENAME RUN_NAME [run|baseline] [CONFIG_FILENAME] [--resume]" >&2
   exit 2
 fi
 if [[ "$profile" != "api" && "$profile" != "local" ]]; then
@@ -19,6 +20,10 @@ if [[ "$profile" != "api" && "$profile" != "local" ]]; then
 fi
 if [[ "$command_name" != "run" && "$command_name" != "baseline" ]]; then
   echo "command must be run or baseline" >&2
+  exit 2
+fi
+if [[ -n "$resume_flag" && "$resume_flag" != "--resume" ]]; then
+  echo "seventh argument must be --resume when provided" >&2
   exit 2
 fi
 if [[ -z "$config_name" ]]; then
@@ -49,9 +54,16 @@ if [[ ! -f "$repo_root/runtime_data/public/$task_name" ]]; then
   echo "public task file does not exist" >&2
   exit 2
 fi
-if [[ -e "$repo_root/runs/$run_name" ]]; then
-  echo "run directory already exists" >&2
-  exit 2
+if [[ "$resume_flag" == "--resume" ]]; then
+  if [[ ! -d "$repo_root/runs/$run_name" || ! -f "$repo_root/runs/$run_name/run_metadata.json" ]]; then
+    echo "resume requires an existing run directory with metadata" >&2
+    exit 2
+  fi
+else
+  if [[ -e "$repo_root/runs/$run_name" ]]; then
+    echo "run directory already exists; pass --resume to continue it" >&2
+    exit 2
+  fi
 fi
 
 set -a

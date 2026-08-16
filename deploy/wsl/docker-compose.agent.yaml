@@ -26,6 +26,10 @@ services:
         target: /reports
         read_only: true
       - type: bind
+        source: ../../runtime_data/retrieval
+        target: /retrieval
+        read_only: true
+      - type: bind
         source: "${FINDVER_RUN_OUTPUT_DIR:-../../runs/run}"
         target: "/output/${FINDVER_RUN_NAME:-run}"
     networks:

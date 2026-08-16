@@ -1,0 +1,42 @@
+schema_version: 1
+matrix_id: findver-api7-formal-v1
+purpose: formal-700
+backend: api
+model: env:MODEL_NAME
+code_commit: auto
+private_scorer_root: /home/taoxi/secure/FinDVer-Scorer-Private
+task:
+  path: runtime_data/public/tasks.jsonl
+  sha256: f51d29db5200c7166f74c9f7920ad8557d5db46a3b700f49513ef2932d1da0f5
+retrieval:
+  path: runtime_data/retrieval/findver_embedding3large_top10.json
+  sha256: 2c29496e6762b3df2d51b01c246800b0512d396090785199d414703dbbf752e5
+  retriever: text-embedding-3-large
+  top_k: 10
+generation:
+  temperature: 1
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+conditions:
+  - condition_id: B0_API
+    config: configs/B0_API.yaml
+    command: baseline
+  - condition_id: B1_API
+    config: configs/B1_API.yaml
+    command: baseline
+  - condition_id: B2_API
+    config: configs/B2_API.yaml
+    command: baseline
+  - condition_id: B3_API
+    config: configs/B3_API.yaml
+    command: baseline
+  - condition_id: A0_API
+    config: configs/A0_API.yaml
+    command: run
+  - condition_id: A1_API
+    config: configs/A1_API.yaml
+    command: run
+  - condition_id: A2_API
+    config: configs/A2_API.yaml
+    command: run

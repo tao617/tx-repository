@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: final-hardening-and-experiment-matrix
+current_phase: api-seven-condition-formal-complete
 current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
   Scorer experiment system.
-last_completed_phase: final-hardening-and-experiment-matrix
-last_git_commit: 817d1eaf7c5ca7c427192441640223ff662bbe3a
+last_completed_phase: api-seven-condition-formal-complete
+last_git_commit: 9a4144fa7059b026f7e444514f403fcca064875d
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -41,32 +41,21 @@ decisions:
 - Mount only the exact per-run output directory into Agent Runtime.
 - Publish a history-free allowlisted Agent release; exclude legacy gold, scorer, outputs,
   and unrestricted inference paths.
+- Use run one-e2e-a1-20260814 as the end-to-end gate before the paid full matrix
+- Use official FinDVer commit e8bb237def4ce555a606a45edba22666e31df248 test/testmini
+  embedding-3-large top-10 outputs; current tasks are covered 700/700.
+- Keep formal API configs separate from legacy baseline configs and freeze temperature=1,
+  top_p=1, seed=7, max_output_tokens=1024.
+- Scope Git safe.directory to the matrix process environment; do not modify global
+  Git configuration.
+- Treat model JSON formatting failures and max-step exhaustion as experimental invalid
+  results; do not retry or tune prompts.
+- Freeze formal results to matrix findver-api7-formal-v1, model deepseek-v4-flash,
+  and code commit 9a4144fa7059b026f7e444514f403fcca064875d
+- Record the public 700-task formal matrix as development evaluation, not a final-hidden
+  or leaderboard claim
 files_changed:
-- README.md
-- configs/agent_no_calculator_api.yaml
-- configs/agent_no_calculator_local.yaml
-- configs/agent_review_api.yaml
-- configs/agent_review_local.yaml
-- configs/baseline_bm25_api.yaml
-- configs/baseline_bm25_local.yaml
-- configs/baseline_cot_api.yaml
-- configs/baseline_cot_local.yaml
-- docs/EXPERIMENT_PLAN.md
 - docs/EXPERIMENT_REPORT.md
-- docs/RUNBOOK_WSL.md
-- docs/SCORER_PROTOCOL.md
-- docs/SESSION_HANDOFF.md
-- docs/STATE.yaml
-- scripts/context_checkpoint.py
-- scripts/summarize_run.py
-- src/findver_agent/config.py
-- src/findver_agent/orchestrator.py
-- src/findver_agent/prompt_builder.py
-- src/findver_agent/state.py
-- tests/integration/test_agent_ablations.py
-- tests/unit/test_context_checkpoint.py
-- tests/unit/test_experiment_configs.py
-- tests/unit/test_summarize_run.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -87,6 +76,29 @@ tests_passed:
   Scorer runs passed
 - Two real API direct-egress smoke runs completed without inherited host proxy variables
 - 69 Agent tests and 10 independent Scorer tests
+- Agent, Gateway, and Scorer images rebuilt from their separate build contexts
+- One-question real API A1 run completed with 3 model calls and a valid prediction
+- Sealed three-file archive verified, handed off read-only, and scored in dev-detailed
+  and final-aggregate modes
+- Exact API credential and base URL markers were absent from all run artifacts
+- 81 Agent unit, integration, and security tests
+- 10 independent Private Scorer tests
+- Agent, Gateway, and Scorer images rebuilt; Compose expands
+- Runtime container loaded all seven API configs and 700 B3 records with retrieval
+  mount RW=false
+- 81 Agent tests after the root-launch fix
+- 21 real API Pilot instances completed and archived
+- B0/B1 full-report requests succeeded without silent truncation or context errors
+- B2/B3 contexts ran; A0 calculator calls=0; A2 review gate completed on valid submissions
+- Pilot resume skipped all completed conditions; scorer inbox empty; Agent containers
+  stopped
+- Formal API matrix completed all seven conditions at 700/700 with archived status
+  and no condition errors
+- Seven sealed submissions were aggregate-only scored and privately archived; Scorer
+  inbox is empty and no experiment containers remain
+- 81 Agent tests and 10 independent Private Scorer tests passed after formal completion
+- Formal aggregate JSON/Markdown and tracked experiment report record accuracy, coverage,
+  invalid counts, comparisons, and runtime behavior
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -96,7 +108,7 @@ known_issues:
 - One upstream Starlette deprecation warning.
 - One upstream Starlette TestClient deprecation warning remains.
 next_actions:
-- Create a history-free public release commit from the strict allowlist and force-with-lease
-  push it to tao617/tx-repository main.
+- Treat the formal aggregate as the completed baseline; any optimization or rerun
+  is a new experiment requiring explicit authorization.
 blocked_items: []
-last_updated: '2026-08-14T19:40:36+08:00'
+last_updated: '2026-08-16T01:44:24+08:00'

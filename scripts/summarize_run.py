@@ -46,7 +46,8 @@ def summarize(
         raise ValueError("prediction count exceeds expected_examples")
 
     action_attempts: Counter[str] = Counter()
-    steps = model_calls = input_tokens = output_tokens = 0
+    steps = model_calls = input_tokens = output_tokens = calculator_calls = 0
+    max_steps_terminated = 0
     latency_ms = 0.0
     trace_files = sorted((run_dir / "traces").glob("*.jsonl"))
     for trace_path in trace_files:
@@ -72,6 +73,21 @@ def summarize(
                     action_name = payload.get("action")
                     if isinstance(action_name, str):
                         action_attempts[action_name] += 1
+                elif event_name == "tool_result" and {
+                    "expression",
+                    "result",
+                }.issubset(payload):
+                    calculator_calls += 1
+                elif event_name == "question_closed" and payload.get(
+                    "reason"
+                ) == "step budget exhausted":
+                    max_steps_terminated += 1
+
+    review_completed = 0
+    state_files = sorted((run_dir / "state").glob("*.json"))
+    for state_path in state_files:
+        state = _load_object(state_path)
+        review_completed += int(state.get("review_completed") is True)
 
     if not math.isfinite(latency_ms) or latency_ms < 0:
         raise ValueError("latency total must be finite and non-negative")
@@ -82,6 +98,9 @@ def summarize(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "latency_ms": round(latency_ms, 3),
+        "calculator_calls": calculator_calls,
+        "review_completed": review_completed,
+        "max_steps_terminated": max_steps_terminated,
         "action_attempts": dict(sorted(action_attempts.items())),
     }
     means = {
@@ -93,6 +112,9 @@ def summarize(
         "action_attempts": {
             name: round(count / expected, 6) for name, count in sorted(action_attempts.items())
         },
+        "calculator_calls": round(calculator_calls / expected, 6),
+        "review_completed": round(review_completed / expected, 6),
+        "max_steps_terminated": round(max_steps_terminated / expected, 6),
     }
     summary: dict[str, Any] = {
         "schema_version": 1,

@@ -20,6 +20,7 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     run = tmp_path / "run"
     traces = run / "traces"
     traces.mkdir(parents=True)
+    (run / "state").mkdir()
     (run / "run_metadata.json").write_text(
         json.dumps(
             {
@@ -58,7 +59,15 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
                 "payload": {"input_tokens": 80, "output_tokens": 10, "latency_ms": 49.5},
             },
             {"event": "action", "payload": {"action": "submit_answer"}},
+            {"event": "tool_result", "payload": {"expression": "1+1", "result": 2}},
+            {
+                "event": "question_closed",
+                "payload": {"status": "invalid", "reason": "step budget exhausted"},
+            },
         ],
+    )
+    (run / "state" / "one.json").write_text(
+        json.dumps({"review_completed": True}), encoding="utf-8"
     )
 
     summary = MODULE.summarize(
@@ -76,6 +85,9 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
         "search_report": 1,
         "submit_answer": 1,
     }
+    assert summary["totals"]["calculator_calls"] == 1
+    assert summary["totals"]["review_completed"] == 1
+    assert summary["totals"]["max_steps_terminated"] == 1
     assert summary["estimated_cost_usd"]["total"] == 0.00024
     assert "private-id" not in rendered
     assert "secret statement" not in rendered

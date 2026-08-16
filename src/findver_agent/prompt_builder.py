@@ -80,7 +80,11 @@ class PromptBuilder:
                 observation_text = f"{observation_text[:4000]}…"
         else:
             observation_text = "null"
-        if self._agent_config.pre_submit_review and state.review_requested:
+        if (
+            self._agent_config.pre_submit_review
+            and state.review_requested
+            and not state.review_completed
+        ):
             final_instruction = "Review all evidence and call submit_answer with the final answer now."
         elif self._agent_config.pre_submit_review and state.remaining_steps <= 2:
             final_instruction = (

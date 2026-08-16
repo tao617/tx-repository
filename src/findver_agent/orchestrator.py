@@ -147,6 +147,7 @@ class AgentOrchestrator:
                     )
                 elif isinstance(action, SubmitAction):
                     if self.config.pre_submit_review and not state.review_requested:
+                        state.draft_submission = action.arguments.model_dump(mode="json")
                         state.review_requested = True
                         observation = {
                             "accepted": False,
@@ -155,8 +156,14 @@ class AgentOrchestrator:
                         }
                         self._complete_step(state, trace, observation)
                         continue
+                    if self.config.pre_submit_review and not state.review_completed:
+                        state.review_completed = True
                     prediction = submit.execute(**action.arguments.model_dump())
-                    observation = {"accepted": True, "prediction": prediction.model_dump(mode="json")}
+                    observation = {
+                        "accepted": True,
+                        "review_completed": state.review_completed,
+                        "prediction": prediction.model_dump(mode="json"),
+                    }
                     self._complete_step(state, trace, observation)
                     state.prediction = prediction
                     state.closed = True

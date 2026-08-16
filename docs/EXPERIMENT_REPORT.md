@@ -1,49 +1,76 @@
-# Experiment Report
+# FinDVer API 七条件正式实验报告
 
-Date: 2026-08-14  
-Environment: WSL Ubuntu 24.04, Python 3.12, Docker 29.1.3, Compose 2.40.3
+完成时间：2026-08-16（Asia/Shanghai）
+运行环境：WSL Ubuntu 24.04、Python 3.12、Docker 29.1.3、Compose 2.40.3
 
-## Completed validation
+## 实验身份与冻结项
 
-- Agent repository tests: 69 passed; one Starlette deprecation warning.
-- Independent Private Scorer tests: 10 passed.
-- Agent Runtime, Model Gateway, and Private Scorer images built successfully without passing host proxy variables.
-- Build contexts are controlled by separate allowlists; private gold, credentials, scorer source, feedback, and run artifacts are excluded from Agent/Gateway images.
-- Container definitions enforce read-only roots, all capabilities dropped, `no-new-privileges`, no host ports, and no Docker socket.
-- Agent network is internal; only the Gateway has egress. Scorer network mode is `none`.
-- Agent, handoff, and Scorer launchers share one host `flock`, pin their Compose project names, and reject overlapping execution.
-- Agent output is an exact per-run bind mount rather than a writable mount of the whole runs directory. Scorer output is canonicalized and constrained below its private output root.
+- 矩阵：`findver-api7-formal-v1`
+- 模型：`deepseek-v4-flash`
+- 冻结代码提交：`9a4144fa7059b026f7e444514f403fcca064875d`
+- 正式运行区间：2026-08-15 02:03:32 至 2026-08-16 01:35:04（Asia/Shanghai）
+- 任务数：每个条件 700 条，共 4,900 个实例
+- 任务 SHA256：`f51d29db5200c7166f74c9f7920ad8557d5db46a3b700f49513ef2932d1da0f5`
+- B3 固定检索 SHA256：`2c29496e6762b3df2d51b01c246800b0512d396090785199d414703dbbf752e5`
+- 统一生成参数：temperature=1、top_p=1、seed=7、max_output_tokens=1024
 
-## End-to-end runs
+条件定义：B0 为完整报告直接作答，B1 为完整报告 CoT，B2 为 BM25 top-10 CoT，B3 为官方 Embedding top-10 CoT；A0 为无 Calculator 的 Agent，A1 为启用 Calculator 的 Agent，A2 在 A1 基础上加入强制提交前复核。
 
-| Run | Backend | Result | Evidence path |
-|---|---|---|---|
-| `smoke-agent` | API Mock | completed | Agent → Gateway → fixed Mock upstream → sealed archive → host handoff → Scorer |
-| `smoke-local` | Local Mock | completed | Same text-JSON protocol with local model alias |
-| `real-api-smoke-8` | real API | completed | Direct Gateway egress; 3 model calls, Search → Read → Submit, 0 errors |
-| `real-api-smoke-9` | real API | completed | Default direct launcher; stack stopped automatically |
-| `smoke-post-audit` | API Mock | completed | Rebuilt images and exact per-run output mount after final isolation fixes |
-| `post-audit-final` | networkless Scorer | scored | Aggregate-only output contained only `summary.json`, including subset aggregates |
+正式执行保持既定顺序 B0 → B1 → B2 → B3 → A0 → A1 → A2。基础设施中断只使用同一矩阵的 `--resume`，没有更换模型、任务、检索文件、配置或提示词，也没有针对结果重试或调参。
 
-The real API credential was loaded at runtime from the external mode-`0600` `.env.agent`; it was not copied into an image or repository. A marker scan found no API key, authorization header, bearer token, or base URL field in successful run artifacts. Direct container egress was the working configuration; the host proxy was not inherited.
+## 正式结果
 
-Several preceding `real-api-smoke-*` directories retain failed diagnostics from proxy experiments. They are ignored local run artifacts and are excluded from the public release.
+| 条件 | Overall | IE | MATH | KNOW | Completed | Coverage | Invalid |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| B0_API | 70.71% | 85.60% | 63.20% | 61.50% | 700 | 82.14% | 125 |
+| B1_API | 66.57% | 79.60% | 61.60% | 56.50% | 700 | 76.71% | 163 |
+| B2_API | 65.14% | 73.20% | 59.60% | 62.00% | 700 | 76.71% | 163 |
+| B3_API | 60.00% | 64.40% | 61.60% | 52.50% | 700 | 74.14% | 181 |
+| A0_API | 73.71% | 84.40% | 67.20% | 68.50% | 700 | 87.00% | 91 |
+| A1_API | 73.14% | 84.00% | 66.80% | 67.50% | 700 | 84.57% | 108 |
+| A2_API | 69.29% | 80.00% | 65.20% | 61.00% | 700 | 79.14% | 146 |
 
-## Scorer protocol run
+A0_API 的 Overall 最高（73.71%），并且 Invalid 最少（91）、Coverage 最高（87.00%）。B0_API 是表现最好的单调用基线（70.71%）。
 
-The one-question Mock archive was scored against the 700-record development gold file. This demonstrated the fixed denominator: 699 missing predictions were counted wrong. Development mode produced a private feedback file; final-aggregate mode produced only `summary.json`. Overall plus IE/Numeric/Knowledge aggregate metrics were emitted without per-example or gold content.
+## 核心对照
 
-The released `testmini` annotations are development-only. No final-hidden gold was available, so no hidden-set score is claimed.
+| 对照 | 口径 | Overall 差值（百分点） | 结论 |
+|---|---|---:|---|
+| B0_API → B1_API | 完整报告下 CoT 效果 | -4.143 | 无提升 |
+| B1_API → B2_API | 完整报告与 BM25 top-10 | -1.429 | 无提升 |
+| B2_API → B3_API | BM25 与 Embedding top-10 | -5.143 | 无提升 |
+| B2_API → A0_API | 固定 RAG 与完整 Agent 系统 | +8.571 | 有实质改善；IE/MATH/KNOW 分别 +11.2/+7.6/+6.5 点 |
+| A0_API → A1_API | Calculator 增益 | -0.571 | 无提升 |
+| A1_API → A2_API | Mandatory Review 增益 | -3.857 | 无提升 |
 
-## Experiment support
+本次冻结实验支持的主要结论是：完整 Agent 相对固定 BM25 RAG 有一致的实质改善；单独启用 Calculator 和强制 Review 没有带来精度增益。CoT、截断到 top-10，以及本次采用的官方 Embedding top-10 均未优于相应对照。以上是该模型、任务集和冻结配置下的实验结论，不外推为一般规律。
 
-Both API and local configuration families now cover B0 direct, B1 chain-of-thought, B2 fixed BM25, A0 Agent without calculator, A1 full Agent, and A2 mandatory pre-submit review. The run summarizer reports aggregate steps, action attempts, tokens, model calls, latency, invalid rate, and optional cost without copying questions, evidence, or sample IDs.
+## 运行行为
 
-## Credential decision
+| 条件 | Model calls | 平均步数 | Max-step 终止率 | Calculator calls | Review 完成率 | Input tokens | Output tokens | 平均耗时 ms |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| B0_API | 700 | 1.000 | 0.00% | 0 | 0.00% | 34,469,308 | 399,312 | 6,356.3 |
+| B1_API | 700 | 1.000 | 0.00% | 0 | 0.00% | 34,475,608 | 437,283 | 6,163.3 |
+| B2_API | 700 | 1.000 | 0.00% | 0 | 0.00% | 2,399,648 | 415,209 | 6,112.2 |
+| B3_API | 700 | 1.000 | 0.00% | 0 | 0.00% | 2,156,819 | 434,444 | 6,135.8 |
+| A0_API | 3,370 | 4.816 | 13.00% | 0 | 0.00% | 5,216,926 | 1,642,459 | 26,411.4 |
+| A1_API | 3,643 | 5.209 | 15.43% | 129 | 0.00% | 5,557,084 | 1,854,507 | 27,251.7 |
+| A2_API | 4,612 | 6.599 | 20.86% | 130 | 79.14% | 7,455,305 | 2,383,317 | 33,277.9 |
 
-- `.env.agent`: sourced only by the controlled launcher and injected only into the fixed Model Gateway.
-- `.env.scorer`: not used or copied. The deterministic Private Scorer has no network and must not hold an API credential.
+A2 的复核门确实生效，但额外步骤、调用和时延没有转化为更高精度；其 20.86% max-step 终止率与 79.14% Review 完成率也说明强制复核受到步数上限约束。A1 共调用 Calculator 129 次，但相对 A0 没有精度增益。
 
-## Experiment limits
+## 完整性与隔离验证
 
-The validation used deterministic Mock API/local runs and small real-model smoke runs. A full 700-item paid API comparison was not launched without an explicit spend/time budget. The six-condition matrix, common submit protocol, sealing path, independent scorer, and aggregate efficiency reporter are ready for that controlled run.
+- 七个条件均完成 700/700，状态为 `completed`，阶段为 `archived`，错误为空。
+- 每个条件均生成只含三种规定文件的 sealed archive，并完成 networkless `final-aggregate` 评分。
+- 私有归档包含 B0/B1/B2/B3/A0/A1/A2 七个条件；Scorer inbox 在归档后为空。
+- 正式矩阵目录包含七份聚合摘要以及 `aggregate.json`、`aggregate.md`。
+- 完成后 Agent、Model Gateway 和 Private Scorer 容器均已停止。
+- Runtime 与 Scorer 保持不同 Compose 项目、网络、挂载和构建上下文；Runtime 没有 gold、反馈或 Scorer 访问权。
+- API 凭据只由外部 mode-0600 `.env.agent` 注入固定 Gateway，未复制到仓库、镜像或报告。
+
+## 实验边界
+
+本报告使用当前公开 700 条任务和隔离的私有确定性 Scorer，仅报告聚合指标；没有逐题私有评分、gold 或反馈进入 Runtime。发布的 testmini 标注仍按开发评估处理，因此这里不声称 final-hidden 或官方排行榜成绩。
+
+`runs/` 与私有 Scorer 目录中的正式产物保持本地、非发布状态。仓库内报告只记录聚合结果、冻结身份和可复现实验流程。

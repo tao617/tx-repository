@@ -2,34 +2,24 @@
 
 ## Current state
 
-Phase `final-hardening-and-experiment-matrix` completed: Fixed audit findings, completed the six-condition API/local matrix, added aggregate efficiency reporting, refreshed release documentation, and validated rebuilt Docker flows.
+Phase `api-seven-condition-formal-complete` completed: Completed the frozen seven-condition real-API matrix: 4,900/4,900 instances, seven sealed aggregate-only scores, private archives, and the final aggregate report.
 
-- Git commit at checkpoint start: `817d1eaf7c5ca7c427192441640223ff662bbe3a`
-- Changed files: 25
+- Git commit at checkpoint start: `9a4144fa7059b026f7e444514f403fcca064875d`
+- Changed files: 1
 
 ## Diff summary
 
 ```text
-README.md                           | 130 +++++++-----------------------------
- docs/EXPERIMENT_PLAN.md             |  21 +++---
- docs/EXPERIMENT_REPORT.md           |  55 +++++++--------
- docs/RUNBOOK_WSL.md                 |  98 +++++++++++++--------------
- docs/SCORER_PROTOCOL.md             |   5 +-
- docs/SESSION_HANDOFF.md             |  31 ++++++---
- docs/STATE.yaml                     |  54 ++++++++++-----
- scripts/context_checkpoint.py       |   2 +-
- src/findver_agent/config.py         |   2 +
- src/findver_agent/orchestrator.py   |  13 +++-
- src/findver_agent/prompt_builder.py |  43 ++++++++----
- src/findver_agent/state.py          |   1 +
- 12 files changed, 209 insertions(+), 246 deletions(-)
+docs/EXPERIMENT_REPORT.md | 93 ++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 60 insertions(+), 33 deletions(-)
 ```
 
 ## Tests passed
 
-- 69 Agent tests and 10 independent Scorer tests
-- Rebuilt Agent, Gateway, and Scorer images; post-audit Mock Agent and aggregate-only Scorer runs passed
-- Two real API direct-egress smoke runs completed without inherited host proxy variables
+- Formal API matrix completed all seven conditions at 700/700 with archived status and no condition errors
+- Seven sealed submissions were aggregate-only scored and privately archived; Scorer inbox is empty and no experiment containers remain
+- 81 Agent tests and 10 independent Private Scorer tests passed after formal completion
+- Formal aggregate JSON/Markdown and tracked experiment report record accuracy, coverage, invalid counts, comparisons, and runtime behavior
 
 ## Tests failed or unavailable
 
@@ -51,4 +41,4 @@ pytest -q
 
 ## Next action
 
-Create a history-free public release commit from the strict allowlist and force-with-lease push it to tao617/tx-repository main.
+Treat the formal aggregate as the completed baseline; any optimization or rerun is a new experiment requiring explicit authorization.

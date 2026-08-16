@@ -106,6 +106,9 @@ async def test_pre_submit_review_requires_second_submission(tmp_path, task_and_r
     assert prediction.label.value == "entailed"
     assert state.step == 2
     assert state.review_requested is True
+    assert state.review_completed is True
+    assert state.draft_submission["label"] == "refuted"
+    assert state.last_observation["review_completed"] is True
     assert state.last_observation["accepted"] is True
     assert state.usage.model_calls == 2
 
