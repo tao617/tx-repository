@@ -16,6 +16,12 @@ ACTION = json.dumps(
             "evidence_ids": [],
             "explanation": "deterministic mock completion",
         },
+        "control": {
+            "evidence_status": "sufficient",
+            "missing_information": [],
+            "confidence": "high",
+            "risk_flags": [],
+        },
     },
     separators=(",", ":"),
 )

@@ -11,15 +11,15 @@ config_name="${6:-}"
 resume_flag="${7:-}"
 
 if [[ -z "$env_file" || -z "$task_name" || -z "$run_name" ]]; then
-  echo "usage: $0 PATH_TO_ENV_AGENT {api|local} PUBLIC_TASK_FILENAME RUN_NAME [run|baseline] [CONFIG_FILENAME] [--resume]" >&2
+  echo "usage: $0 PATH_TO_ENV_AGENT {api|local} PUBLIC_TASK_FILENAME RUN_NAME [run|baseline|iterative-rag] [CONFIG_PATH_UNDER_CONFIGS] [--resume]" >&2
   exit 2
 fi
 if [[ "$profile" != "api" && "$profile" != "local" ]]; then
   echo "profile must be api or local" >&2
   exit 2
 fi
-if [[ "$command_name" != "run" && "$command_name" != "baseline" ]]; then
-  echo "command must be run or baseline" >&2
+if [[ "$command_name" != "run" && "$command_name" != "baseline" && "$command_name" != "iterative-rag" ]]; then
+  echo "command must be run, baseline, or iterative-rag" >&2
   exit 2
 fi
 if [[ -n "$resume_flag" && "$resume_flag" != "--resume" ]]; then
@@ -29,8 +29,11 @@ fi
 if [[ -z "$config_name" ]]; then
   if [[ "$command_name" == "run" ]]; then
     config_name="agent_${profile}.yaml"
-  else
+  elif [[ "$command_name" == "baseline" ]]; then
     config_name="baseline_${profile}.yaml"
+  else
+    echo "iterative-rag requires an explicit config path" >&2
+    exit 2
   fi
 fi
 if [[ ! "$task_name" =~ ^[A-Za-z0-9._-]+$ || ! "$run_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -41,10 +44,25 @@ if [[ ! -f "$env_file" || "$(stat -c %a "$env_file")" != "600" ]]; then
   echo "credential file must exist with mode 0600" >&2
   exit 2
 fi
-if [[ ! "$config_name" =~ ^[A-Za-z0-9._-]+\.yaml$ || ! -f "$repo_root/configs/$config_name" ]]; then
-  echo "configuration must be a plain YAML filename under configs" >&2
+if [[ ! "$config_name" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\.yaml$ ]]; then
+  echo "configuration must be a safe relative YAML path under configs" >&2
   exit 2
 fi
+IFS='/' read -r -a config_segments <<< "$config_name"
+for segment in "${config_segments[@]}"; do
+  if [[ "$segment" == "." || "$segment" == ".." ]]; then
+    echo "configuration path cannot contain dot segments" >&2
+    exit 2
+  fi
+done
+config_path="$(realpath -e -- "$repo_root/configs/$config_name")"
+case "$config_path" in
+  "$repo_root/configs/"*) ;;
+  *)
+    echo "configuration must resolve beneath configs" >&2
+    exit 2
+    ;;
+esac
 exec 9>/run/lock/findver-evaluation.lock
 if ! flock -n 9; then
   echo "another FinDVer Agent, handoff, or Scorer operation holds the evaluation lock" >&2

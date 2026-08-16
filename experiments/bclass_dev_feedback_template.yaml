@@ -1,0 +1,59 @@
+schema_version: 1
+matrix_id: findver-bclass-dev-feedback-v1
+purpose: bclass-method-development-template
+evaluation_split: dev_feedback
+execution_authorized: false
+code_commit: auto
+task:
+  path: runtime_data/public/tasks.jsonl
+  sha256: f51d29db5200c7166f74c9f7920ad8557d5db46a3b700f49513ef2932d1da0f5
+retrieval:
+  path: runtime_data/retrieval/findver_embedding3large_top10.json
+  sha256: 2c29496e6762b3df2d51b01c246800b0512d396090785199d414703dbbf752e5
+  retriever: text-embedding-3-large
+  top_k: 10
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  max_context_tokens: 32768
+conditions:
+  - condition_id: BLC_FINDVER_COT
+    prompt_profile: findver_cot_json
+    api_config: configs/bclass/api/BLC_FINDVER_COT.yaml
+    local_config: configs/bclass/local/BLC_FINDVER_COT.yaml
+  - condition_id: BRAG10_FINDVER_COT
+    prompt_profile: findver_cot_json
+    api_config: configs/bclass/api/BRAG10_FINDVER_COT.yaml
+    local_config: configs/bclass/local/BRAG10_FINDVER_COT.yaml
+  - condition_id: BITER_RAG10
+    prompt_profile: findver_cot_json_fixed_loop
+    api_config: configs/bclass/api/BITER_RAG10.yaml
+    local_config: configs/bclass/local/BITER_RAG10.yaml
+  - condition_id: A_SCRATCH
+    prompt_profile: action_compatible_findver_v2
+    api_config: configs/bclass/api/A_SCRATCH.yaml
+    local_config: configs/bclass/local/A_SCRATCH.yaml
+  - condition_id: M0_RAG10_SEEDED
+    prompt_profile: legacy_action_v1
+    api_config: configs/bclass/api/M0_RAG10_SEEDED.yaml
+    local_config: configs/bclass/local/M0_RAG10_SEEDED.yaml
+  - condition_id: M1_BUDGET_AWARE
+    prompt_profile: action_compatible_findver_v2
+    api_config: configs/bclass/api/M1_BUDGET_AWARE.yaml
+    local_config: configs/bclass/local/M1_BUDGET_AWARE.yaml
+  - condition_id: M2_SELECTIVE_REVIEW
+    prompt_profile: action_compatible_findver_v2
+    api_config: configs/bclass/api/M2_SELECTIVE_REVIEW.yaml
+    local_config: configs/bclass/local/M2_SELECTIVE_REVIEW.yaml
+ablations:
+  scope: one-primary-model-dev-feedback-only
+  configs:
+    - configs/bclass/ablations/RAG3_SEEDED.yaml
+    - configs/bclass/ablations/RAG5_SEEDED.yaml
+    - configs/bclass/ablations/RAG10_SEEDED.yaml
+  required_artifacts:
+    top3: /retrieval/findver_embedding3large_top3.json
+    top5: /retrieval/findver_embedding3large_top5.json
+    top10: /retrieval/findver_embedding3large_top10.json

@@ -77,7 +77,12 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     )
     rendered = json.dumps(summary)
 
-    assert summary["rates"] == {"prediction_coverage": 1.0, "invalid": 0.5}
+    assert summary["rates"] == {
+        "prediction_coverage": 1.0,
+        "invalid": 0.5,
+        "strict_valid": 0.0,
+        "review_trigger": 0.0,
+    }
     assert summary["totals"]["steps"] == 2
     assert summary["totals"]["model_calls"] == 2
     assert summary["totals"]["input_tokens"] == 180

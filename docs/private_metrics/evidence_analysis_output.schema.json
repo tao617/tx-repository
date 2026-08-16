@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://findver.local/private/evidence-analysis-output.schema.json",
+  "title": "FinDVer aggregate evidence analysis output",
+  "description": "Aggregate-only output permitted to leave the Private Scorer boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "aggregateRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "numerator", "denominator"],
+      "properties": {
+        "value": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "numerator": {"type": "number", "minimum": 0},
+        "denominator": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "analysis",
+    "evidence_metrics",
+    "conditional_correctness",
+    "paired_statistics",
+    "stratified_analysis"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_id",
+        "candidate_run_id",
+        "baseline_run_id",
+        "examples",
+        "public_tasks_sha256",
+        "retrieval_file_sha256"
+      ],
+      "properties": {
+        "analysis_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "candidate_run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "baseline_run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "examples": {"type": "integer", "minimum": 1},
+        "public_tasks_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "retrieval_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "evidence_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_precision",
+        "evidence_recall",
+        "evidence_f1",
+        "all_gold_evidence_recall",
+        "initial_rag_recall",
+        "final_agent_evidence_recall",
+        "evidence_recovery_rate"
+      ],
+      "properties": {
+        "evidence_precision": {"$ref": "#/$defs/aggregateRate"},
+        "evidence_recall": {"$ref": "#/$defs/aggregateRate"},
+        "evidence_f1": {"$ref": "#/$defs/aggregateRate"},
+        "all_gold_evidence_recall": {"$ref": "#/$defs/aggregateRate"},
+        "initial_rag_recall": {"$ref": "#/$defs/aggregateRate"},
+        "final_agent_evidence_recall": {"$ref": "#/$defs/aggregateRate"},
+        "evidence_recovery_rate": {"$ref": "#/$defs/aggregateRate"}
+      }
+    },
+    "conditional_correctness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovered_evidence",
+        "full_initial_recall",
+        "partial_initial_recall",
+        "zero_initial_recall"
+      ],
+      "properties": {
+        "recovered_evidence": {"$ref": "#/$defs/aggregateRate"},
+        "full_initial_recall": {"$ref": "#/$defs/aggregateRate"},
+        "partial_initial_recall": {"$ref": "#/$defs/aggregateRate"},
+        "zero_initial_recall": {"$ref": "#/$defs/aggregateRate"}
+      }
+    },
+    "paired_statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paired_bootstrap_95ci", "mcnemar"],
+      "properties": {
+        "paired_bootstrap_95ci": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "metric",
+              "candidate_minus_baseline",
+              "lower",
+              "upper",
+              "confidence_level",
+              "resamples",
+              "seed"
+            ],
+            "properties": {
+              "metric": {"type": "string", "minLength": 1, "maxLength": 64},
+              "candidate_minus_baseline": {"type": "number"},
+              "lower": {"type": "number"},
+              "upper": {"type": "number"},
+              "confidence_level": {"const": 0.95},
+              "resamples": {"type": "integer", "minimum": 1000},
+              "seed": {"type": "integer", "minimum": 0}
+            }
+          }
+        },
+        "mcnemar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_correct_baseline_wrong",
+            "candidate_wrong_baseline_correct",
+            "statistic",
+            "p_value",
+            "method"
+          ],
+          "properties": {
+            "candidate_correct_baseline_wrong": {"type": "integer", "minimum": 0},
+            "candidate_wrong_baseline_correct": {"type": "integer", "minimum": 0},
+            "statistic": {"type": "number", "minimum": 0},
+            "p_value": {"type": "number", "minimum": 0, "maximum": 1},
+            "method": {"const": "two-sided-exact-binomial"}
+          }
+        }
+      }
+    },
+    "stratified_analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_length", "evidence_position", "position_groups_overlap"],
+      "properties": {
+        "document_length": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["short", "medium", "long"],
+          "properties": {
+            "short": {"$ref": "#/$defs/aggregateRate"},
+            "medium": {"$ref": "#/$defs/aggregateRate"},
+            "long": {"$ref": "#/$defs/aggregateRate"}
+          }
+        },
+        "evidence_position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["front", "middle", "back"],
+          "properties": {
+            "front": {"$ref": "#/$defs/aggregateRate"},
+            "middle": {"$ref": "#/$defs/aggregateRate"},
+            "back": {"$ref": "#/$defs/aggregateRate"}
+          }
+        },
+        "position_groups_overlap": {"const": true}
+      }
+    }
+  }
+}

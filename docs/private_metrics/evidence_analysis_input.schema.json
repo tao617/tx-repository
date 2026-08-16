@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://findver.local/private/evidence-analysis-input.schema.json",
+  "title": "FinDVer private paired evidence analysis input",
+  "description": "Scorer-private input. This object must never enter Agent Runtime or public results.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_id",
+    "candidate_run_id",
+    "baseline_run_id",
+    "public_tasks_sha256",
+    "retrieval_file_sha256",
+    "retriever",
+    "top_k",
+    "bootstrap",
+    "document_length_cutoffs",
+    "records"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "analysis_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "candidate_run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "baseline_run_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "public_tasks_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "retrieval_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "retriever": {
+      "enum": ["bm25", "text-embedding-3-large", "contriever-msmarco"]
+    },
+    "top_k": {"enum": [3, 5, 10]},
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resamples", "seed", "confidence_level"],
+      "properties": {
+        "resamples": {"type": "integer", "minimum": 1000},
+        "seed": {"type": "integer", "minimum": 0},
+        "confidence_level": {"const": 0.95}
+      }
+    },
+    "document_length_cutoffs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["short_max_paragraphs", "medium_max_paragraphs"],
+      "properties": {
+        "short_max_paragraphs": {"type": "integer", "minimum": 1},
+        "medium_max_paragraphs": {"type": "integer", "minimum": 2}
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "example_id",
+          "gold_label",
+          "candidate_label",
+          "baseline_label",
+          "gold_evidence_ids",
+          "candidate_evidence_ids",
+          "initial_rag_evidence_ids",
+          "final_agent_evidence_ids",
+          "document_paragraph_count"
+        ],
+        "properties": {
+          "example_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "gold_label": {"enum": ["entailed", "refuted"]},
+          "candidate_label": {"enum": ["entailed", "refuted", null]},
+          "baseline_label": {"enum": ["entailed", "refuted", null]},
+          "gold_evidence_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "candidate_evidence_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "initial_rag_evidence_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "final_agent_evidence_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "document_paragraph_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

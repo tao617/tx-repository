@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize non-sensitive efficiency metrics from one completed run."""
+"""Summarize aggregate-only reliability and efficiency metrics for one run."""
 
 from __future__ import annotations
 
@@ -9,6 +9,28 @@ import math
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+
+PHASES = (
+    "exploration",
+    "finalization",
+    "review",
+    "iterative_retrieval",
+    "legacy",
+    "baseline",
+)
+ERROR_KINDS = ("parse", "model", "skill", "protocol")
+TOOL_NAMES = ("search_report", "read_paragraphs", "calculator")
+SAFE_TERMINATION_REASONS = {
+    "step budget exhausted",
+    "submitted_during_exploration",
+    "submitted_during_finalization",
+    "review_completed",
+    "review_fallback",
+    "review_budget_exhausted",
+    "finalization_budget_exhausted",
+    "iterative_rag_finalized",
+}
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -31,6 +53,35 @@ def _load_predictions(path: Path) -> list[dict[str, Any]]:
     return predictions
 
 
+def _strict_valid(prediction: dict[str, Any]) -> bool:
+    evidence_ids = prediction.get("evidence_ids")
+    return (
+        prediction.get("status") == "completed"
+        and prediction.get("label") in {"entailed", "refuted"}
+        and isinstance(evidence_ids, list)
+        and all(type(item) is int and item >= 0 for item in evidence_ids)
+        and len(evidence_ids) == len(set(evidence_ids))
+        and isinstance(prediction.get("explanation"), str)
+        and bool(prediction["explanation"].strip())
+    )
+
+
+def _error_kind(payload: dict[str, Any], *, baseline: bool = False) -> str:
+    configured = payload.get("error_type")
+    if configured in ERROR_KINDS:
+        return str(configured)
+    message = str(payload.get("error", "")).casefold()
+    if "model error" in message or (baseline and "context" in message):
+        return "model"
+    if "skill error" in message or message.startswith("skillerror"):
+        return "skill"
+    return "parse"
+
+
+def _mean(value: int | float, denominator: int) -> float:
+    return round(value / denominator, 6)
+
+
 def summarize(
     run_dir: Path,
     *,
@@ -46,11 +97,24 @@ def summarize(
         raise ValueError("prediction count exceeds expected_examples")
 
     action_attempts: Counter[str] = Counter()
-    steps = model_calls = input_tokens = output_tokens = calculator_calls = 0
+    phase_attempts: Counter[str] = Counter()
+    trace_tool_calls: Counter[str] = Counter()
+    termination_reasons: Counter[str] = Counter()
+    phase_errors = {phase: Counter() for phase in PHASES}
+    model_calls = model_responses = input_tokens = output_tokens = 0
+    seed_paragraphs_from_trace = dynamic_paragraphs_from_trace = 0
+    review_triggers_from_trace = 0
     max_steps_terminated = 0
     latency_ms = 0.0
+    context_records = context_report_paragraphs = context_report_characters = 0
+    context_assembled_paragraphs = context_full_report = context_local_truncations = 0
+    provider_context_errors = 0
+    context_limits: Counter[str] = Counter()
+
     trace_files = sorted((run_dir / "traces").glob("*.jsonl"))
     for trace_path in trace_files:
+        trace_seed_count: int | None = None
+        trace_nonfull_context_count: int | None = None
         with trace_path.open(encoding="utf-8") as handle:
             for line_number, line in enumerate(handle, 1):
                 if not line.strip():
@@ -61,11 +125,15 @@ def summarize(
                 event_name = event.get("event")
                 payload = event.get("payload", {})
                 if not isinstance(payload, dict):
-                    raise ValueError(f"{trace_path.name}:{line_number} payload must be an object")
+                    raise ValueError(
+                        f"{trace_path.name}:{line_number} payload must be an object"
+                    )
                 if event_name == "model_request":
-                    steps += 1
-                elif event_name == "model_response":
                     model_calls += 1
+                    phase = payload.get("phase")
+                    phase_attempts[str(phase) if phase in PHASES else "legacy"] += 1
+                elif event_name == "model_response":
+                    model_responses += 1
                     input_tokens += int(payload.get("input_tokens", 0))
                     output_tokens += int(payload.get("output_tokens", 0))
                     latency_ms += float(payload.get("latency_ms", 0))
@@ -73,51 +141,182 @@ def summarize(
                     action_name = payload.get("action")
                     if isinstance(action_name, str):
                         action_attempts[action_name] += 1
-                elif event_name == "tool_result" and {
-                    "expression",
-                    "result",
-                }.issubset(payload):
-                    calculator_calls += 1
-                elif event_name == "question_closed" and payload.get(
-                    "reason"
-                ) == "step budget exhausted":
-                    max_steps_terminated += 1
+                elif event_name == "tool_result":
+                    skill = payload.get("skill")
+                    if skill in TOOL_NAMES:
+                        trace_tool_calls[str(skill)] += 1
+                    elif {"expression", "result"}.issubset(payload):
+                        trace_tool_calls["calculator"] += 1
+                elif event_name == "retrieval_seed_loaded":
+                    paragraph_ids = payload.get("paragraph_ids", [])
+                    if isinstance(paragraph_ids, list):
+                        trace_seed_count = len(paragraph_ids)
+                elif event_name == "dynamic_evidence_loaded":
+                    paragraph_ids = payload.get("paragraph_ids", [])
+                    if isinstance(paragraph_ids, list):
+                        dynamic_paragraphs_from_trace += len(paragraph_ids)
+                elif event_name == "review_triggered":
+                    review_triggers_from_trace += 1
+                elif event_name == "recoverable_error":
+                    phase = payload.get("phase")
+                    phase_name = str(phase) if phase in PHASES else "legacy"
+                    phase_errors[phase_name][_error_kind(payload)] += 1
+                elif event_name == "baseline_error":
+                    phase_errors["baseline"][_error_kind(payload, baseline=True)] += 1
+                    provider_context_errors += int(
+                        payload.get("provider_context_error") is True
+                    )
+                elif event_name == "input_context":
+                    context_records += 1
+                    context_report_paragraphs += int(
+                        payload.get("report_paragraph_count", 0)
+                    )
+                    context_report_characters += int(
+                        payload.get("report_character_count", 0)
+                    )
+                    assembled = int(payload.get("assembled_paragraph_count", 0))
+                    context_assembled_paragraphs += assembled
+                    is_full = payload.get("full_report_assembled") is True
+                    context_full_report += int(is_full)
+                    context_local_truncations += int(
+                        payload.get("local_truncation") is True
+                    )
+                    if not is_full:
+                        trace_nonfull_context_count = assembled
+                    limit = payload.get("model_context_limit")
+                    if type(limit) is int and limit > 0:
+                        context_limits[str(limit)] += 1
+                elif event_name == "question_closed":
+                    reason = payload.get("reason")
+                    status = payload.get("status", "unknown")
+                    if not isinstance(reason, str) or not reason:
+                        reason = f"{status}_unspecified"
+                    elif reason not in SAFE_TERMINATION_REASONS:
+                        # Error strings may contain provider or task material.
+                        reason = f"{status}_other"
+                    termination_reasons[reason] += 1
+                    if reason == "step budget exhausted":
+                        max_steps_terminated += 1
+        if trace_seed_count is not None:
+            seed_paragraphs_from_trace += trace_seed_count
+        elif trace_nonfull_context_count is not None:
+            seed_paragraphs_from_trace += trace_nonfull_context_count
 
-    review_completed = 0
     state_files = sorted((run_dir / "state").glob("*.json"))
+    state_tool_calls: Counter[str] = Counter()
+    seed_paragraphs_from_state = dynamic_paragraphs_from_state = 0
+    review_completed = review_triggered = review_fallbacks = review_label_changes = 0
+    has_state_tool_metrics = False
+    has_state_seed_metrics = False
+    has_state_evidence_metrics = False
+    has_state_review_metrics = False
     for state_path in state_files:
         state = _load_object(state_path)
+        tool_counts = state.get("tool_counts")
+        if isinstance(tool_counts, dict):
+            has_state_tool_metrics = True
+            for tool in TOOL_NAMES:
+                state_tool_calls[tool] += int(tool_counts.get(tool, 0))
+        initial = state.get("initial_retrieval_state")
+        if isinstance(initial, dict):
+            has_state_seed_metrics = True
+            paragraph_ids = initial.get("paragraph_ids", [])
+            if isinstance(paragraph_ids, list):
+                seed_paragraphs_from_state += len(paragraph_ids)
+        evidence = state.get("evidence_ledger")
+        if isinstance(evidence, list):
+            has_state_evidence_metrics = True
+            dynamic_paragraphs_from_state += sum(
+                1
+                for record in evidence
+                if isinstance(record, dict)
+                and not str(record.get("source", "report")).startswith("fixed_rag:")
+            )
+        if any(key.startswith("review_") for key in state):
+            has_state_review_metrics = True
         review_completed += int(state.get("review_completed") is True)
+        review_triggered += int(state.get("review_triggered") is True)
+        review_fallbacks += int(state.get("review_fallback_used") is True)
+        review_label_changes += int(state.get("review_changed_label") is True)
+
+    tool_calls = state_tool_calls if has_state_tool_metrics else trace_tool_calls
+    seed_paragraphs = (
+        seed_paragraphs_from_state
+        if has_state_seed_metrics
+        else seed_paragraphs_from_trace
+    )
+    dynamic_paragraphs = (
+        dynamic_paragraphs_from_state
+        if has_state_evidence_metrics
+        else dynamic_paragraphs_from_trace
+    )
+    if not has_state_review_metrics:
+        review_triggered = review_triggers_from_trace
 
     if not math.isfinite(latency_ms) or latency_ms < 0:
         raise ValueError("latency total must be finite and non-negative")
-    invalid = sum(1 for prediction in predictions if prediction.get("status") != "completed")
+    invalid = sum(
+        1 for prediction in predictions if prediction.get("status") != "completed"
+    )
+    strict_valid = sum(1 for prediction in predictions if _strict_valid(prediction))
+    exploration_attempts = phase_attempts["exploration"]
+    if metadata.get("mode") == "agent":
+        exploration_attempts += phase_attempts["legacy"]
+    phase_error_output = {
+        phase: {kind: int(phase_errors[phase].get(kind, 0)) for kind in ERROR_KINDS}
+        for phase in PHASES
+    }
     totals = {
-        "steps": steps,
+        "steps": model_calls,
         "model_calls": model_calls,
+        "model_responses": model_responses,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "latency_ms": round(latency_ms, 3),
-        "calculator_calls": calculator_calls,
+        "exploration_steps": exploration_attempts,
+        "finalization_attempts": phase_attempts["finalization"],
+        "review_attempts": phase_attempts["review"],
+        "iterative_retrieval_attempts": phase_attempts["iterative_retrieval"],
+        "search_calls": tool_calls["search_report"],
+        "read_calls": tool_calls["read_paragraphs"],
+        "calculator_calls": tool_calls["calculator"],
+        "seed_paragraphs": seed_paragraphs,
+        "dynamic_paragraphs": dynamic_paragraphs,
+        "review_triggered": review_triggered,
         "review_completed": review_completed,
+        "review_fallbacks": review_fallbacks,
+        "review_label_changes": review_label_changes,
         "max_steps_terminated": max_steps_terminated,
         "action_attempts": dict(sorted(action_attempts.items())),
+        "termination_reasons": dict(sorted(termination_reasons.items())),
+        "phase_errors": phase_error_output,
     }
     means = {
-        "steps": round(steps / expected, 6),
-        "model_calls": round(model_calls / expected, 6),
-        "input_tokens": round(input_tokens / expected, 6),
-        "output_tokens": round(output_tokens / expected, 6),
-        "latency_ms": round(latency_ms / expected, 6),
+        "steps": _mean(model_calls, expected),
+        "model_calls": _mean(model_calls, expected),
+        "input_tokens": _mean(input_tokens, expected),
+        "output_tokens": _mean(output_tokens, expected),
+        "latency_ms": _mean(latency_ms, expected),
+        "exploration_steps": _mean(exploration_attempts, expected),
+        "finalization_attempts": _mean(phase_attempts["finalization"], expected),
+        "review_attempts": _mean(phase_attempts["review"], expected),
+        "iterative_retrieval_attempts": _mean(
+            phase_attempts["iterative_retrieval"], expected
+        ),
+        "search_calls": _mean(tool_calls["search_report"], expected),
+        "read_calls": _mean(tool_calls["read_paragraphs"], expected),
+        "calculator_calls": _mean(tool_calls["calculator"], expected),
+        "seed_paragraphs": _mean(seed_paragraphs, expected),
+        "dynamic_paragraphs": _mean(dynamic_paragraphs, expected),
         "action_attempts": {
-            name: round(count / expected, 6) for name, count in sorted(action_attempts.items())
+            name: _mean(count, expected)
+            for name, count in sorted(action_attempts.items())
         },
-        "calculator_calls": round(calculator_calls / expected, 6),
-        "review_completed": round(review_completed / expected, 6),
-        "max_steps_terminated": round(max_steps_terminated / expected, 6),
+        "review_completed": _mean(review_completed, expected),
+        "max_steps_terminated": _mean(max_steps_terminated, expected),
     }
     summary: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run": {
             key: metadata.get(key)
             for key in (
@@ -132,11 +331,39 @@ def summarize(
             )
         },
         "rates": {
-            "prediction_coverage": round(len(predictions) / expected, 6),
-            "invalid": round(invalid / expected, 6),
+            "prediction_coverage": _mean(len(predictions), expected),
+            "invalid": _mean(invalid, expected),
+            "strict_valid": _mean(strict_valid, expected),
+            "review_trigger": _mean(review_triggered, expected),
         },
         "totals": totals,
         "means_per_expected_example": means,
+        "long_context": {
+            "instrumented_examples": context_records,
+            "mean_report_paragraphs": (
+                _mean(context_report_paragraphs, context_records)
+                if context_records
+                else 0.0
+            ),
+            "mean_report_characters": (
+                _mean(context_report_characters, context_records)
+                if context_records
+                else 0.0
+            ),
+            "mean_assembled_paragraphs": (
+                _mean(context_assembled_paragraphs, context_records)
+                if context_records
+                else 0.0
+            ),
+            "full_report_assembly_rate": (
+                _mean(context_full_report, context_records)
+                if context_records
+                else 0.0
+            ),
+            "local_truncation_count": context_local_truncations,
+            "provider_context_error_count": provider_context_errors,
+            "configured_context_limits": dict(sorted(context_limits.items())),
+        },
     }
     if input_cost_per_million is not None or output_cost_per_million is not None:
         if input_cost_per_million is None or output_cost_per_million is None:

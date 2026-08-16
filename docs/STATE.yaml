@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: api-seven-condition-formal-complete
+current_phase: public-release-packaging
 current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
   Scorer experiment system.
-last_completed_phase: api-seven-condition-formal-complete
-last_git_commit: 9a4144fa7059b026f7e444514f403fcca064875d
+last_completed_phase: public-release-packaging
+last_git_commit: a73d37e282f32510584219267060be8f103f8a4e
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -54,8 +54,51 @@ decisions:
   and code commit 9a4144fa7059b026f7e444514f403fcca064875d
 - Record the public 700-task formal matrix as development evaluation, not a final-hidden
   or leaderboard claim
+- Adopt ADR 0002 RAG-seeded budget-aware evidence verification while preserving protocol
+  v1 and frozen experiment history.
+- Seed evidence is pinned and counts toward evidence and unique-paragraph limits but
+  consumes no model, exploration, search, or read budget.
+- FixedEmbeddingIndex remains a top-10 compatibility loader; new FixedRetrievalIndex
+  validates independent top-3, top-5, and top-10 artifact metadata and SHA256.
+- Protocol v1 retains historical max_steps behavior; protocol v2 persists phase budgets
+  and rejects incompatible resume.
+- Every v2 model attempt is durably charged only to its active phase before the request;
+  exhausted exploration always transitions to reserved Finalization.
+- Protocol v2 requires bounded control metadata on every action and persists only
+  evidence status, confidence, up to five evidence gaps, and enumerated risks.
+- Selective Review uses deterministic risk triggers and can replace a draft only with
+  a fully valid submission; all review failures fall back to the verified draft.
+- Budget-matched iterative RAG uses a fixed seed, a configured invariant count of
+  query/search/auto-read rounds, and strict finalization; it has no evidence controller,
+  adaptive stop, or review.
+- Aggregate model-call totals count requests, while tokens and latency count completed
+  responses; state is used only for aggregate tool, evidence, and review totals.
+- Private evidence, recovery, paired-bootstrap, and McNemar implementation remains
+  outside Runtime; this repository contains only scorer-side contracts because the
+  separate scorer repository is absent.
+- Iterative RAG uses invariant configured retrieval rounds plus submit-only finalization
+  without controller/review; aggregate calls count requests while usage counts responses;
+  private evidence analysis remains isolated and blocked on the absent separate scorer
+  repository.
+- B-class main configs are paired across API and Local with identical generation and
+  method settings; backend alias, timeout, retries, and backend kind are the only
+  pair differences.
+- The two-model planner is preparation-only, requires distinct explicit model IDs,
+  creates independent run IDs, and freezes shared task/retrieval hashes and per-condition
+  fairness fields.
+- Top-k ablations are limited to one primary model on development data; independent
+  official top-3 and top-5 artifacts are required before those configs can run.
+- B-class API/local pairs share method and generation settings; the planner requires
+  distinct explicit model IDs and produces prepared-not-executed paired runs; paid
+  and final-hidden execution remains unauthorized.
+- The ultra audit was executed exactly once after all implementation phases; no paid
+  or hidden experiment ran, no historical artifact changed, and no post-audit implementation
+  refactor is required.
+- Public release matrix tests use a minimal allowed task fixture while production
+  task and retrieval artifact hashes remain pinned.
 files_changed:
-- docs/EXPERIMENT_REPORT.md
+- tests/fixtures/bclass_public_tasks.jsonl
+- tests/unit/test_prepare_bclass_matrix.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -99,6 +142,26 @@ tests_passed:
 - 81 Agent tests and 10 independent Private Scorer tests passed after formal completion
 - Formal aggregate JSON/Markdown and tracked experiment report record accuracy, coverage,
   invalid counts, comparisons, and runtime behavior
+- 81 Agent tests passed; one existing Starlette deprecation warning.
+- 35 targeted fixed-retrieval, config, state, Agent compatibility, and RAG Seed tests
+  passed.
+- 105 full Agent tests passed; one existing Starlette deprecation warning.
+- 29 targeted staged-budget, finalization, review-budget, resume, prompt, and v1 compatibility
+  tests passed.
+- 117 full Agent tests passed; one existing Starlette deprecation warning.
+- 47 targeted Action control, Prompt, Selective Review, staged-budget, and v1 compatibility
+  tests passed.
+- 141 full Agent tests passed; one existing Starlette deprecation warning.
+- 18 targeted Phase 4 tests and 149 full Agent tests passed; one existing Starlette
+  deprecation warning.
+- 24 targeted config, matrix, launcher, mock, compatibility, and isolation tests plus
+  158 full Agent tests passed; API/Local Compose expanded, Runtime/Gateway images
+  rebuilt, all 17 container configs loaded, and Mock API, Mock Local, and iterative
+  container runs completed.
+- 700 retrieval records and 106 Runtime files validated; 80 focused Agent audit tests,
+  158 full Agent tests, and 10 unchanged Private Scorer tests passed; three-file mock
+  submission and Compose isolation verified.
+- 159 full Agent tests passed; one existing Starlette deprecation warning.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -107,8 +170,15 @@ known_issues:
   only its prompt semantics will be retained.
 - One upstream Starlette deprecation warning.
 - One upstream Starlette TestClient deprecation warning remains.
+- Private scorer evidence-metrics/bootstrap/McNemar adapter implementation requires
+  the separate private scorer repository, which is not available in this workspace.
+- Independent official embedding top-3 and top-5 retrieval artifacts are absent, so
+  those development ablations cannot run without external artifacts.
+- Formal evidence analysis remains blocked on the out-of-workspace private adapter,
+  and top-3/top-5 ablations remain blocked on independent official retrieval artifacts.
 next_actions:
-- Treat the formal aggregate as the completed baseline; any optimization or rerun
-  is a new experiment requiring explicit authorization.
-blocked_items: []
-last_updated: '2026-08-16T01:44:24+08:00'
+- Publish the verified allowlisted release commit to origin/main.
+blocked_items:
+- private_scorer_evidence_metrics_adapter_requires_separate_private_repository
+- independent_embedding_top3_top5_retrieval_artifacts_not_present
+last_updated: '2026-08-16T20:07:16+08:00'

@@ -1,0 +1,37 @@
+run:
+  mode: agent
+  backend_kind: api
+backend:
+  type: openai_compatible
+  base_url: http://model-gateway:8080/v1
+  model: external-model-name
+  timeout_seconds: 120
+  max_retries: 3
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  max_context_tokens: 32768
+agent:
+  max_steps: 8
+  protocol_version: v2
+  exploration_steps: 6
+  finalization_steps: 2
+  review_steps: 0
+  review_policy: none
+  max_search_calls: 4
+  max_read_calls: 4
+  max_calculator_calls: 4
+  max_paragraphs_per_read: 12
+  max_total_unique_paragraphs: 30
+  calculator_enabled: true
+  initial_retrieval:
+    enabled: true
+    retrieval_file: /retrieval/findver_embedding3large_top10.json
+    retriever: text-embedding-3-large
+    top_k: 10
+    preload_as_evidence: true
+  cross_question_memory: false
+  scorer_feedback: false
+  concurrency: 1

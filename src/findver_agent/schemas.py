@@ -12,6 +12,27 @@ class Label(str, Enum):
     REFUTED = "refuted"
 
 
+class EvidenceStatus(str, Enum):
+    NONE = "none"
+    PARTIAL = "partial"
+    SUFFICIENT = "sufficient"
+    CONFLICTING = "conflicting"
+
+
+class Confidence(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class RiskFlag(str, Enum):
+    CALCULATION = "calculation"
+    CONFLICTING_EVIDENCE = "conflicting_evidence"
+    WEAK_SUPPORT = "weak_support"
+    RETRIEVAL_GAP = "retrieval_gap"
+    TABLE_ALIGNMENT = "table_alignment"
+
+
 class PublicTask(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -52,4 +73,3 @@ class Prediction(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("evidence_ids must be unique")
         return value
-

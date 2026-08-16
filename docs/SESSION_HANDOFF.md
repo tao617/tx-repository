@@ -2,24 +2,21 @@
 
 ## Current state
 
-Phase `api-seven-condition-formal-complete` completed: Completed the frozen seven-condition real-API matrix: 4,900/4,900 instances, seven sealed aggregate-only scores, private archives, and the final aggregate report.
+Phase `public-release-packaging` completed: Made the B-class matrix planner tests self-contained for the history-free public release without publishing runtime task data.
 
-- Git commit at checkpoint start: `9a4144fa7059b026f7e444514f403fcca064875d`
-- Changed files: 1
+- Git commit at checkpoint start: `a73d37e282f32510584219267060be8f103f8a4e`
+- Changed files: 2
 
 ## Diff summary
 
 ```text
-docs/EXPERIMENT_REPORT.md | 93 ++++++++++++++++++++++++++++++-----------------
- 1 file changed, 60 insertions(+), 33 deletions(-)
+tests/unit/test_prepare_bclass_matrix.py | 37 +++++++++++++++++++++++++-------
+ 1 file changed, 29 insertions(+), 8 deletions(-)
 ```
 
 ## Tests passed
 
-- Formal API matrix completed all seven conditions at 700/700 with archived status and no condition errors
-- Seven sealed submissions were aggregate-only scored and privately archived; Scorer inbox is empty and no experiment containers remain
-- 81 Agent tests and 10 independent Private Scorer tests passed after formal completion
-- Formal aggregate JSON/Markdown and tracked experiment report record accuracy, coverage, invalid counts, comparisons, and runtime behavior
+- 159 full Agent tests passed; one existing Starlette deprecation warning.
 
 ## Tests failed or unavailable
 
@@ -41,4 +38,4 @@ pytest -q
 
 ## Next action
 
-Treat the formal aggregate as the completed baseline; any optimization or rerun is a new experiment requiring explicit authorization.
+Publish the verified allowlisted release commit to origin/main.
