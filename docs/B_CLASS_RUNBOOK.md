@@ -6,6 +6,45 @@ The B-class code, configuration templates, and paired-plan generator are develop
 
 The frozen historical B0/B1/B2/B3/A0/A1/A2 matrix remains unchanged. New runs must use the B-class names and new run IDs.
 
+The current boundary is a candidate implementation freeze, not the final experiment freeze. One development-only BITER round calibration may still follow the Model A Canary. After that calibration, freeze the selected BITER rounds, code, prompts, configs, retrieval hashes, model IDs, scorer commit, and statistical comparison rule before `dev_holdout` or `final_hidden`.
+
+## Clean public-release preflight
+
+Use a fresh checkout of the history-free `tao617/tx-repository` publication, or explicitly select its release branch and verify the expected commit. In the development workspace used to build this project, the local `main` branch follows upstream FinDVer rather than `origin/main`; do not use an unqualified `git switch main` there as a release-selection command.
+
+The complete test environment includes the Gateway extra:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -e '.[dev,gateway]'
+.venv/bin/python -m compileall -q src scripts tests
+.venv/bin/pytest -q
+bash -n scripts/run_agent_with_env.sh
+bash -n scripts/run_stateful_mock_smoke.sh
+```
+
+The public release intentionally does not track the formal `runtime_data/public/tasks.jsonl`. Provision that Gold-free file from the approved host source, run `scripts/verify_public_data.py`, and verify its manifest SHA256 before plan preparation. For the builder-only stateful smoke, stage the tracked synthetic fixture exactly as CI does:
+
+```bash
+mkdir -p runtime_data/public
+cp tests/fixtures/stateful_smoke_tasks.jsonl \
+  runtime_data/public/smoke-tasks.jsonl
+.venv/bin/python scripts/verify_public_data.py \
+  --tasks runtime_data/public/smoke-tasks.jsonl
+```
+
+On the root-controlled WSL Docker host, expand Compose and run the mock path with the intended host user IDs. This is an infrastructure check, not an experiment:
+
+```bash
+FINDVER_UID="$(id -u)" FINDVER_GID="$(id -g)" \
+  sudo -E docker compose --project-name findver-agent \
+  -f deploy/wsl/docker-compose.agent.yaml --profile api config
+
+sudo env FINDVER_UID="$(id -u)" FINDVER_GID="$(id -g)" \
+  GATEWAY_DIAGNOSTICS=1 \
+  scripts/run_stateful_mock_smoke.sh bclass-preflight-$(git rev-parse --short HEAD)
+```
+
 ## Configuration map
 
 The seven main conditions are paired under `configs/bclass/api/` and `configs/bclass/local/`:
@@ -27,6 +66,8 @@ Top-k development ablations are under `configs/bclass/ablations/` and remain sco
 ## Prepare a paired two-model plan
 
 Choose two explicit, different model IDs and their backend paths. This command validates all 14 paired configs and freezes the current code commit, task hash, retrieval hash, prompt profile, generation settings, config hashes, independent run IDs, and maximum call budgets. It does not call a model.
+
+Before running it, require a clean tracked worktree and confirm that `runtime_data/public/tasks.jsonl` exists, contains only the public task fields, and matches the tracked manifest hash. The public release does not supply this ignored host input automatically.
 
 ```bash
 .venv/bin/python scripts/prepare_bclass_matrix.py \
@@ -98,6 +139,9 @@ scripts/run_agent_with_env.sh \
 The one-command stateful path uses only a fake builder key and the public smoke task:
 
 ```bash
+mkdir -p runtime_data/public
+cp tests/fixtures/stateful_smoke_tasks.jsonl \
+  runtime_data/public/smoke-tasks.jsonl
 scripts/run_stateful_mock_smoke.sh bclass-stateful-mock-m2
 ```
 

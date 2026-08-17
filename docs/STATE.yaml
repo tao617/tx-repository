@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: public-ci-smoke-input
-current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
-  Scorer experiment system.
-last_completed_phase: public-ci-smoke-input
-last_git_commit: 50ecb5ee3b7a65cfd67e123063fa0518ce0a65bd
+current_phase: bclass-experiment-preflight
+current_goal: Complete the B-class experiment preflight and stop before any real-model
+  Canary or paid evaluation.
+last_completed_phase: bclass-experiment-preflight
+last_git_commit: 88573d23e387c1860261d495e9f0ec06430682d8
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -134,11 +134,22 @@ decisions:
   reaches frozen artifact hashing.
 - Public CI copies a tracked synthetic task fixture into the ignored runtime_data/public
   path; the fixture must match a tracked public report and frozen retrieval identity.
+- Public release ecd22935827b4b252ce6f878bb5d5700a79cf464 passed GitHub Actions run
+  31996865142 for Python 3.11, Python 3.12, and Stateful Docker M2 smoke.
+- Treat the current implementation as candidate-frozen only; allow at most one development-only
+  BITER round calibration after Model A Canary, then freeze the full experiment protocol
+  before holdout or hidden evaluation.
+- A clean public release preflight must install .[dev,gateway], stage the tracked
+  smoke fixture, and provision the ignored Gold-free formal task file from the approved
+  host source.
+- No paid model call, real-model Canary, second-model matrix, holdout, or final_hidden
+  execution is authorized by this checkpoint.
 files_changed:
-- .github/workflows/ci.yml
-- tests/fixtures/stateful_smoke_tasks.jsonl
-- tests/unit/test_ci_workflow.py
-- tests/unit/test_ci_workflow.py.orig
+- docs/B_CLASS_RUNBOOK.md
+- docs/EXPERIMENT_PLAN.md
+- docs/SCORER_PROTOCOL.md
+- docs/SESSION_HANDOFF.md
+- docs/STATE.yaml
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -243,6 +254,18 @@ tests_passed:
   diff checks.
 - 12 focused CI/public-data/runtime-bundle tests; 188 full Agent tests; shell syntax,
   Python compileall, and git diff checks.
+- 188 full Agent tests passed in the development workspace; one existing Starlette
+  deprecation warning.
+- Clean public release ecd2293 passed 188 tests, compileall, shell syntax, entrypoint
+  help, public-task validation, and API Compose expansion.
+- 'Clean public release stateful Docker M2 smoke passed on the third infrastructure
+  attempt: actions=8, model_calls=9, termination_reason=review_fallback; the first
+  two builds stopped on transient PyPI read timeouts before Runtime start.'
+- Private Scorer 37aad0d passed 19 tests, both networkless Compose profiles, isolated
+  image builds, both hardened CLI starts, and image-content inspection.
+- The 700-task public input and Top-10 retrieval matched their frozen SHA256 values;
+  a synthetic preparation-only plan validated schema v2, prepared_not_executed status,
+  and 14 unique run IDs.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -251,11 +274,11 @@ known_issues:
   only its prompt semantics will be retained.
 - One upstream Starlette deprecation warning.
 - One upstream Starlette TestClient deprecation warning remains.
-- Public CI is defined but cannot be claimed green until the workflow runs on the
-  pushed commit.
 - The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
   candidates use temperature=0; no API call was made.
 next_actions:
-- Publish the verified public CI smoke-input fix to origin/main and confirm the rerun.
+- Obtain explicit Model A and Model B IDs, backend paths, 100000-token capacity guarantees,
+  cost/call ceilings, and user authorization for a hash-bound Model A dev_feedback
+  Canary; do not run a real-model experiment before that report and approval.
 blocked_items: []
-last_updated: '2026-08-17T13:08:06+08:00'
+last_updated: '2026-08-17T14:47:41+08:00'

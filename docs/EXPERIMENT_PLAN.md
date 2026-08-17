@@ -41,7 +41,9 @@ Initial B-class templates use temperature 0, top-p 1, seed 7, 1024 output tokens
 
 Use `scripts/summarize_run.py` for aggregate runtime behavior: file completion, valid output, invalid, and review-trigger rates; actual model requests/responses; input/output tokens; latency; phase attempts; search/read/calculator calls; seed/dynamic paragraph counts; review fallbacks/label changes; termination reasons; failure taxonomy; and long-context instrumentation. `prediction_coverage`, `strict_valid`, `invalid`, and `review_trigger` remain compatibility aliases, not primary report labels. Long-context metrics distinguish deterministic estimated input, provider-reported actual input, prompt budget, real model capacity, overflow status, and provider context errors.
 
-Accuracy, Evidence Precision/Recall/F1, All-Gold Evidence Recall, Initial RAG Recall, Final Agent Evidence Recall, Evidence Recovery Rate, conditional correctness, paired-bootstrap 95% intervals, and McNemar comparison belong only to the networkless Private Scorer contract in `docs/PRIVATE_EVIDENCE_METRICS.md`. The private adapter implementation is blocked while the separate scorer repository is unavailable.
+Accuracy, Evidence Precision/Recall/F1, All-Gold Evidence Recall, Initial RAG Recall, Final Agent Evidence Recall, Evidence Recovery Rate, conditional correctness, paired-bootstrap 95% intervals, and McNemar comparison belong only to the networkless Private Scorer contract in `docs/PRIVATE_EVIDENCE_METRICS.md`. The adapter is implemented in the separate Private Scorer repository at commit `37aad0d`. Before formal scoring, verify that exact or an explicitly newer frozen scorer commit in its isolated environment; never copy the implementation or its private inputs into this repository.
+
+Before `dev_holdout`, freeze the primary candidate-versus-baseline comparison. Either name the primary baseline in advance or freeze a deterministic development-only selection rule and any multiple-comparison handling; do not select the reported primary comparator after reading holdout or hidden results.
 
 ## Data lifecycle and result placeholders
 
@@ -54,3 +56,5 @@ Iterate only on `dev_feedback`; select using aggregate-only `dev_holdout`; freez
 | `final_hidden` | run once after freeze | run once after freeze | not run |
 
 No paid API, second-model formal, top-k ablation, budget ablation, or final-hidden run is authorized by this plan.
+
+The implementation is only candidate-frozen before the Model A Canary. If development aggregates justify one BITER round adjustment, make that single adjustment and then freeze the complete experiment protocol before any aggregate-only holdout or hidden evaluation.
