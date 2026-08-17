@@ -63,7 +63,11 @@ case "$config_path" in
     exit 2
     ;;
 esac
-exec 9>/run/lock/findver-evaluation.lock
+lock_path=/run/lock/findver-evaluation.lock
+if [[ ! -e "$lock_path" ]]; then
+  (umask 022; set -o noclobber; : > "$lock_path") 2>/dev/null || true
+fi
+exec 9<"$lock_path"
 if ! flock -n 9; then
   echo "another FinDVer Agent, handoff, or Scorer operation holds the evaluation lock" >&2
   exit 2
@@ -84,6 +88,8 @@ else
   fi
 fi
 
+planned_run_identity_json="${FINDVER_RUN_IDENTITY_JSON:-}"
+planned_expected_model_id="${FINDVER_EXPECTED_MODEL_ID:-}"
 set -a
 # shellcheck disable=SC1090
 source "$env_file"
@@ -92,6 +98,23 @@ unset COMPOSE_FILE COMPOSE_PROFILES COMPOSE_PROJECT_NAME
 : "${MODEL_BASE_URL:?MODEL_BASE_URL is required}"
 : "${MODEL_API_KEY:?MODEL_API_KEY is required}"
 : "${MODEL_NAME:?MODEL_NAME is required}"
+
+run_identity_json="$planned_run_identity_json"
+expected_model_id="$planned_expected_model_id"
+if [[ -n "$expected_model_id" ]]; then
+  if [[ -z "$run_identity_json" ]]; then
+    echo "planned run requires FINDVER_RUN_IDENTITY_JSON" >&2
+    exit 2
+  fi
+  identity_model_id="$(
+    python3 -c \
+      'import json, os; print(json.loads(os.environ["FINDVER_RUN_IDENTITY_JSON"])["effective_model_id"])'
+  )"
+  if [[ "$MODEL_NAME" != "$expected_model_id" || "$identity_model_id" != "$MODEL_NAME" ]]; then
+    echo "MODEL_NAME does not match the planned effective model ID" >&2
+    exit 2
+  fi
+fi
 
 export MODEL_UPSTREAM_BASE_URL="$MODEL_BASE_URL"
 export MODEL_UPSTREAM_MODEL="$MODEL_NAME"
@@ -125,13 +148,19 @@ if docker ps -q --filter label=com.docker.compose.project=findver-scorer | grep 
   echo "refusing to run while the Private Scorer project is active" >&2
   exit 2
 fi
+"${compose[@]}" build model-gateway agent-runtime
 "${compose[@]}" up -d model-gateway
-"${compose[@]}" run --rm agent-runtime \
-  python -m findver_agent.cli "$command_name" \
-  --config "/app/configs/$config_name" \
-  --tasks "/public/$task_name" \
-  --reports /reports \
+runtime_command=(
+  python -m findver_agent.cli "$command_name"
+  --config "/app/configs/$config_name"
+  --tasks "/public/$task_name"
+  --reports /reports
   --run-dir "/output/$run_name"
+)
+if [[ -n "$run_identity_json" ]]; then
+  runtime_command+=(--run-identity-json "$run_identity_json")
+fi
+"${compose[@]}" run --rm agent-runtime "${runtime_command[@]}"
 if [[ "${GATEWAY_DIAGNOSTICS:-0}" == "1" ]]; then
   "${compose[@]}" logs --no-color --tail 50 model-gateway >&2
 fi

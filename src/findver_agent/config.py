@@ -33,6 +33,7 @@ class BackendConfig(BaseModel):
     model: str = Field(min_length=1)
     timeout_seconds: float = Field(default=120, gt=0, le=600)
     max_retries: int = Field(default=3, ge=0, le=10)
+    model_context_window_tokens: int = Field(default=32768, ge=8192, le=1_000_000)
 
     @model_validator(mode="after")
     def fixed_gateway_only(self) -> "BackendConfig":

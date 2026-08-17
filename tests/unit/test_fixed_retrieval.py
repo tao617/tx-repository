@@ -6,6 +6,7 @@ import pytest
 from findver_agent.baseline import BaselineRunner, format_paragraphs
 from findver_agent.config import BaselineConfig
 from findver_agent.fixed_retrieval import FixedEmbeddingIndex, FixedRetrievalError
+from findver_agent.fixed_retrieval import FixedRetrievalIndex
 from findver_agent.model_backends.base import GenerationConfig
 from findver_agent.report_store import ReportStore
 from findver_agent.schemas import PublicTask
@@ -155,13 +156,20 @@ def test_full_report_is_not_silently_character_truncated(tmp_path):
     assert "[paragraph id = 1]" in context
 
 
-def test_runtime_retrieval_file_is_gold_free_and_complete():
+@pytest.mark.parametrize("top_k", [3, 5, 10])
+def test_runtime_retrieval_files_are_gold_free_and_complete(top_k):
     root = Path(__file__).parents[2]
-    path = root / "runtime_data" / "retrieval" / "findver_embedding3large_top10.json"
+    path = (
+        root
+        / "runtime_data"
+        / "retrieval"
+        / f"findver_embedding3large_top{top_k}.json"
+    )
     value = json.loads(path.read_text(encoding="utf-8"))
     rendered = json.dumps(value).lower()
 
     assert value["metadata"]["examples"] == 700
+    assert value["metadata"]["top_k"] == top_k
     assert len(value["items"]) == 700
     assert not {
         "entailment_label",
@@ -171,4 +179,8 @@ def test_runtime_retrieval_file_is_gold_free_and_complete():
         "correct",
         "feedback",
     } & set(rendered.replace('"', "").replace("{", " ").replace("}", " ").split())
-    FixedEmbeddingIndex(path)
+    FixedRetrievalIndex(
+        path,
+        retriever="text-embedding-3-large",
+        top_k=top_k,
+    )

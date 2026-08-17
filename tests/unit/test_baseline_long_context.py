@@ -11,6 +11,7 @@ from findver_agent.schemas import PublicTask
 
 class Backend:
     model_name = "mock-model"
+    model_context_window_tokens = 100_000
 
     def __init__(self, response):
         self.response = response
@@ -40,7 +41,7 @@ def setup_runner(tmp_path, response):
     run_dir = tmp_path / "run"
     runner = BaselineRunner(
         backend=Backend(response),
-        generation=GenerationConfig(max_context_tokens=8192),
+        generation=GenerationConfig(prompt_budget_tokens=8192),
         baseline_config=BaselineConfig(
             prompt_type="findver_direct_json",
             retrieval="none",
@@ -81,19 +82,35 @@ async def test_baseline_records_full_context_shape_and_actual_usage(tmp_path):
     ]
     context = next(event["payload"] for event in events if event["event"] == "input_context")
     usage = next(event["payload"] for event in events if event["event"] == "model_response")
-    assert context == {
+    assert {
+        key: context[key]
+        for key in (
+            "report_paragraph_count",
+            "report_character_count",
+            "assembled_paragraph_count",
+            "full_report_assembled",
+            "local_truncation",
+        )
+    } == {
         "report_paragraph_count": 2,
         "report_character_count": sum(len(text) for text in paragraphs),
         "assembled_paragraph_count": 2,
         "full_report_assembled": True,
         "local_truncation": False,
-        "model_context_limit": 8192,
     }
+    assert context["prompt_budget_tokens"] == 8192
+    assert context["estimated_input_tokens"] > 0
+    assert context["estimated_total_tokens"] == (
+        context["estimated_input_tokens"] + context["max_output_tokens"]
+    )
+    assert context["model_context_window_tokens"] == 100_000
+    assert context["overflow_status"] == "within_window"
     assert (usage["input_tokens"], usage["output_tokens"], usage["latency_ms"]) == (
         123,
         17,
         9.5,
     )
+    assert usage["actual_provider_input_tokens"] == 123
 
 
 @pytest.mark.asyncio

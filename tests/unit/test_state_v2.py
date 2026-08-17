@@ -75,6 +75,7 @@ def test_legacy_v1_state_without_new_fields_remains_loadable(tmp_path):
     assert restored.phase == "exploration"
     assert restored.phase_budgets is None
     assert restored.step == 1
+    assert restored.draft_risk_flags == []
 
 
 def test_protocol_version_change_is_rejected_on_resume(tmp_path):

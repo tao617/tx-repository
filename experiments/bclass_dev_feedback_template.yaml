@@ -17,7 +17,7 @@ generation:
   top_p: 1
   seed: 7
   max_output_tokens: 1024
-  max_context_tokens: 32768
+  prompt_budget_tokens: 32768
 conditions:
   - condition_id: BLC_FINDVER_COT
     prompt_profile: findver_cot_json

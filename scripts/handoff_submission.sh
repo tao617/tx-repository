@@ -10,7 +10,11 @@ if [[ -z "$source_arg" ]]; then
   echo "usage: $0 SEALED_ARCHIVE [PRIVATE_SCORER_INBOX]" >&2
   exit 2
 fi
-exec 9>/run/lock/findver-evaluation.lock
+lock_path=/run/lock/findver-evaluation.lock
+if [[ ! -e "$lock_path" ]]; then
+  (umask 022; set -o noclobber; : > "$lock_path") 2>/dev/null || true
+fi
+exec 9<"$lock_path"
 if ! flock -n 9; then
   echo "another FinDVer Agent, handoff, or Scorer operation holds the evaluation lock" >&2
   exit 2
@@ -25,6 +29,7 @@ if docker ps -q --filter label=com.docker.compose.project=findver-scorer | grep 
 fi
 
 source_path="$(realpath "$source_arg")"
+sidecar_path="$(dirname "$source_path")/evidence-ledger.jsonl"
 inbox_path="$(realpath -m "$inbox_arg")"
 case "$source_path" in
   "$repo_root"/runs/*) ;;
@@ -38,7 +43,8 @@ if [[ "$(stat -c %a "$source_path")" != "444" ]]; then
   exit 2
 fi
 
-"$python_bin" "$repo_root/scripts/verify_submission.py" "$source_path"
+"$python_bin" "$repo_root/scripts/verify_submission.py" "$source_path" \
+  --evidence-ledger-sidecar "$sidecar_path"
 install -d -m 0700 "$inbox_path"
 target="$inbox_path/submission.tar.gz"
 if [[ -e "$target" ]]; then
@@ -49,5 +55,21 @@ install -m 0444 "$source_path" "$target"
 if [[ "$(sha256sum "$source_path" | cut -d' ' -f1)" != "$(sha256sum "$target" | cut -d' ' -f1)" ]]; then
   echo "handoff hash verification failed" >&2
   exit 2
+fi
+if [[ -f "$sidecar_path" ]]; then
+  sidecar_target="$inbox_path/evidence-ledger.jsonl"
+  if [[ -e "$sidecar_target" ]]; then
+    echo "refusing to overwrite existing scorer sidecar: $sidecar_target" >&2
+    exit 2
+  fi
+  if [[ "$(stat -c %a "$sidecar_path")" != "444" ]]; then
+    echo "evidence ledger sidecar must be immutable mode 0444" >&2
+    exit 2
+  fi
+  install -m 0444 "$sidecar_path" "$sidecar_target"
+  if [[ "$(sha256sum "$sidecar_path" | cut -d' ' -f1)" != "$(sha256sum "$sidecar_target" | cut -d' ' -f1)" ]]; then
+    echo "sidecar handoff hash verification failed" >&2
+    exit 2
+  fi
 fi
 echo "handoff complete: $target"

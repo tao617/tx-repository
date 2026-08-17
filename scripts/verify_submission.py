@@ -13,12 +13,17 @@ from findver_agent.submission import verify_submission_archive
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
+    parser.add_argument("--evidence-ledger-sidecar", type=Path)
     args = parser.parse_args()
-    manifest, predictions = verify_submission_archive(args.archive)
+    manifest, predictions = verify_submission_archive(
+        args.archive,
+        evidence_ledger_sidecar=args.evidence_ledger_sidecar,
+    )
     digest = hashlib.sha256(args.archive.read_bytes()).hexdigest()
     print(
         f"valid run_id={manifest.run_id} predictions={len(predictions)} "
-        f"sha256={digest}"
+        f"sha256={digest} "
+        f"ledger_sidecar={manifest.evidence_ledger_sidecar_sha256 is not None}"
     )
     return 0
 

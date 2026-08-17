@@ -138,6 +138,7 @@ class QuestionState(BaseModel):
     draft_prediction: Prediction | None = None
     draft_confidence: Confidence | None = None
     draft_evidence_status: EvidenceStatus | None = None
+    draft_risk_flags: list[RiskFlag] = Field(default_factory=list)
     review_requested: bool = False
     review_completed: bool = False
     draft_submission: dict[str, Any] | None = None
@@ -153,11 +154,11 @@ class QuestionState(BaseModel):
     termination_reason: str | None = None
     closed: bool = False
 
-    @field_validator("risk_flags")
+    @field_validator("risk_flags", "draft_risk_flags")
     @classmethod
     def risk_flags_are_unique(cls, value: list[RiskFlag]) -> list[RiskFlag]:
         if len(value) != len(set(value)):
-            raise ValueError("state risk_flags must be unique")
+            raise ValueError("state risk flags must be unique")
         return value
 
     @classmethod

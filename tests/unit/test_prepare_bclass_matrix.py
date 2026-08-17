@@ -46,13 +46,26 @@ def test_two_explicit_distinct_models_produce_paired_independent_runs(tmp_path):
         model_b="provider/model-b",
         backend_a="api",
         backend_b="local",
+        context_window_a=100_000,
+        context_window_b=100_000,
     )
 
+    assert plan["schema_version"] == 2
     assert plan["status"] == "prepared_not_executed"
     assert plan["evaluation_split"] == "dev_feedback"
     assert plan["models"] == [
-        {"slot": "model_a", "model_id": "provider/model-a", "backend_kind": "api"},
-        {"slot": "model_b", "model_id": "provider/model-b", "backend_kind": "local"},
+        {
+            "slot": "model_a",
+            "model_id": "provider/model-a",
+            "backend_kind": "api",
+            "model_context_window_tokens": 100_000,
+        },
+        {
+            "slot": "model_b",
+            "model_id": "provider/model-b",
+            "backend_kind": "local",
+            "model_context_window_tokens": 100_000,
+        },
     ]
     assert len(plan["runs"]) == 14
     assert len({run["run_id"] for run in plan["runs"]}) == 14
@@ -63,6 +76,7 @@ def test_two_explicit_distinct_models_produce_paired_independent_runs(tmp_path):
         assert len(paired_runs) == 2
         assert paired_runs[0]["prompt_profile"] == paired_runs[1]["prompt_profile"]
         assert paired_runs[0]["maximum_model_calls"] == paired_runs[1]["maximum_model_calls"]
+    assert {run["model_context_window_tokens"] for run in plan["runs"]} == {100_000}
     assert plan["task"]["sha256"] == MODULE.sha256_file(TASK_FIXTURE)
     assert plan["retrieval"]["sha256"] == "2c29496e6762b3df2d51b01c246800b0512d396090785199d414703dbbf752e5"
     assert plan["generation"] == {
@@ -70,7 +84,7 @@ def test_two_explicit_distinct_models_produce_paired_independent_runs(tmp_path):
         "top_p": 1,
         "seed": 7,
         "max_output_tokens": 1024,
-        "max_context_tokens": 32768,
+        "prompt_budget_tokens": 32768,
     }
 
 
@@ -82,6 +96,8 @@ def test_matrix_rejects_same_model_id():
             model_b="same-model",
             backend_a="api",
             backend_b="api",
+            context_window_a=100_000,
+            context_window_b=100_000,
         )
 
 
@@ -95,6 +111,21 @@ def test_matrix_rejects_generation_drift(tmp_path):
             model_b="model-b",
             backend_a="api",
             backend_b="local",
+            context_window_a=100_000,
+            context_window_b=100_000,
+        )
+
+
+def test_matrix_rejects_unusable_context_window():
+    with pytest.raises(ValueError, match="model B context window"):
+        MODULE.prepare_plan(
+            MANIFEST,
+            model_a="model-a",
+            model_b="model-b",
+            backend_a="api",
+            backend_b="local",
+            context_window_a=100_000,
+            context_window_b=4_096,
         )
 
 
@@ -104,3 +135,17 @@ def test_matrix_plan_writer_never_overwrites(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))["status"] == "prepared_not_executed"
     with pytest.raises(ValueError, match="already exists"):
         MODULE._atomic_json(path, {"status": "replacement"})
+
+
+def test_matrix_rejects_context_window_different_from_configs(tmp_path):
+    manifest = _manifest_with_public_task_fixture(tmp_path)
+    with pytest.raises(ValueError, match="selected B-class configs"):
+        MODULE.prepare_plan(
+            manifest,
+            model_a="model-a",
+            model_b="model-b",
+            backend_a="api",
+            backend_b="local",
+            context_window_a=100_000,
+            context_window_b=128_000,
+        )

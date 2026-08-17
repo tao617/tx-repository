@@ -59,7 +59,7 @@ def build(
         except KeyError as error:
             raise ValueError(f"official retrieval missing example_id: {task.example_id}") from error
         report = Path(record["report"]).name
-        if report != record["report"] or report != task.report:
+        if report != task.report:
             raise ValueError(f"official retrieval report mismatch: {task.example_id}")
         paragraph_ids = record["retrieved_context"]
         if (

@@ -21,6 +21,13 @@ PHASES = (
 )
 ERROR_KINDS = ("parse", "model", "skill", "protocol")
 TOOL_NAMES = ("search_report", "read_paragraphs", "calculator")
+VISIBILITY_KEYS = (
+    "ledger_evidence_ids",
+    "prompt_visible_evidence_ids",
+    "prompt_omitted_evidence_ids",
+    "dynamic_ledger_evidence_ids",
+    "prompt_visible_dynamic_evidence_ids",
+)
 SAFE_TERMINATION_REASONS = {
     "step budget exhausted",
     "submitted_during_exploration",
@@ -82,6 +89,14 @@ def _mean(value: int | float, denominator: int) -> float:
     return round(value / denominator, 6)
 
 
+def _valid_id_list(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and all(type(item) is int and item >= 0 for item in value)
+        and len(value) == len(set(value))
+    )
+
+
 def summarize(
     run_dir: Path,
     *,
@@ -109,7 +124,13 @@ def summarize(
     context_records = context_report_paragraphs = context_report_characters = 0
     context_assembled_paragraphs = context_full_report = context_local_truncations = 0
     provider_context_errors = 0
-    context_limits: Counter[str] = Counter()
+    context_request_records = estimated_input_tokens = 0
+    actual_provider_input_records = actual_provider_input_tokens = 0
+    context_windows: Counter[str] = Counter()
+    prompt_budgets: Counter[str] = Counter()
+    overflow_statuses: Counter[str] = Counter()
+    legacy_context_limits: Counter[str] = Counter()
+    visibility_counts: Counter[str] = Counter()
 
     trace_files = sorted((run_dir / "traces").glob("*.jsonl"))
     for trace_path in trace_files:
@@ -132,11 +153,64 @@ def summarize(
                     model_calls += 1
                     phase = payload.get("phase")
                     phase_attempts[str(phase) if phase in PHASES else "legacy"] += 1
+                    estimated = payload.get("estimated_input_tokens")
+                    if type(estimated) is int and estimated >= 0:
+                        context_request_records += 1
+                        estimated_input_tokens += estimated
+                        window = payload.get("model_context_window_tokens")
+                        if type(window) is int and window > 0:
+                            context_windows[str(window)] += 1
+                        prompt_budget = payload.get("prompt_budget_tokens")
+                        if type(prompt_budget) is int and prompt_budget > 0:
+                            prompt_budgets[str(prompt_budget)] += 1
+                        overflow_status = payload.get("overflow_status")
+                        if overflow_status in {
+                            "within_window", "estimated_overflow", "not_enforced"
+                        }:
+                            overflow_statuses[str(overflow_status)] += 1
+                    present_visibility = [
+                        key for key in VISIBILITY_KEYS if key in payload
+                    ]
+                    if present_visibility:
+                        if len(present_visibility) != len(VISIBILITY_KEYS) or any(
+                            not _valid_id_list(payload.get(key))
+                            for key in VISIBILITY_KEYS
+                        ):
+                            raise ValueError(
+                                f"{trace_path.name}:{line_number} has invalid evidence visibility IDs"
+                            )
+                        ids = {key: list(payload[key]) for key in VISIBILITY_KEYS}
+                        ledger = set(ids["ledger_evidence_ids"])
+                        visible = set(ids["prompt_visible_evidence_ids"])
+                        omitted = set(ids["prompt_omitted_evidence_ids"])
+                        dynamic = set(ids["dynamic_ledger_evidence_ids"])
+                        visible_dynamic = set(
+                            ids["prompt_visible_dynamic_evidence_ids"]
+                        )
+                        if (
+                            visible & omitted
+                            or visible | omitted != ledger
+                            or not dynamic <= ledger
+                            or not visible_dynamic <= dynamic & visible
+                        ):
+                            raise ValueError(
+                                f"{trace_path.name}:{line_number} has inconsistent evidence visibility IDs"
+                            )
+                        visibility_counts["instrumented_requests"] += 1
+                        visibility_counts["ledger"] += len(ledger)
+                        visibility_counts["visible"] += len(visible)
+                        visibility_counts["omitted"] += len(omitted)
+                        visibility_counts["dynamic_ledger"] += len(dynamic)
+                        visibility_counts["dynamic_visible"] += len(visible_dynamic)
                 elif event_name == "model_response":
                     model_responses += 1
                     input_tokens += int(payload.get("input_tokens", 0))
                     output_tokens += int(payload.get("output_tokens", 0))
                     latency_ms += float(payload.get("latency_ms", 0))
+                    actual_input = payload.get("actual_provider_input_tokens")
+                    if type(actual_input) is int and actual_input >= 0:
+                        actual_provider_input_records += 1
+                        actual_provider_input_tokens += actual_input
                 elif event_name == "action":
                     action_name = payload.get("action")
                     if isinstance(action_name, str):
@@ -161,6 +235,16 @@ def summarize(
                     phase = payload.get("phase")
                     phase_name = str(phase) if phase in PHASES else "legacy"
                     phase_errors[phase_name][_error_kind(payload)] += 1
+                    error_text = payload.get("error")
+                    if (
+                        payload.get("error_type") == "model"
+                        and isinstance(error_text, str)
+                        and (
+                            "context window" in error_text.casefold()
+                            or "context length" in error_text.casefold()
+                        )
+                    ):
+                        provider_context_errors += 1
                 elif event_name == "baseline_error":
                     phase_errors["baseline"][_error_kind(payload, baseline=True)] += 1
                     provider_context_errors += int(
@@ -185,7 +269,7 @@ def summarize(
                         trace_nonfull_context_count = assembled
                     limit = payload.get("model_context_limit")
                     if type(limit) is int and limit > 0:
-                        context_limits[str(limit)] += 1
+                        legacy_context_limits[str(limit)] += 1
                 elif event_name == "question_closed":
                     reason = payload.get("reason")
                     status = payload.get("status", "unknown")
@@ -331,6 +415,10 @@ def summarize(
             )
         },
         "rates": {
+            "file_completion_rate": _mean(len(predictions), expected),
+            "valid_output_rate": _mean(strict_valid, expected),
+            "invalid_rate": _mean(invalid, expected),
+            "review_trigger_rate": _mean(review_triggered, expected),
             "prediction_coverage": _mean(len(predictions), expected),
             "invalid": _mean(invalid, expected),
             "strict_valid": _mean(strict_valid, expected),
@@ -338,8 +426,52 @@ def summarize(
         },
         "totals": totals,
         "means_per_expected_example": means,
+        "evidence_visibility": {
+            "instrumented_model_requests": visibility_counts[
+                "instrumented_requests"
+            ],
+            "ledger_request_occurrences": visibility_counts["ledger"],
+            "visible_request_occurrences": visibility_counts["visible"],
+            "omitted_request_occurrences": visibility_counts["omitted"],
+            "dynamic_ledger_request_occurrences": visibility_counts[
+                "dynamic_ledger"
+            ],
+            "dynamic_visible_request_occurrences": visibility_counts[
+                "dynamic_visible"
+            ],
+            "overall_visibility_rate": (
+                _mean(visibility_counts["visible"], visibility_counts["ledger"])
+                if visibility_counts["ledger"]
+                else 0.0
+            ),
+            "dynamic_visibility_rate": (
+                _mean(
+                    visibility_counts["dynamic_visible"],
+                    visibility_counts["dynamic_ledger"],
+                )
+                if visibility_counts["dynamic_ledger"]
+                else 0.0
+            ),
+        },
         "long_context": {
             "instrumented_examples": context_records,
+            "instrumented_model_requests": context_request_records,
+            "mean_estimated_input_tokens": (
+                _mean(estimated_input_tokens, context_request_records)
+                if context_request_records
+                else 0.0
+            ),
+            "instrumented_provider_responses": actual_provider_input_records,
+            "mean_actual_provider_input_tokens": (
+                _mean(actual_provider_input_tokens, actual_provider_input_records)
+                if actual_provider_input_records
+                else 0.0
+            ),
+            "configured_model_context_windows": dict(
+                sorted(context_windows.items())
+            ),
+            "configured_prompt_budgets": dict(sorted(prompt_budgets.items())),
+            "overflow_status_counts": dict(sorted(overflow_statuses.items())),
             "mean_report_paragraphs": (
                 _mean(context_report_paragraphs, context_records)
                 if context_records
@@ -362,7 +494,9 @@ def summarize(
             ),
             "local_truncation_count": context_local_truncations,
             "provider_context_error_count": provider_context_errors,
-            "configured_context_limits": dict(sorted(context_limits.items())),
+            "legacy_configured_context_limits": dict(
+                sorted(legacy_context_limits.items())
+            ),
         },
     }
     if input_cost_per_million is not None or output_cost_per_million is not None:

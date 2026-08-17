@@ -30,13 +30,14 @@ def test_api_and_local_bclass_configs_are_paired_and_loadable():
         assert local.run.backend_kind == "local"
         assert api.backend.model == "external-model-name"
         assert local.backend.model == "local-small-model"
+        assert api.backend.model_context_window_tokens == local.backend.model_context_window_tokens == 100_000
         assert api.generation == local.generation
         assert api.generation.model_dump() == {
             "temperature": 0.0,
             "top_p": 1.0,
             "seed": 7,
             "max_output_tokens": 1024,
-            "max_context_tokens": 32768,
+            "prompt_budget_tokens": 32768,
         }
         assert method_section(api) == method_section(local)
 
@@ -92,6 +93,8 @@ def test_top_k_ablations_use_independent_named_artifacts():
     for top_k in (3, 5, 10):
         config = load_config(BCLASS / "ablations" / f"RAG{top_k}_SEEDED.yaml")
         assert config.agent is not None
+        assert config.backend.model_context_window_tokens == 100_000
+        assert config.generation.prompt_budget_tokens == 32_768
         initial = config.agent.initial_retrieval
         assert initial.enabled
         assert initial.top_k == top_k

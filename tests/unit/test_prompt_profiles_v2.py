@@ -5,7 +5,7 @@ import pytest
 from findver_agent.baseline import BaselineRunner
 from findver_agent.config import AgentConfig, BaselineConfig
 from findver_agent.model_backends.base import GenerationConfig, ModelResponse
-from findver_agent.prompt_builder import PromptBuilder
+from findver_agent.prompt_builder import PromptBuilder, select_evidence
 from findver_agent.report_store import ReportStore
 from findver_agent.schemas import Confidence, EvidenceStatus, Prediction, PublicTask, RiskFlag
 from findver_agent.state import EvidenceRecord, InitialRetrievalState, QuestionState
@@ -172,3 +172,54 @@ def test_v2_finalization_and_review_prompts_are_submit_only_and_show_review_stat
     assert "Verified draft" in review_user
     assert "low_confidence" in review_user
     assert "unsupported claim" in review_user
+
+
+def test_recent_dynamic_evidence_survives_saturated_seed_budget():
+    task = PublicTask(
+        example_id="dynamic-visibility",
+        statement="The recovered target value is supported.",
+        report="report.json",
+    )
+    state = QuestionState.create(
+        task,
+        8,
+        protocol_version="v2",
+        exploration_steps=6,
+        finalization_steps=2,
+        review_steps=1,
+    )
+    for paragraph_id in range(10):
+        state.evidence_ledger.append(
+            EvidenceRecord(
+                paragraph_id=paragraph_id,
+                exact_text=f"long frozen seed {paragraph_id} " + "s" * 2800,
+                source="fixed_rag:text-embedding-3-large:top10",
+                reason_selected="seeded by frozen upstream retrieval",
+                read_order=paragraph_id,
+                pinned=True,
+            )
+        )
+    for offset in range(4):
+        paragraph_id = 100 + offset
+        state.evidence_ledger.append(
+            EvidenceRecord(
+                paragraph_id=paragraph_id,
+                exact_text=f"recovered target evidence {offset} " + "d" * 1200,
+                source="report",
+                reason_selected="selected dynamically",
+                read_order=10 + offset,
+            )
+        )
+
+    selected = select_evidence(state, 24_000)
+    selected_ids = [record.paragraph_id for record in selected]
+    visibility = PromptBuilder(
+        GenerationConfig(max_context_tokens=32_768),
+        AgentConfig(protocol_version="v2"),
+    ).evidence_visibility(state)
+
+    assert selected_ids[:4] == [103, 102, 101, 100]
+    assert set(range(100, 104)).issubset(selected_ids)
+    assert len(set(range(10)) & set(selected_ids)) < 10
+    assert visibility["ledger_evidence_ids"] == list(range(10)) + list(range(100, 104))
+    assert visibility["prompt_visible_dynamic_evidence_ids"] == [103, 102, 101, 100]

@@ -2,21 +2,21 @@
 
 ## Current state
 
-Phase `public-release-packaging` completed: Made the B-class matrix planner tests self-contained for the history-free public release without publishing runtime task data.
+Phase `public-release-portability` completed: Made the new B-class context-window validation test independent of untracked runtime task data in public clones.
 
-- Git commit at checkpoint start: `a73d37e282f32510584219267060be8f103f8a4e`
-- Changed files: 2
+- Git commit at checkpoint start: `a4b09f471a3840c323e14f546925d7a0272177d9`
+- Changed files: 1
 
 ## Diff summary
 
 ```text
-tests/unit/test_prepare_bclass_matrix.py | 37 +++++++++++++++++++++++++-------
- 1 file changed, 29 insertions(+), 8 deletions(-)
+tests/unit/test_prepare_bclass_matrix.py | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
 ```
 
 ## Tests passed
 
-- 159 full Agent tests passed; one existing Starlette deprecation warning.
+- 7 focused matrix-planner tests; 187 full Agent tests; Python compileall and git diff checks.
 
 ## Tests failed or unavailable
 
@@ -38,4 +38,4 @@ pytest -q
 
 ## Next action
 
-Publish the verified allowlisted release commit to origin/main.
+Publish the verified allowlisted update to origin/main.

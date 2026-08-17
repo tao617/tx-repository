@@ -4,12 +4,14 @@
 
 This contract is for a separate, networkless Private Scorer or scorer-side analysis process. The Agent Runtime must never receive the analysis input, gold labels, gold evidence, scorer code, per-example comparisons, or scorer output. Only an output conforming to the aggregate schema may leave the scorer boundary.
 
-The separate Private Scorer repository is not present in this workspace. Therefore this repository supplies only the metric definitions and adapter schemas; it does not claim that the private implementation is complete. The missing adapter implementation is recorded as a blocked item in `docs/STATE.yaml`.
+The implementation is complete in the separate, networkless Private Scorer repository at commit `37aad0d`. That repository, its private inputs, and its outputs remain outside this Agent workspace and Runtime build context. This repository continues to carry only the metric definitions and adapter schemas.
 
 The schemas are:
 
 - `docs/private_metrics/evidence_analysis_input.schema.json`: private, per-example scorer input; never copied into the Runtime or a public result.
 - `docs/private_metrics/evidence_analysis_output.schema.json`: aggregate-only output permitted to cross the scorer boundary.
+
+For Agent runs, `evidence-ledger.jsonl` is transferred beside, not inside, the sealed submission. It contains only `example_id`, `initial_rag_evidence_ids`, and `final_agent_evidence_ids`. The sealed manifest binds its schema version and SHA256. Handoff rejects a missing, unexpected, malformed, population-mismatched, or hash-mismatched sidecar. The scorer-side adapter combines this non-Gold ID-only artifact with private Gold only after the runtime has stopped.
 
 The private input deliberately contains no statement text, report text, explanation text, or model trace. It binds candidate and strongest-baseline labels, evidence ID sets, document length, frozen retrieval identity, and statistical settings for one paired population.
 
@@ -67,4 +69,4 @@ McNemar uses the paired label-correctness table. The output records candidate-co
 
 Document length groups are configured privately using explicit paragraph-count cutoffs for `short`, `medium`, and `long`. Evidence positions are derived from `(paragraph_id + 0.5) / document_paragraph_count` into `front`, `middle`, and `back` thirds. An example with gold evidence in multiple thirds may contribute to multiple position groups; this must be stated in the aggregate output metadata.
 
-This phase prepares the fields and aggregate output shape only. It does not authorize a synthetic long-context study or a paid evaluation run.
+The isolated adapter implements these aggregate groups. This does not authorize a synthetic long-context study or a paid evaluation run.

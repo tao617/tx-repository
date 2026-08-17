@@ -50,6 +50,8 @@ Top-3 and Top-5 files are independent frozen retrieval artifacts. They must not 
 
 Seeded evidence is pinned with source `fixed_rag:<retriever>:top<k>` and selection reason `seeded by frozen upstream retrieval`. It counts toward evidence size, unique paragraphs, prompt tokens, and paragraph-efficiency metrics, but not tool or model budgets.
 
+Prompt evidence selection reserves 35% of its bounded evidence-character budget for up to four most-recent dynamic paragraphs and guarantees the two most recent when they fit the total budget. Remaining capacity uses the deterministic historical priority. Every Agent model-request trace records only ledger, prompt-visible, prompt-omitted, dynamic-ledger, and visible-dynamic paragraph IDs; aggregate summaries report visibility rates without example IDs or evidence text.
+
 ### Protocol versions and budgets
 
 Protocol v1 keeps the historical `max_steps` behavior. Protocol v2 uses independent budgets:
@@ -124,6 +126,18 @@ iterative_rag:
 
 Model names remain configuration values. The experiment-matrix launcher accepts two explicit, distinct model IDs and binds both to identical task hash, retrieval hash, prompt profile, and generation settings while producing separate run IDs.
 
+### Prompt budget and model context capacity
+
+```yaml
+backend:
+  model_context_window_tokens: 100000
+generation:
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+```
+
+The prompt budget controls deterministic prompt/evidence construction only. The model capacity is a local fail-closed constraint: estimated input plus reserved output is checked before transport, and provider-reported prompt usage is checked after response. Formal plan preparation and execution require the declared capacity to match the selected config; no nonstandard capacity field is sent to the model API.
+
 ## Experiment matrix
 
 New configurations live under `configs/bclass/`; they do not alter historical IDs.
@@ -144,9 +158,9 @@ Every new run uses a new run ID, data manifest, code commit, config hash, and re
 
 ## Metrics and scorer contract
 
-Agent-side aggregate summaries report coverage, invalid and strict-valid rates, mean model calls/tokens/latency, phase attempts, tool calls, seed and dynamic paragraph counts, review trigger/fallback/change counts, termination reasons, and parse/model/skill errors by phase.
+Agent-side aggregate summaries report file completion, valid output, invalid, and review-trigger rates; mean model calls/tokens/latency; phase attempts; tool calls; seed and dynamic paragraph counts; review fallback/change counts; termination reasons; and parse/model/skill errors by phase. Legacy rate keys remain documented compatibility aliases.
 
-Long-context instrumentation records actual baseline input tokens, report paragraph count, report character count, whether the report was fully assembled, local truncation, provider context errors, and configured model context limit. Offline analysis reserves short/medium/long document and front/middle/back evidence-position groups.
+Long-context instrumentation records deterministic estimated input, provider-reported actual input, reserved output, the prompt-construction budget, real model context capacity, estimated overflow status, provider context errors, report paragraph/character counts, full-report assembly, and local truncation. Aggregate summaries contain no task or evidence text. Offline analysis reserves short/medium/long document and front/middle/back evidence-position groups.
 
 Private scorer analysis owns Evidence Precision/Recall/F1, All-Gold Evidence Recall, Initial RAG Recall, Final Agent Evidence Recall, Evidence Recovery Rate, correctness conditioned on initial/recovered evidence, paired-bootstrap 95% confidence intervals, and McNemar comparison. Only aggregate outputs may cross the scorer boundary. If the private scorer is unavailable in this workspace, only the contract and adapter schema are implemented here and the private implementation remains explicitly blocked.
 
@@ -183,12 +197,14 @@ Each completed phase runs `scripts/context_checkpoint.py`, updates this status t
 - Added paired API/Local configs for all seven B-class conditions plus independent-file Top-3/5/10 development ablations, without modifying historical configs.
 - Added a non-executing two-model matrix planner that requires distinct explicit model IDs and freezes paired task/retrieval hashes, prompt profiles, generation settings, config hashes, budgets, and run IDs.
 - Added the B-class manifest/runbook and updated experiment/test/README guidance; rebuilt Runtime/Gateway images and completed Mock API, Mock Local, and iterative-entry container smokes without paid calls.
+- Separated the 32768-token prompt-construction budget from a hash-bound 100000-token B-class model capacity, with pre-transport estimation, provider-usage verification, fail-closed overflow handling, trace telemetry, and aggregate-only summaries.
+- Added a no-credential nine-call stateful M2 Docker smoke with offline verification, plus public Python 3.11/3.12 pytest and Python 3.12 Docker jobs in GitHub Actions.
+- Imported and validated the independent official FinDVer `text-embedding-3-large` top-3 and top-5 outputs from frozen commit `e8bb237def4ce555a606a45edba22666e31df248`; the Runtime artifacts remain gold-free and are not truncated from top-10.
 - Completed the single final ultra audit across all 15 prescribed leakage, isolation, submission, history, seed, budget, review, state, iterative-baseline, config, mock, Compose, and regression checks; recorded evidence in `docs/B_CLASS_FINAL_AUDIT.md`.
 
 ## Pending items
 
-- Real private-scorer metric implementation, if the separate scorer repository is not available.
-- Independent official top-3 and top-5 retrieval artifacts required for those development ablations.
+- Implement the private evidence metrics, paired bootstrap, and McNemar adapter only inside the separate Private Scorer repository and preserve its networkless boundary.
 - Any paid API, final-hidden, full second-model, top-k ablation, or budget-ablation run.
 
 ## Out of scope

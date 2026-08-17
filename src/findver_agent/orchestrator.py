@@ -15,7 +15,11 @@ from findver_agent.actions import (
 )
 from findver_agent.config import AgentConfig
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
-from findver_agent.model_backends.base import GenerationConfig, ModelBackend
+from findver_agent.model_backends.base import (
+    GenerationConfig,
+    ModelBackend,
+    context_window_metadata,
+)
 from findver_agent.prompt_builder import PromptBuilder
 from findver_agent.report_store import ReportSession, ReportStore
 from findver_agent.schemas import (
@@ -112,7 +116,23 @@ class AgentOrchestrator:
         while state.step < self.config.max_steps:
             state.remaining_steps = self.config.max_steps - state.step
             messages = self.prompt_builder.build(state)
-            trace.write("model_request", {"step": state.step, "messages": messages})
+            context_metadata = context_window_metadata(
+                messages,
+                max_output_tokens=self.generation.max_output_tokens,
+                model_context_window_tokens=getattr(
+                    self.backend, "model_context_window_tokens", None
+                ),
+            )
+            trace.write(
+                "model_request",
+                {
+                    "step": state.step,
+                    "messages": messages,
+                    **self.prompt_builder.evidence_visibility(state),
+                    "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                    **context_metadata,
+                },
+            )
             try:
                 state.usage.model_calls += 1
                 response = await self.backend.generate(messages, self.generation)
@@ -125,6 +145,7 @@ class AgentOrchestrator:
                         "step": state.step,
                         "content": response.content,
                         "input_tokens": response.input_tokens,
+                        "actual_provider_input_tokens": response.input_tokens,
                         "output_tokens": response.output_tokens,
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
@@ -276,6 +297,13 @@ class AgentOrchestrator:
             phase = state.phase
             self._begin_v2_attempt(state)
             messages = self.prompt_builder.build(state)
+            context_metadata = context_window_metadata(
+                messages,
+                max_output_tokens=self.generation.max_output_tokens,
+                model_context_window_tokens=getattr(
+                    self.backend, "model_context_window_tokens", None
+                ),
+            )
             trace.write(
                 "model_request",
                 {
@@ -283,6 +311,9 @@ class AgentOrchestrator:
                     "phase": phase,
                     "phase_attempt": self._phase_step(state, phase),
                     "messages": messages,
+                    **self.prompt_builder.evidence_visibility(state),
+                    "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                    **context_metadata,
                 },
             )
             try:
@@ -298,6 +329,7 @@ class AgentOrchestrator:
                         "phase_attempt": self._phase_step(state, phase),
                         "content": response.content,
                         "input_tokens": response.input_tokens,
+                        "actual_provider_input_tokens": response.input_tokens,
                         "output_tokens": response.output_tokens,
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
@@ -323,10 +355,12 @@ class AgentOrchestrator:
                 "action",
                 {"phase": phase, **action.model_dump(mode="json")},
             )
-            self._apply_action_control(state, action)
+            control = action.control
+            if control is None:  # protocol v2 parsing enforces this
+                raise ValueError("protocol v2 action is missing control metadata")
             if (
                 phase == "exploration"
-                and state.evidence_status == EvidenceStatus.SUFFICIENT
+                and control.evidence_status == EvidenceStatus.SUFFICIENT
                 and not isinstance(action, SubmitAction)
             ):
                 self._record_v2_error(state, trace, phase, "protocol", "exploration protocol inconsistency: sufficient evidence requires submit_answer")
@@ -340,12 +374,15 @@ class AgentOrchestrator:
                     f"{phase} protocol error: only submit_answer is allowed",
                 )
                 continue
+            candidate_risks = set(state.risk_flags) | set(control.risk_flags)
+            if control.evidence_status == EvidenceStatus.CONFLICTING:
+                candidate_risks.add(RiskFlag.CONFLICTING_EVIDENCE)
             if (
                 phase == "finalization"
                 and isinstance(action, SubmitAction)
-                and state.evidence_status != EvidenceStatus.SUFFICIENT
-                and state.evidence_confidence != Confidence.LOW
-                and set(state.risk_flags).isdisjoint(
+                and control.evidence_status != EvidenceStatus.SUFFICIENT
+                and control.confidence != Confidence.LOW
+                and candidate_risks.isdisjoint(
                     {
                         RiskFlag.CONFLICTING_EVIDENCE,
                         RiskFlag.RETRIEVAL_GAP,
@@ -367,6 +404,7 @@ class AgentOrchestrator:
                 elif isinstance(action, SubmitAction):
                     self._validate_submission(state, action)
                     prediction = submit.execute(**action.arguments.model_dump())
+                    self._apply_action_control(state, action)
                     if phase == "review":
                         if state.draft_prediction is None:
                             raise SkillError("review requires a verified draft")
@@ -410,6 +448,7 @@ class AgentOrchestrator:
                     f"skill error: {error}",
                 )
                 continue
+            self._apply_action_control(state, action)
             self._complete_v2_attempt(state, trace, observation)
 
         if state.prediction is None:  # pragma: no cover - loop closes through helpers
@@ -531,7 +570,8 @@ class AgentOrchestrator:
         reasons: list[str] = []
         if state.tool_counts.calculator > 0:
             reasons.append("calculator_used")
-        if RiskFlag.CONFLICTING_EVIDENCE in state.risk_flags:
+        draft_risks = set(state.draft_risk_flags)
+        if RiskFlag.CONFLICTING_EVIDENCE in draft_risks:
             reasons.append("conflicting_evidence")
         if state.draft_confidence == Confidence.LOW:
             reasons.append("low_confidence")
@@ -540,9 +580,9 @@ class AgentOrchestrator:
             and state.forced_finalization_evidence_status != EvidenceStatus.SUFFICIENT
         ):
             reasons.append("forced_finalization_insufficient_evidence")
-        if RiskFlag.WEAK_SUPPORT in state.risk_flags:
+        if RiskFlag.WEAK_SUPPORT in draft_risks:
             reasons.append("weak_support")
-        if RiskFlag.TABLE_ALIGNMENT in state.risk_flags:
+        if RiskFlag.TABLE_ALIGNMENT in draft_risks:
             reasons.append("table_alignment")
         return reasons
 
@@ -559,6 +599,7 @@ class AgentOrchestrator:
         state.draft_submission = submission
         state.draft_confidence = state.evidence_confidence
         state.draft_evidence_status = state.evidence_status
+        state.draft_risk_flags = list(state.risk_flags)
         self._complete_v2_attempt(
             state,
             trace,

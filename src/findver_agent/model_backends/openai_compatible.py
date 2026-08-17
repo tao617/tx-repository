@@ -7,7 +7,12 @@ from typing import Any
 
 import httpx
 
-from findver_agent.model_backends.base import GenerationConfig, ModelResponse
+from findver_agent.model_backends.base import (
+    ContextWindowExceededError,
+    GenerationConfig,
+    ModelResponse,
+    context_window_metadata,
+)
 from findver_agent.model_backends.retry_policy import retry_async
 
 
@@ -23,9 +28,11 @@ class OpenAICompatibleBackend:
         model: str,
         timeout_seconds: float,
         max_retries: int,
+        model_context_window_tokens: int,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.model_name = model
+        self.model_context_window_tokens = model_context_window_tokens
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._max_retries = max_retries
         self._client = httpx.AsyncClient(timeout=timeout_seconds, transport=transport)
@@ -43,6 +50,18 @@ class OpenAICompatibleBackend:
         messages: list[dict[str, str]],
         config: GenerationConfig,
     ) -> ModelResponse:
+        context = context_window_metadata(
+            messages,
+            max_output_tokens=config.max_output_tokens,
+            model_context_window_tokens=self.model_context_window_tokens,
+        )
+        if context["overflow_status"] == "estimated_overflow":
+            raise ContextWindowExceededError(
+                "context window overflow before request: "
+                f"estimated_input_tokens={context['estimated_input_tokens']} "
+                f"max_output_tokens={config.max_output_tokens} "
+                f"model_context_window_tokens={self.model_context_window_tokens}"
+            )
         payload: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
@@ -74,9 +93,21 @@ class OpenAICompatibleBackend:
             raise BackendError("gateway returned an invalid chat completion") from error
         if not isinstance(content, str):
             raise BackendError("gateway completion content must be a string")
+        input_tokens = int(usage.get("prompt_tokens") or 0)
+        if (
+            input_tokens > 0
+            and input_tokens + config.max_output_tokens
+            > self.model_context_window_tokens
+        ):
+            raise ContextWindowExceededError(
+                "context window overflow from provider usage: "
+                f"actual_provider_input_tokens={input_tokens} "
+                f"max_output_tokens={config.max_output_tokens} "
+                f"model_context_window_tokens={self.model_context_window_tokens}"
+            )
         return ModelResponse(
             content=content,
-            input_tokens=int(usage.get("prompt_tokens") or 0),
+            input_tokens=input_tokens,
             output_tokens=int(usage.get("completion_tokens") or 0),
             latency_ms=latency_ms,
             response_id=data.get("id"),

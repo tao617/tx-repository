@@ -46,8 +46,28 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
     write_jsonl(
         run / "traces" / "trace.jsonl",
         [
-            {"event": "model_request", "payload": {"phase": "exploration", "messages": ["private"]}},
-            {"event": "model_response", "payload": {"input_tokens": 10, "output_tokens": 2, "latency_ms": 3}},
+            {
+                "event": "model_request",
+                "payload": {
+                    "phase": "exploration",
+                    "messages": ["private"],
+                    "estimated_input_tokens": 900,
+                    "estimated_total_tokens": 1924,
+                    "max_output_tokens": 1024,
+                    "model_context_window_tokens": 100_000,
+                    "prompt_budget_tokens": 32_768,
+                    "overflow_status": "within_window",
+                },
+            },
+            {
+                "event": "model_response",
+                "payload": {
+                    "input_tokens": 10,
+                    "actual_provider_input_tokens": 10,
+                    "output_tokens": 2,
+                    "latency_ms": 3,
+                },
+            },
             {"event": "model_request", "payload": {"phase": "finalization"}},
             {"event": "model_request", "payload": {"phase": "review"}},
             {"event": "model_response", "payload": {"input_tokens": 12, "output_tokens": 4, "latency_ms": 5}},
@@ -85,6 +105,10 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
     rendered = json.dumps(summary)
 
     assert summary["rates"] == {
+        "file_completion_rate": 1.0,
+        "valid_output_rate": 1.0,
+        "invalid_rate": 0.0,
+        "review_trigger_rate": 1.0,
         "prediction_coverage": 1.0,
         "invalid": 0.0,
         "strict_valid": 1.0,
@@ -107,6 +131,14 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
     assert summary["totals"]["phase_errors"]["finalization"]["model"] == 1
     assert summary["totals"]["phase_errors"]["review"]["skill"] == 1
     assert summary["long_context"]["provider_context_error_count"] == 1
-    assert summary["long_context"]["configured_context_limits"] == {"8192": 1}
+    assert summary["long_context"]["legacy_configured_context_limits"] == {"8192": 1}
+    context = summary["long_context"]
+    assert context["instrumented_model_requests"] == 1
+    assert context["mean_estimated_input_tokens"] == 900.0
+    assert context["instrumented_provider_responses"] == 1
+    assert context["mean_actual_provider_input_tokens"] == 10.0
+    assert context["configured_model_context_windows"] == {"100000": 1}
+    assert context["configured_prompt_budgets"] == {"32768": 1}
+    assert context["overflow_status_counts"] == {"within_window": 1}
     for secret in ("sensitive-example-id", "Sensitive answer", "private evidence", "private parse"):
         assert secret not in rendered

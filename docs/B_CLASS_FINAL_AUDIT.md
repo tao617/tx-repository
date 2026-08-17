@@ -24,8 +24,16 @@ This is the single final `ultra` audit required by the B-class upgrade plan. It 
 | 14 | Compose isolation remains valid | pass | API and Local Agent Compose profiles and scorer Compose expanded successfully. Structural assertions verified separate projects/build contexts, Agent internal networking, scorer networklessness, disjoint mounts, no ports, and no Docker socket. |
 | 15 | All tests pass | pass | 80 focused final-audit tests passed, followed by 158/158 full Agent tests. One pre-existing Starlette/httpx deprecation warning remains. |
 
+## Post-audit hardening status
+
+The table above remains the immutable evidence for the 2026-08-16 audit and is not retroactively rewritten by later work. The subsequent hardening series explicitly amended the project contract to allow one hash-bound, paragraph-ID-only ledger sidecar outside the three-file archive; bound formal run identity; prevented rejected actions from mutating control state; preserved dynamic prompt visibility; and separated the 32768-token prompt-construction budget from a hash-bound 100000-token B-class model capacity.
+
+- Agent summaries now expose unambiguous primary rate names while retaining documented compatibility aliases.
+- A deterministic nine-call M2 scenario, strict offline verifier, and public GitHub Actions jobs cover the stateful Docker path without real credentials.
+- Post-fix user-side run `bclass-stateful-local-20260817-03` rebuilt both images and passed strict offline verification with eight actions, nine model calls, `review_fallback`, calculator-only persisted/draft risk, and no rejected-action pollution. The GitHub Actions result must still be observed on the exact pushed commit before public CI verification is claimed.
+- Independent official `text-embedding-3-large` top-3 and top-5 outputs were imported from frozen FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`, validated against all 700 public tasks and reports, and wrapped without Gold or top-10 truncation.
+
 ## Outstanding external items
 
 - The private evidence-metrics, paired-bootstrap, and McNemar adapter is not implemented in this Agent workspace. The separate Private Scorer was inspected read-only for isolation and regression only; no gold, scorer source, outputs, or feedback were copied here.
-- Independent official embedding top-3 and top-5 retrieval artifacts are not present. Their configs are loadable templates but those ablations remain blocked and were not run.
 - Formal paid API, second-model, `dev_holdout`, and `final_hidden` evaluations require explicit authorization and frozen private manifests.

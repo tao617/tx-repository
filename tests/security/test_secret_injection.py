@@ -25,6 +25,8 @@ def test_runtime_env_loader_does_not_copy_or_print_secrets() -> None:
     assert "echo \"$MODEL_API_KEY\"" not in text
     assert "agent_api.yaml" not in text
     assert "flock -n 9" in text
+    assert 'exec 9<"$lock_path"' in text
+    assert '"${compose[@]}" build model-gateway agent-runtime' in text
     assert "--project-name findver-agent" in text
     assert "COMPOSE_PROJECT_NAME" in text
     assert "FINDVER_RUN_OUTPUT_DIR" in text

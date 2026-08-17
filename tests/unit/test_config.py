@@ -22,6 +22,19 @@ def agent_config(base_url="http://model-gateway:8080/v1"):
 def test_runtime_config_accepts_fixed_gateway():
     config = AppConfig.model_validate(agent_config())
     assert config.backend.base_url == "http://model-gateway:8080/v1"
+    assert config.backend.model_context_window_tokens == 32768
+    assert config.generation.prompt_budget_tokens == 4096
+    assert config.generation.max_context_tokens == 4096
+    assert config.generation.model_dump()["prompt_budget_tokens"] == 4096
+    assert "max_context_tokens" not in config.generation.model_dump()
+
+
+def test_runtime_config_separates_prompt_budget_from_model_capacity():
+    raw = agent_config()
+    raw["backend"]["model_context_window_tokens"] = 100_000
+    raw["generation"] = {"prompt_budget_tokens": 32_768}
+    config = AppConfig.model_validate(raw)
+    assert (config.generation.prompt_budget_tokens, config.backend.model_context_window_tokens) == (32_768, 100_000)
 
 
 @pytest.mark.parametrize(

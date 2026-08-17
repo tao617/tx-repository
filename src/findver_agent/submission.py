@@ -16,6 +16,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from findver_agent.evidence_sidecar import (
+    SIDECAR_NAME,
+    SIDECAR_SCHEMA_VERSION,
+    EvidenceSidecarError,
+    build_evidence_ledger_sidecar,
+    load_evidence_ledger_sidecar,
+    write_immutable_sidecar,
+)
+from findver_agent.run_identity import RunIdentity
 from findver_agent.schemas import Prediction, PredictionStatus
 
 
@@ -51,6 +60,11 @@ class SubmissionManifest(BaseModel):
     config_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     public_tasks_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     predictions_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    run_identity: RunIdentity | None = None
+    evidence_ledger_sidecar_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$"
+    )
+    evidence_ledger_sidecar_schema_version: Literal[1] | None = None
     expected_examples: int = Field(ge=0)
     submitted_examples: int = Field(ge=0)
     started_at: datetime
@@ -62,6 +76,26 @@ class SubmissionManifest(BaseModel):
             raise ValueError("submitted example count must equal expected example count")
         if self.completed_at < self.started_at:
             raise ValueError("completed_at cannot precede started_at")
+        if (self.evidence_ledger_sidecar_sha256 is None) != (
+            self.evidence_ledger_sidecar_schema_version is None
+        ):
+            raise ValueError("evidence ledger sidecar hash and schema version must be paired")
+        if self.run_identity is not None:
+            identity = self.run_identity
+            bound_fields = {
+                "run ID": (self.run_id, identity.plan_run_id),
+                "model alias": (self.model, identity.model_alias),
+                "backend": (self.backend, identity.backend_kind),
+                "git commit": (self.git_commit, identity.git_commit_at_start),
+                "config SHA256": (self.config_sha256, identity.config_sha256),
+                "public tasks SHA256": (
+                    self.public_tasks_sha256,
+                    identity.public_tasks_sha256,
+                ),
+            }
+            for name, (manifest_value, identity_value) in bound_fields.items():
+                if manifest_value != identity_value:
+                    raise ValueError(f"manifest {name} must match run identity")
         return self
 
 
@@ -156,6 +190,25 @@ def seal_submission(run_dir: Path, output: Path, *, repository_root: Path | None
         raise SubmissionError("prediction IDs do not exactly match public task IDs")
     if metadata.get("expected_examples") != len(expected_ids):
         raise SubmissionError("metadata expected count does not match task_ids")
+    sidecar_sha256 = None
+    sidecar_schema_version = None
+    if metadata.get("agent_enabled") is True:
+        try:
+            sidecar_data = build_evidence_ledger_sidecar(run_dir, expected_ids)
+            sidecar_sha256 = write_immutable_sidecar(
+                run_dir / SIDECAR_NAME,
+                sidecar_data,
+            )
+        except EvidenceSidecarError as error:
+            raise SubmissionError(str(error)) from error
+        sidecar_schema_version = SIDECAR_SCHEMA_VERSION
+    identity_data = metadata.get("run_identity")
+    run_identity = None
+    if identity_data is not None:
+        try:
+            run_identity = RunIdentity.model_validate(identity_data)
+        except ValueError as error:
+            raise SubmissionError("run metadata contains an invalid run identity") from error
     repository_root = repository_root or Path(__file__).resolve().parents[2]
     manifest = SubmissionManifest(
         run_id=run_dir.name,
@@ -163,10 +216,17 @@ def seal_submission(run_dir: Path, output: Path, *, repository_root: Path | None
         model=metadata["model"],
         backend=metadata["backend"],
         agent_enabled=metadata["agent_enabled"],
-        git_commit=metadata.get("git_commit") or _git_commit(repository_root),
+        git_commit=(
+            run_identity.git_commit_at_start
+            if run_identity is not None
+            else metadata.get("git_commit") or _git_commit(repository_root)
+        ),
         config_sha256=metadata["config_sha256"],
         public_tasks_sha256=metadata["public_tasks_sha256"],
         predictions_sha256=sha256_bytes(predictions_data),
+        run_identity=run_identity,
+        evidence_ledger_sidecar_sha256=sidecar_sha256,
+        evidence_ledger_sidecar_schema_version=sidecar_schema_version,
         expected_examples=len(expected_ids),
         submitted_examples=len(predictions),
         started_at=metadata["started_at"],
@@ -240,7 +300,11 @@ def _parse_sums(data: bytes) -> dict[str, str]:
     return sums
 
 
-def verify_submission_archive(path: Path) -> tuple[SubmissionManifest, list[Prediction]]:
+def verify_submission_archive(
+    path: Path,
+    *,
+    evidence_ledger_sidecar: Path | None = None,
+) -> tuple[SubmissionManifest, list[Prediction]]:
     try:
         with tarfile.open(path, mode="r:gz") as archive:
             members = archive.getmembers()
@@ -274,5 +338,20 @@ def verify_submission_archive(path: Path) -> tuple[SubmissionManifest, list[Pred
         raise SubmissionError("manifest predictions hash mismatch")
     if len(predictions) != manifest.submitted_examples:
         raise SubmissionError("manifest submitted count mismatch")
+    if evidence_ledger_sidecar is not None:
+        if manifest.evidence_ledger_sidecar_sha256 is None:
+            if evidence_ledger_sidecar.exists():
+                raise SubmissionError("unexpected evidence ledger sidecar")
+        else:
+            try:
+                load_evidence_ledger_sidecar(
+                    evidence_ledger_sidecar,
+                    expected_sha256=manifest.evidence_ledger_sidecar_sha256,
+                    expected_ids=[
+                        prediction.example_id for prediction in predictions
+                    ],
+                )
+            except EvidenceSidecarError as error:
+                raise SubmissionError(str(error)) from error
     return manifest, predictions
 

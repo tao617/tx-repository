@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: public-release-packaging
+current_phase: public-release-portability
 current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
   Scorer experiment system.
-last_completed_phase: public-release-packaging
-last_git_commit: a73d37e282f32510584219267060be8f103f8a4e
+last_completed_phase: public-release-portability
+last_git_commit: a4b09f471a3840c323e14f546925d7a0272177d9
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -73,13 +73,13 @@ decisions:
   adaptive stop, or review.
 - Aggregate model-call totals count requests, while tokens and latency count completed
   responses; state is used only for aggregate tool, evidence, and review totals.
-- Private evidence, recovery, paired-bootstrap, and McNemar implementation remains
-  outside Runtime; this repository contains only scorer-side contracts because the
-  separate scorer repository is absent.
+- Private evidence, recovery, paired-bootstrap, and exact McNemar analysis is implemented
+  in the separate networkless Private Scorer repository at commit 37aad0d; its code,
+  private data, and outputs remain outside this Agent workspace and Runtime build
+  context.
 - Iterative RAG uses invariant configured retrieval rounds plus submit-only finalization
   without controller/review; aggregate calls count requests while usage counts responses;
-  private evidence analysis remains isolated and blocked on the absent separate scorer
-  repository.
+  private evidence analysis remains isolated in the separate Private Scorer repository.
 - B-class main configs are paired across API and Local with identical generation and
   method settings; backend alias, timeout, retries, and backend kind are the only
   pair differences.
@@ -87,7 +87,8 @@ decisions:
   creates independent run IDs, and freezes shared task/retrieval hashes and per-condition
   fairness fields.
 - Top-k ablations are limited to one primary model on development data; independent
-  official top-3 and top-5 artifacts are required before those configs can run.
+  official top-3, top-5, and top-10 artifacts from frozen FinDVer commit e8bb237 are
+  available, while any actual ablation run still requires explicit authorization.
 - B-class API/local pairs share method and generation settings; the planner requires
   distinct explicit model IDs and produces prepared-not-executed paired runs; paid
   and final-hidden execution remains unauthorized.
@@ -96,8 +97,42 @@ decisions:
   refactor is required.
 - Public release matrix tests use a minimal allowed task fixture while production
   task and retrieval artifact hashes remain pinned.
+- Agent submissions carry a separate immutable evidence-ledger.jsonl sidecar containing
+  only example IDs, initial RAG paragraph IDs, and final ledger paragraph IDs; its
+  schema and SHA256 are bound into manifest.json.
+- Formal B-class execution uses only the schema-v2 plan executor; model, code, config,
+  task, retrieval, run ID, backend, context capacity, and resume identity fail closed
+  on drift.
+- Protocol- or skill-rejected actions consume attempts and record errors but cannot
+  mutate evidence control or risk state; selective review reads the accepted draft
+  risk snapshot.
+- Reserve 35 percent of evidence prompt characters for up to four recent dynamic paragraphs,
+  guarantee the newest two when they fit, and export only aggregate visibility rates.
+- Use a 32768-token prompt-construction budget and a 100000-token B-class model context
+  capacity.
+- Treat context capacity as a local hash-bound constraint and never send it as a nonstandard
+  API field.
+- Fail before transport on estimated overflow and fail after response on authoritative
+  provider-usage overflow.
+- Use explicit file_completion_rate, valid_output_rate, invalid_rate, and review_trigger_rate
+  keys while retaining documented legacy aliases.
+- Keep the single /run/lock/findver-evaluation.lock path and open it read-only for
+  flock compatibility with a root-created 0644 lock file.
+- Always build model-gateway and agent-runtime from the current source before the
+  generic launcher starts containers.
+- Use independent official upstream top-3/top-5 files from commit e8bb237; never derive
+  them by truncating the paragraph-ID-sorted top-10 artifact.
+- Accept the original FinDVer report path format by reducing it to a basename and
+  requiring an exact public-task report match.
+- Treat bclass-stateful-local-20260817-03 as the first valid post-provenance-fix stateful
+  container evidence; retain -02 only as stale-image diagnostic history.
+- Validate sidecar content, exact population, and prediction order independently in
+  both Agent handoff verification and Private Scorer ingestion.
+- Formal Top-k API plan rows may reference configs/bclass/ablations; Local rows remain
+  rejected.
+- Public-release tests must use the tracked minimal public-task fixture whenever validation
+  reaches frozen artifact hashing.
 files_changed:
-- tests/fixtures/bclass_public_tasks.jsonl
 - tests/unit/test_prepare_bclass_matrix.py
 tests_passed:
 - 9 unit tests
@@ -162,6 +197,45 @@ tests_passed:
   158 full Agent tests, and 10 unchanged Private Scorer tests passed; three-file mock
   submission and Compose isolation verified.
 - 159 full Agent tests passed; one existing Starlette deprecation warning.
+- 161 full Agent tests passed; one existing Starlette deprecation warning.
+- 169 full Agent tests passed; one existing Starlette deprecation warning.
+- B-class planner/executor CLI help, launcher shell syntax, Ruff, and diff checks
+  passed.
+- 29 focused review, budget, resume, state, and prompt tests passed.
+- 170 full Agent tests passed; one existing Starlette deprecation warning.
+- Python compileall and diff checks passed.
+- 16 focused prompt, summary, RAG-seed, and Agent-loop tests passed.
+- 171 full Agent tests passed; one existing Starlette deprecation warning.
+- 25 focused context, backend, plan, baseline, and summary tests passed.
+- 176 full Agent tests passed; one existing Starlette deprecation warning.
+- Python compileall, shell syntax, CLI help, and diff checks passed; Black is not
+  installed.
+- 178 Agent tests passed; one existing Starlette deprecation warning.
+- Python compileall, all shell syntax checks, CLI/static workflow checks, security
+  lock checks, and git diff checks passed.
+- 18 focused launcher, isolation, selective-review, and mock-protocol tests passed.
+- 178 full Agent tests passed; one existing Starlette deprecation warning; shell syntax
+  and diff checks passed.
+- 35 focused fixed-retrieval, B-class config, and Runtime-bundle security tests passed.
+- 181 full Agent tests passed; one existing Starlette deprecation warning; diff checks
+  passed.
+- Official top-3 artifact SHA256 4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7
+  and top-5 SHA256 78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d
+  each validated 700 records with exact cutoff length.
+- 'User-side bclass-stateful-local-20260817-03 rebuilt both images and passed strict
+  offline verification: actions=8, model_calls=9, termination_reason=review_fallback.'
+- 19 Private Scorer tests passed; both networkless Compose profiles expanded and the
+  isolated image built.
+- Both scorer CLIs started in read-only no-network containers; image contents contained
+  only scorer code and public contracts.
+- 181 Agent tests passed with one existing Starlette deprecation warning; diff checks
+  passed.
+- 12 focused submission and sidecar tests passed.
+- 185 Agent tests passed with one existing Starlette deprecation warning; Python syntax
+  and diff checks passed.
+- 8 focused executor tests; 187 full Agent tests; Python compileall and git diff checks.
+- 7 focused matrix-planner tests; 187 full Agent tests; Python compileall and git
+  diff checks.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -170,15 +244,11 @@ known_issues:
   only its prompt semantics will be retained.
 - One upstream Starlette deprecation warning.
 - One upstream Starlette TestClient deprecation warning remains.
-- Private scorer evidence-metrics/bootstrap/McNemar adapter implementation requires
-  the separate private scorer repository, which is not available in this workspace.
-- Independent official embedding top-3 and top-5 retrieval artifacts are absent, so
-  those development ablations cannot run without external artifacts.
-- Formal evidence analysis remains blocked on the out-of-workspace private adapter,
-  and top-3/top-5 ablations remain blocked on independent official retrieval artifacts.
+- Public CI is defined but cannot be claimed green until the workflow runs on the
+  pushed commit.
+- The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
+  candidates use temperature=0; no API call was made.
 next_actions:
-- Publish the verified allowlisted release commit to origin/main.
-blocked_items:
-- private_scorer_evidence_metrics_adapter_requires_separate_private_repository
-- independent_embedding_top3_top5_retrieval_artifacts_not_present
-last_updated: '2026-08-16T20:07:16+08:00'
+- Publish the verified allowlisted update to origin/main.
+blocked_items: []
+last_updated: '2026-08-17T13:02:55+08:00'

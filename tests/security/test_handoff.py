@@ -10,6 +10,7 @@ def test_handoff_is_host_only_and_one_way() -> None:
     assert "findver-agent" in text
     assert "findver-scorer" in text
     assert "flock -n 9" in text
+    assert 'exec 9<"$lock_path"' in text
     assert "install -m 0444" in text
     assert "sha256sum" in text
     assert "docker compose" not in text

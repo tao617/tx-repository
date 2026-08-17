@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from findver_agent.run_identity import RunIdentity
 from findver_agent.schemas import Prediction, PublicTask
 
 
@@ -124,6 +125,7 @@ async def run_batch(
     model: str,
     backend_kind: str,
     answer: Callable[[PublicTask], Awaitable[Prediction]],
+    run_identity: RunIdentity | None = None,
 ) -> Path:
     tasks = load_public_tasks(tasks_path)
     if not tasks:
@@ -133,6 +135,20 @@ async def run_batch(
     metadata_path = run_dir / "run_metadata.json"
     config_hash = sha256_file(config_path)
     public_tasks_hash = sha256_file(tasks_path)
+    identity_data = (
+        run_identity.model_dump(mode="json") if run_identity is not None else None
+    )
+    if run_identity is not None:
+        if run_dir.name != run_identity.plan_run_id:
+            raise ValueError("run directory name does not match planned run identity")
+        if model != run_identity.model_alias:
+            raise ValueError("runtime model alias does not match planned run identity")
+        if backend_kind != run_identity.backend_kind:
+            raise ValueError("runtime backend does not match planned run identity")
+        if config_hash != run_identity.config_sha256:
+            raise ValueError("runtime config does not match planned run identity")
+        if public_tasks_hash != run_identity.public_tasks_sha256:
+            raise ValueError("runtime tasks do not match planned run identity")
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if metadata.get("public_tasks_sha256") != public_tasks_hash:
@@ -141,6 +157,14 @@ async def run_batch(
             raise ValueError("configuration changed since the run started")
         if metadata.get("task_ids") != task_ids:
             raise ValueError("public task IDs changed since the run started")
+        if metadata.get("mode") != mode:
+            raise ValueError("run mode changed since the run started")
+        if metadata.get("model") != model:
+            raise ValueError("model alias changed since the run started")
+        if metadata.get("backend") != backend_kind:
+            raise ValueError("backend changed since the run started")
+        if metadata.get("run_identity") != identity_data:
+            raise ValueError("run identity changed since the run started")
         started_at = metadata["started_at"]
     else:
         started_at = datetime.now(timezone.utc).isoformat()
@@ -154,6 +178,7 @@ async def run_batch(
         "public_tasks_sha256": public_tasks_hash,
         "expected_examples": len(tasks),
         "task_ids": task_ids,
+        "run_identity": identity_data,
         "completed_examples": len(journal.predictions),
         "started_at": started_at,
         "completed_at": None,

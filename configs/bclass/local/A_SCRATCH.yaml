@@ -7,12 +7,13 @@ backend:
   model: local-small-model
   timeout_seconds: 180
   max_retries: 2
+  model_context_window_tokens: 100000
 generation:
   temperature: 0
   top_p: 1
   seed: 7
   max_output_tokens: 1024
-  max_context_tokens: 32768
+  prompt_budget_tokens: 32768
 agent:
   max_steps: 8
   protocol_version: v2

@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from scripts.prepare_fixed_retrieval import build as build_fixed_retrieval
 from findver_agent.baseline import BaselineRunner
 from findver_agent.config import BaselineConfig
 from findver_agent.fixed_retrieval import FixedRetrievalError, FixedRetrievalIndex
@@ -186,3 +187,47 @@ def test_fixed_retrieval_baseline_accepts_original_list_format(tmp_path):
     assert runner._context(task, reports.open_session("report.json")) == (
         "[paragraph id = 2] two\n[paragraph id = 0] zero\n"
     )
+
+
+def test_prepare_fixed_retrieval_accepts_original_report_path(tmp_path):
+    reports = report_store(tmp_path)
+    tasks_path = tmp_path / "tasks.jsonl"
+    tasks_path.write_text(
+        json.dumps(
+            {
+                "example_id": "example",
+                "statement": "claim",
+                "report": "report.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    official_path = tmp_path / "official.json"
+    official_path.write_text(
+        json.dumps(
+            [
+                {
+                    "example_id": "example",
+                    "report": "reports/processed_reports/report.json",
+                    "retrieved_context": [2, 0],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    value = build_fixed_retrieval(
+        tasks_path=tasks_path,
+        reports_path=reports.root,
+        official_paths=[official_path],
+        source_commit="frozen-commit",
+        retriever="text-embedding-3-large",
+        top_k=3,
+    )
+
+    assert value["metadata"]["top_k"] == 3
+    assert value["items"]["example"] == {
+        "report": "report.json",
+        "retrieved_context": [2, 0],
+    }

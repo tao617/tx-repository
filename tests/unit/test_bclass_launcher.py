@@ -13,3 +13,7 @@ def test_launcher_supports_iterative_and_nested_configs_with_path_confinement():
     assert '"$repo_root/configs/"*' in text
     assert '--config "/app/configs/$config_name"' in text
     assert "configuration path cannot contain dot segments" in text
+    assert 'planned_run_identity_json="${FINDVER_RUN_IDENTITY_JSON:-}"' in text
+    assert 'planned_expected_model_id="${FINDVER_EXPECTED_MODEL_ID:-}"' in text
+    assert "MODEL_NAME does not match the planned effective model ID" in text
+    assert 'runtime_command+=(--run-identity-json "$run_identity_json")' in text

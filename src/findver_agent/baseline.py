@@ -7,7 +7,12 @@ from pathlib import Path
 from findver_agent.actions import ActionParseError, SubmitAction, parse_action
 from findver_agent.config import BaselineConfig
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
-from findver_agent.model_backends.base import GenerationConfig, ModelBackend
+from findver_agent.model_backends.base import (
+    ContextWindowExceededError,
+    GenerationConfig,
+    ModelBackend,
+    context_window_metadata,
+)
 from findver_agent.report_store import ReportSession, ReportStore
 from findver_agent.schemas import Prediction, PredictionStatus, PublicTask
 from findver_agent.skills.search_report import SearchReportSkill
@@ -100,6 +105,19 @@ class BaselineRunner:
             reasoning = "Classify directly."
             system = BASELINE_SYSTEM
         context = self._context(task, session)
+        messages = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": f"Financial document:\n{context}\nStatement:\n{task.statement}\n{reasoning}",
+            },
+        ]
+        window = getattr(self.backend, "model_context_window_tokens", None)
+        context_metadata = context_window_metadata(
+            messages,
+            max_output_tokens=self.generation.max_output_tokens,
+            model_context_window_tokens=window,
+        )
         trace.write(
             "input_context",
             {
@@ -110,20 +128,23 @@ class BaselineRunner:
                 "assembled_paragraph_count": context.count("[paragraph id = "),
                 "full_report_assembled": self.config.retrieval == "none",
                 "local_truncation": False,
-                "model_context_limit": self.generation.max_context_tokens,
+                "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                **context_metadata,
             },
         )
-        messages = [
-            {"role": "system", "content": system},
+        trace.write(
+            "model_request",
             {
-                "role": "user",
-                "content": f"Financial document:\n{context}\nStatement:\n{task.statement}\n{reasoning}",
+                "messages": messages,
+                "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                **context_metadata,
             },
-        ]
-        trace.write("model_request", {"messages": messages})
+        )
         try:
             response = await self.backend.generate(messages, self.generation)
-            trace.write("model_response", response.model_dump(mode="json"))
+            response_payload = response.model_dump(mode="json")
+            response_payload["actual_provider_input_tokens"] = response.input_tokens
+            trace.write("model_response", response_payload)
             action = parse_action(response.content)
             if not isinstance(action, SubmitAction):
                 raise ActionParseError("baseline must submit in its single response")
@@ -138,7 +159,11 @@ class BaselineRunner:
                 "baseline_error",
                 {
                     "error": error_text,
-                    "provider_context_error": "context" in str(error).casefold(),
+                    "provider_context_error": isinstance(
+                        error, ContextWindowExceededError
+                    )
+                    or "context window" in str(error).casefold()
+                    or "context length" in str(error).casefold(),
                 },
             )
             trace.write(

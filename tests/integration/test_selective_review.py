@@ -10,6 +10,10 @@ from findver_agent.schemas import PredictionStatus, PublicTask
 from findver_agent.state import StateStore
 
 
+class AbortRun(BaseException):
+    pass
+
+
 class SequenceBackend:
     model_name = "mock"
 
@@ -18,7 +22,7 @@ class SequenceBackend:
 
     async def generate(self, messages, config):
         response = self.responses.pop(0)
-        if isinstance(response, Exception):
+        if isinstance(response, BaseException):
             raise response
         return ModelResponse(
             content=response,
@@ -180,6 +184,8 @@ async def test_selective_review_risk_triggers(tmp_path, case, submit_kwargs, rea
 
     assert reason in state.review_trigger_reasons
     assert state.review_completed is True
+    if reason in {"conflicting_evidence", "weak_support", "table_alignment"}:
+        assert reason in [flag.value for flag in state.draft_risk_flags]
 
 
 @pytest.mark.asyncio
@@ -232,6 +238,7 @@ async def test_sufficient_non_submit_action_is_recoverable_protocol_error(tmp_pa
                 status="sufficient",
                 confidence="high",
                 missing=[],
+                risk_flags=["weak_support"],
             ),
             submit(),
         ],
@@ -242,6 +249,40 @@ async def test_sufficient_non_submit_action_is_recoverable_protocol_error(tmp_pa
 
     assert state.tool_counts.search_report == 0
     assert state.phase_errors.exploration.protocol == 1
+    assert state.risk_flags == []
+    assert state.draft_risk_flags == []
+    assert state.review_triggered is False
+    assert state.termination_reason == "submitted_during_exploration"
+
+
+@pytest.mark.asyncio
+async def test_rejected_action_control_is_not_committed_to_persisted_state(tmp_path, case):
+    task, run_dir, engine, values = make_engine(
+        tmp_path,
+        case,
+        [
+            action(
+                "search_report",
+                {"query": "must not run", "top_k": 3},
+                status="sufficient",
+                confidence="high",
+                missing=["must not persist"],
+                risk_flags=["weak_support"],
+            ),
+            AbortRun(),
+        ],
+    )
+
+    with pytest.raises(AbortRun):
+        await engine.run_question(task)
+    state = load_state(task, run_dir, values)
+
+    assert state.phase_errors.exploration.protocol == 1
+    assert state.tool_counts.search_report == 0
+    assert state.evidence_status.value == "none"
+    assert state.evidence_confidence.value == "low"
+    assert state.open_questions == []
+    assert state.risk_flags == []
 
 
 @pytest.mark.asyncio
@@ -250,7 +291,7 @@ async def test_unread_evidence_cannot_be_saved_as_draft(tmp_path, case):
         tmp_path,
         case,
         [
-            submit(evidence_ids=[1], explanation="Unread paragraph."),
+            submit(evidence_ids=[1], explanation="Unread paragraph.", risk_flags=["weak_support"]),
             submit(evidence_ids=[], explanation="Valid retry."),
         ],
     )
@@ -262,6 +303,9 @@ async def test_unread_evidence_cannot_be_saved_as_draft(tmp_path, case):
     assert state.phase_errors.exploration.skill == 1
     assert state.draft_prediction.explanation == "Valid retry."
     assert state.draft_submission["evidence_ids"] == []
+    assert state.risk_flags == []
+    assert state.draft_risk_flags == []
+    assert state.review_triggered is False
 
 
 @pytest.mark.asyncio

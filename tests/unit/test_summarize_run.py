@@ -47,7 +47,17 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     write_jsonl(
         traces / "trace.jsonl",
         [
-            {"event": "model_request", "payload": {"messages": ["secret statement"]}},
+            {
+                "event": "model_request",
+                "payload": {
+                    "messages": ["secret statement"],
+                    "ledger_evidence_ids": [1, 2, 3],
+                    "prompt_visible_evidence_ids": [2, 3],
+                    "prompt_omitted_evidence_ids": [1],
+                    "dynamic_ledger_evidence_ids": [3],
+                    "prompt_visible_dynamic_evidence_ids": [3],
+                },
+            },
             {
                 "event": "model_response",
                 "payload": {"input_tokens": 100, "output_tokens": 20, "latency_ms": 50.5},
@@ -78,6 +88,10 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     rendered = json.dumps(summary)
 
     assert summary["rates"] == {
+        "file_completion_rate": 1.0,
+        "valid_output_rate": 0.0,
+        "invalid_rate": 0.5,
+        "review_trigger_rate": 0.0,
         "prediction_coverage": 1.0,
         "invalid": 0.5,
         "strict_valid": 0.0,
@@ -93,6 +107,16 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     assert summary["totals"]["calculator_calls"] == 1
     assert summary["totals"]["review_completed"] == 1
     assert summary["totals"]["max_steps_terminated"] == 1
+    assert summary["evidence_visibility"] == {
+        "instrumented_model_requests": 1,
+        "ledger_request_occurrences": 3,
+        "visible_request_occurrences": 2,
+        "omitted_request_occurrences": 1,
+        "dynamic_ledger_request_occurrences": 1,
+        "dynamic_visible_request_occurrences": 1,
+        "overall_visibility_rate": 0.666667,
+        "dynamic_visibility_rate": 1.0,
+    }
     assert summary["estimated_cost_usd"]["total"] == 0.00024
     assert "private-id" not in rendered
     assert "secret statement" not in rendered

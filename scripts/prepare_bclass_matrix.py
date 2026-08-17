@@ -250,6 +250,11 @@ def freeze_manifest(path: Path) -> dict[str, Any]:
                     backend_kind: {
                         "path": str(paths[backend_kind].relative_to(REPO_ROOT)),
                         "sha256": sha256_file(paths[backend_kind]),
+                        "model_context_window_tokens": (
+                            configs[
+                                backend_kind
+                            ].backend.model_context_window_tokens
+                        ),
                     }
                     for backend_kind in ("api", "local")
                 },
@@ -285,6 +290,8 @@ def prepare_plan(
     model_b: str,
     backend_a: Literal["api", "local"],
     backend_b: Literal["api", "local"],
+    context_window_a: int,
+    context_window_b: int,
 ) -> dict[str, Any]:
     model_a = model_a.strip()
     model_b = model_b.strip()
@@ -292,19 +299,34 @@ def prepare_plan(
         raise ValueError("both explicit model IDs must be 1-256 characters")
     if model_a == model_b:
         raise ValueError("model A and model B IDs must be different")
+    if not 8192 <= context_window_a <= 1_000_000:
+        raise ValueError("model A context window must be 8192-1000000 tokens")
+    if not 8192 <= context_window_b <= 1_000_000:
+        raise ValueError("model B context window must be 8192-1000000 tokens")
     frozen = freeze_manifest(manifest_path)
     models = (
-        ("model_a", model_a, backend_a),
-        ("model_b", model_b, backend_b),
+        ("model_a", model_a, backend_a, context_window_a),
+        ("model_b", model_b, backend_b, context_window_b),
     )
     runs = []
-    for slot, model_id, backend_kind in models:
+    for slot, model_id, backend_kind, context_window in models:
+        configured_windows = {
+            condition["configs"][backend_kind][
+                "model_context_window_tokens"
+            ]
+            for condition in frozen["conditions"]
+        }
+        if configured_windows != {context_window}:
+            raise ValueError(
+                f"{slot} context window does not match selected B-class configs"
+            )
         for condition in frozen["conditions"]:
             runs.append(
                 {
                     "slot": slot,
                     "model_id": model_id,
                     "backend_kind": backend_kind,
+                    "model_context_window_tokens": context_window,
                     "condition_id": condition["condition_id"],
                     "run_id": (
                         f"{frozen['matrix_id']}-{slot}-{condition['condition_id']}"
@@ -316,12 +338,17 @@ def prepare_plan(
                 }
             )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "prepared_not_executed",
         **frozen,
         "models": [
-            {"slot": slot, "model_id": model_id, "backend_kind": backend_kind}
-            for slot, model_id, backend_kind in models
+            {
+                "slot": slot,
+                "model_id": model_id,
+                "backend_kind": backend_kind,
+                "model_context_window_tokens": context_window,
+            }
+            for slot, model_id, backend_kind, context_window in models
         ],
         "runs": runs,
     }
@@ -334,6 +361,8 @@ def main() -> int:
     parser.add_argument("--model-b", required=True)
     parser.add_argument("--backend-a", choices=("api", "local"), required=True)
     parser.add_argument("--backend-b", choices=("api", "local"), required=True)
+    parser.add_argument("--model-a-context-window", required=True, type=int)
+    parser.add_argument("--model-b-context-window", required=True, type=int)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     plan = prepare_plan(
@@ -342,6 +371,8 @@ def main() -> int:
         model_b=args.model_b,
         backend_a=args.backend_a,
         backend_b=args.backend_b,
+        context_window_a=args.model_a_context_window,
+        context_window_b=args.model_b_context_window,
     )
     _atomic_json(args.output.resolve(), plan)
     print(

@@ -7,12 +7,13 @@ backend:
   model: external-model-name
   timeout_seconds: 120
   max_retries: 3
+  model_context_window_tokens: 100000
 generation:
   temperature: 0
   top_p: 1
   seed: 7
   max_output_tokens: 1024
-  max_context_tokens: 32768
+  prompt_budget_tokens: 32768
 baseline:
   prompt_type: findver_cot_json
   retrieval: fixed_retrieval

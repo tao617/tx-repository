@@ -12,6 +12,7 @@ from findver_agent.iterative_rag import IterativeRAGRunner
 from findver_agent.model_backends.openai_compatible import OpenAICompatibleBackend
 from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
+from findver_agent.run_identity import RunIdentity
 from findver_agent.runner import run_batch
 
 
@@ -24,11 +25,17 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--tasks", required=True, type=Path)
         command.add_argument("--reports", required=True, type=Path)
         command.add_argument("--run-dir", required=True, type=Path)
+        command.add_argument("--run-identity-json")
     return root
 
 
 async def execute(args: argparse.Namespace) -> Path:
     config = load_config(args.config)
+    run_identity = (
+        RunIdentity.model_validate_json(args.run_identity_json)
+        if args.run_identity_json
+        else None
+    )
     expected_mode = {
         "run": "agent",
         "baseline": "baseline",
@@ -41,6 +48,7 @@ async def execute(args: argparse.Namespace) -> Path:
         model=config.backend.model,
         timeout_seconds=config.backend.timeout_seconds,
         max_retries=config.backend.max_retries,
+        model_context_window_tokens=config.backend.model_context_window_tokens,
     )
     try:
         reports = ReportStore(args.reports)
@@ -82,6 +90,7 @@ async def execute(args: argparse.Namespace) -> Path:
             model=config.backend.model,
             backend_kind=config.run.backend_kind,
             answer=engine.run_question,
+            run_identity=run_identity,
         )
     finally:
         await backend.aclose()

@@ -8,7 +8,12 @@ from findver_agent.actions import ActionParseError, SearchAction, SubmitAction, 
 from findver_agent.baseline import format_paragraphs
 from findver_agent.config import IterativeRAGConfig
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
-from findver_agent.model_backends.base import GenerationConfig, ModelBackend, ModelResponse
+from findver_agent.model_backends.base import (
+    GenerationConfig,
+    ModelBackend,
+    ModelResponse,
+    context_window_metadata,
+)
 from findver_agent.report_store import ReportSession, ReportStore
 from findver_agent.schemas import Prediction, PredictionStatus, PublicTask
 from findver_agent.skills import ReadParagraphsSkill, SearchReportSkill, SubmitAnswerSkill
@@ -310,9 +315,22 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
         phase: str,
         attempt: int,
     ) -> ModelResponse | None:
+        context_metadata = context_window_metadata(
+            messages,
+            max_output_tokens=self.generation.max_output_tokens,
+            model_context_window_tokens=getattr(
+                self.backend, "model_context_window_tokens", None
+            ),
+        )
         trace.write(
             "model_request",
-            {"phase": phase, "phase_attempt": attempt, "messages": messages},
+            {
+                "phase": phase,
+                "phase_attempt": attempt,
+                "messages": messages,
+                "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                **context_metadata,
+            },
         )
         try:
             response = await self.backend.generate(messages, self.generation)
@@ -333,6 +351,7 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
                 "content": response.content,
                 "input_tokens": response.input_tokens,
                 "output_tokens": response.output_tokens,
+                "actual_provider_input_tokens": response.input_tokens,
                 "latency_ms": response.latency_ms,
                 "response_id": response.response_id,
             },
