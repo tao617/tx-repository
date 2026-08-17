@@ -2,41 +2,24 @@
 
 ## Current state
 
-Phase `lc-agent-firstpass-implementation` completed: Implemented the frozen LC_AGENT_FIRSTPASS runtime, configuration, durable at-most-once state, exact shared report serialization, telemetry, extension planning, offline preflight, and mock verification without paid execution.
+Phase `lc-agent-firstpass-dev-feedback-runtime-complete` completed: Executed the single explicitly authorized deepseek-v4-flash LC_AGENT_FIRSTPASS row on all 700 dev_feedback tasks, then summarized, sealed, and independently verified it without invoking Private Scorer, holdout, or hidden evaluation.
 
-- Git commit at checkpoint start: `f5adc7072d650707b56f44bcdb423c866cebb75a`
-- Changed files: 23
+- Git commit at checkpoint start: `1fff62e293513644b3ec3ec3a936511018096a35`
+- Changed files: 0
 
 ## Diff summary
 
 ```text
-experiments/bclass_dev_feedback_template.yaml |   1 +
- scripts/prepare_bclass_extension.py           |  50 ++++++++++-
- scripts/run_bclass_plan.py                    |  19 ++++
- scripts/run_stateful_mock_smoke.sh            |  11 ++-
- scripts/summarize_run.py                      |  67 ++++++++++++++
- scripts/verify_stateful_mock_smoke.py         |  40 ++++++++-
- src/findver_agent/baseline.py                 |  12 +--
- src/findver_agent/config.py                   |  21 +++++
- src/findver_agent/iterative_rag.py            |   2 +-
- src/findver_agent/orchestrator.py             | 125 +++++++++++++++++++++++++-
- src/findver_agent/prompt_builder.py           |  49 ++++++++--
- src/findver_agent/state.py                    |  20 ++++-
- tests/unit/test_bclass_configs.py             |  19 ++++
- tests/unit/test_config.py                     |  55 ++++++++++++
- tests/unit/test_model_backend.py              |  56 ++++++++++++
- tests/unit/test_prepare_bclass_extension.py   |  39 ++++++--
- tests/unit/test_run_bclass_plan.py            |  48 ++++++++++
- tests/unit/test_summarize_run_v2.py           |  11 +++
- 18 files changed, 616 insertions(+), 29 deletions(-)
+No tracked-file diff; see files_changed for untracked files.
 ```
 
 ## Tests passed
 
-- 248 pytest tests passed.
-- 700-task offline LC preflight completed with 700 first-pass injections, zero model requests, and zero estimated context overflows.
-- Stateful Mock Docker run completed with 9 calls and exactly one Exploration-attempt-1 full-report injection; cleanup verified.
-- Python compileall, shell syntax, and git diff checks passed.
+- Pre-run public-data verification covered 700 tasks and all 248 pytest tests passed on commit 1fff62e.
+- The formal schema-v2 executor completed 700/700 examples with strict valid rate 0.995714, 39,268,332 input tokens, 303,935 output tokens, zero local truncations, and zero provider context errors.
+- Long-context telemetry recorded exactly 700 injections, all in Exploration attempt 1, across 2,803 model requests.
+- The sealed archive independently verified with 700 predictions, the bound evidence sidecar, exact three-file contents, and SHA256 9c14142c0609f6cf46e8f1ea44da7b31211022103813049bbc169850108cca4f.
+- Runtime and Gateway containers and networks were removed and the global evaluation lock was released.
 
 ## Tests failed or unavailable
 
@@ -58,4 +41,4 @@ pytest -q
 
 ## Next action
 
-Create the focused implementation commit, then generate and inspect one immutable schema-v2 hash-bound plan without executing it; real model, scorer, holdout, and hidden runs remain unauthorized.
+Stop at the verified sealed Runtime artifact. Await separate explicit authorization before any one-way Private Scorer handoff or scoring; do not run dev_holdout or final_hidden.

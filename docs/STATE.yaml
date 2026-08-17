@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: lc-agent-firstpass-implementation
+current_phase: lc-agent-firstpass-dev-feedback-runtime-complete
 current_goal: Implement and offline-verify the single authorized LC_AGENT_FIRSTPASS
   post-hoc exploratory extension while preserving the frozen primary comparison and
   stopping before any real-model or Private Scorer execution.
-last_completed_phase: lc-agent-firstpass-implementation
-last_git_commit: f5adc7072d650707b56f44bcdb423c866cebb75a
+last_completed_phase: lc-agent-firstpass-dev-feedback-runtime-complete
+last_git_commit: 1fff62e293513644b3ec3ec3a936511018096a35
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -197,30 +197,13 @@ decisions:
   the report after the durable first-attempt claim.
 - The full report never preloads the evidence ledger; final evidence still requires
   read_paragraphs and the sealed sidecar remains unchanged.
-files_changed:
-- configs/bclass/ablations/LC_AGENT_FIRSTPASS.yaml
-- experiments/bclass_dev_feedback_template.yaml
-- scripts/preflight_lc_agent.py
-- scripts/prepare_bclass_extension.py
-- scripts/run_bclass_plan.py
-- scripts/run_stateful_mock_smoke.sh
-- scripts/summarize_run.py
-- scripts/verify_stateful_mock_smoke.py
-- src/findver_agent/baseline.py
-- src/findver_agent/config.py
-- src/findver_agent/iterative_rag.py
-- src/findver_agent/orchestrator.py
-- src/findver_agent/prompt_builder.py
-- src/findver_agent/report_format.py
-- src/findver_agent/state.py
-- tests/integration/test_long_context_firstpass.py
-- tests/unit/test_bclass_configs.py
-- tests/unit/test_config.py
-- tests/unit/test_model_backend.py
-- tests/unit/test_preflight_lc_agent.py
-- tests/unit/test_prepare_bclass_extension.py
-- tests/unit/test_run_bclass_plan.py
-- tests/unit/test_summarize_run_v2.py
+- 'LC_AGENT_FIRSTPASS passed every frozen Runtime feasibility gate: full completion,
+  strict valid rate at least 99 percent, no local truncation, no provider context
+  error, and input tokens below 46,376,030.'
+- Accuracy, evidence quality, paired statistics, and the holdout promotion rule remain
+  unevaluated because Private Scorer execution was explicitly out of scope.
+- The sealed Runtime artifact remains local; no scorer inbox handoff occurred.
+files_changed: []
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -383,6 +366,17 @@ tests_passed:
 - Stateful Mock Docker run completed with 9 calls and exactly one Exploration-attempt-1
   full-report injection; cleanup verified.
 - Python compileall, shell syntax, and git diff checks passed.
+- Pre-run public-data verification covered 700 tasks and all 248 pytest tests passed
+  on commit 1fff62e.
+- The formal schema-v2 executor completed 700/700 examples with strict valid rate
+  0.995714, 39,268,332 input tokens, 303,935 output tokens, zero local truncations,
+  and zero provider context errors.
+- Long-context telemetry recorded exactly 700 injections, all in Exploration attempt
+  1, across 2,803 model requests.
+- The sealed archive independently verified with 700 predictions, the bound evidence
+  sidecar, exact three-file contents, and SHA256 9c14142c0609f6cf46e8f1ea44da7b31211022103813049bbc169850108cca4f.
+- Runtime and Gateway containers and networks were removed and the global evaluation
+  lock was released.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -398,8 +392,8 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Create the focused implementation commit, then generate and inspect one immutable
-  schema-v2 hash-bound plan without executing it; real model, scorer, holdout, and
-  hidden runs remain unauthorized.
+- Stop at the verified sealed Runtime artifact. Await separate explicit authorization
+  before any one-way Private Scorer handoff or scoring; do not run dev_holdout or
+  final_hidden.
 blocked_items: []
-last_updated: '2026-08-17T22:40:32+08:00'
+last_updated: '2026-08-17T22:52:04+08:00'
