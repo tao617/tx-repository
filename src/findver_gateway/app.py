@@ -7,14 +7,16 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Literal
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 LOGGER = logging.getLogger("findver_gateway")
+MAX_SHARED_CONNECTIONS = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +66,11 @@ class Message(BaseModel):
     content: str
 
 
+class Thinking(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    type: Literal["disabled"]
+
+
 class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str
@@ -72,6 +79,14 @@ class ChatCompletionRequest(BaseModel):
     top_p: float = Field(default=1, gt=0, le=1)
     max_tokens: int = Field(default=1024, ge=1, le=32768)
     seed: int | None = None
+    thinking: Thinking | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def explicit_thinking_cannot_be_null(cls, value: object) -> object:
+        if isinstance(value, dict) and "thinking" in value and value["thinking"] is None:
+            raise ValueError("thinking must be the explicit disabled structure")
+        return value
 
 
 def create_app(
@@ -84,6 +99,10 @@ def create_app(
         application.state.client = httpx.AsyncClient(
             timeout=settings.timeout_seconds,
             transport=transport,
+            limits=httpx.Limits(
+                max_connections=MAX_SHARED_CONNECTIONS,
+                max_keepalive_connections=MAX_SHARED_CONNECTIONS,
+            ),
         )
         yield
         await application.state.client.aclose()
@@ -104,7 +123,7 @@ def create_app(
     async def chat(payload: ChatCompletionRequest, request: Request) -> Response:
         if payload.model not in settings.model_aliases:
             raise HTTPException(status_code=400, detail="model alias is not allowed")
-        upstream_payload = payload.model_dump(mode="json")
+        upstream_payload = payload.model_dump(mode="json", exclude_none=True)
         upstream_payload["model"] = settings.upstream_model
         headers = {"content-type": "application/json"}
         if settings.upstream_api_key:
@@ -135,4 +154,3 @@ def create_app(
 
 def app_factory() -> FastAPI:
     return create_app(Settings.from_env())
-

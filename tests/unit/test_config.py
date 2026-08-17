@@ -52,3 +52,43 @@ def test_runtime_config_cannot_enable_memory_or_scorer_feedback():
     with pytest.raises(ValidationError):
         AppConfig.model_validate(raw)
 
+
+def test_deepseek_profile_requires_explicit_disabled_thinking():
+    raw = agent_config()
+    raw["backend"]["request_profile"] = "deepseek_v4_openai"
+    with pytest.raises(ValidationError, match="thinking.type=disabled"):
+        AppConfig.model_validate(raw)
+
+    raw["backend"]["thinking"] = {"type": "disabled"}
+    config = AppConfig.model_validate(raw)
+    assert config.backend.thinking is not None
+    assert config.backend.thinking.type == "disabled"
+
+
+@pytest.mark.parametrize(
+    "thinking",
+    [
+        {"type": "enabled"},
+        {"type": "disabled", "effort": "high"},
+        {"mode": "disabled"},
+    ],
+)
+def test_deepseek_profile_rejects_enabled_unknown_or_extended_thinking(thinking):
+    raw = agent_config()
+    raw["backend"].update(
+        {"request_profile": "deepseek_v4_openai", "thinking": thinking}
+    )
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(raw)
+
+
+def test_generic_profile_rejects_deepseek_fields_and_arbitrary_extensions():
+    raw = agent_config()
+    raw["backend"]["thinking"] = {"type": "disabled"}
+    with pytest.raises(ValidationError, match="generic_openai"):
+        AppConfig.model_validate(raw)
+
+    raw = agent_config()
+    raw["backend"]["extra_body"] = {"thinking": {"type": "disabled"}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(raw)

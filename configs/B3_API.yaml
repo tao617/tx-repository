@@ -18,4 +18,4 @@ baseline:
   retrieval: fixed_embedding
   retrieval_file: /retrieval/findver_embedding3large_top10.json
   top_k: 10
-  concurrency: 1
+  concurrency: 32

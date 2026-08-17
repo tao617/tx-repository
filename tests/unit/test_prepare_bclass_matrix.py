@@ -59,12 +59,16 @@ def test_two_explicit_distinct_models_produce_paired_independent_runs(tmp_path):
             "model_id": "provider/model-a",
             "backend_kind": "api",
             "model_context_window_tokens": 100_000,
+            "request_profile": "deepseek_v4_openai",
+            "thinking": {"type": "disabled"},
         },
         {
             "slot": "model_b",
             "model_id": "provider/model-b",
             "backend_kind": "local",
             "model_context_window_tokens": 100_000,
+            "request_profile": "generic_openai",
+            "thinking": None,
         },
     ]
     assert len(plan["runs"]) == 14
@@ -86,6 +90,104 @@ def test_two_explicit_distinct_models_produce_paired_independent_runs(tmp_path):
         "max_output_tokens": 1024,
         "prompt_budget_tokens": 32768,
     }
+    assert {run["configured_concurrency"] for run in plan["runs"]} == {32}
+
+
+def test_single_explicit_model_produces_seven_unique_runs_and_distinct_matrix(tmp_path):
+    manifest = _manifest_with_public_task_fixture(tmp_path)
+    single = MODULE.prepare_plan(
+        manifest,
+        model_a="deepseek-v4-flash",
+        backend_a="api",
+        context_window_a=100_000,
+    )
+    paired = MODULE.prepare_plan(
+        manifest,
+        model_a="deepseek-v4-flash",
+        model_b="provider/model-b",
+        backend_a="api",
+        backend_b="local",
+        context_window_a=100_000,
+        context_window_b=100_000,
+    )
+
+    assert single["schema_version"] == 2
+    assert single["status"] == "prepared_not_executed"
+    assert len(single["models"]) == 1
+    assert len(single["runs"]) == 7
+    assert len({run["run_id"] for run in single["runs"]}) == 7
+    assert {run["slot"] for run in single["runs"]} == {"model_a"}
+    assert single["matrix_id"] != paired["matrix_id"]
+    assert all(
+        run["run_id"].startswith(f"{single['matrix_id']}-")
+        for run in single["runs"]
+    )
+
+
+@pytest.mark.parametrize(
+    "partial",
+    [
+        {"model_b": "provider/model-b"},
+        {"backend_b": "local"},
+        {"context_window_b": 100_000},
+        {"model_b": "provider/model-b", "backend_b": "local"},
+    ],
+)
+def test_partial_model_b_group_fails_closed(tmp_path, partial):
+    manifest = _manifest_with_public_task_fixture(tmp_path)
+    with pytest.raises(ValueError, match="provided together or all omitted"):
+        MODULE.prepare_plan(
+            manifest,
+            model_a="deepseek-v4-flash",
+            backend_a="api",
+            context_window_a=100_000,
+            **partial,
+        )
+
+
+def test_placeholder_model_b_is_rejected(tmp_path):
+    manifest = _manifest_with_public_task_fixture(tmp_path)
+    with pytest.raises(ValueError, match="placeholder"):
+        MODULE.prepare_plan(
+            manifest,
+            model_a="deepseek-v4-flash",
+            model_b="TBD",
+            backend_a="api",
+            backend_b="local",
+            context_window_a=100_000,
+            context_window_b=100_000,
+        )
+
+
+def test_untracked_sha_bound_dev_feedback_manifest_is_supported(tmp_path):
+    manifest = _manifest_with_public_task_fixture(tmp_path)
+    assert manifest.is_relative_to(tmp_path)
+    plan = MODULE.prepare_plan(
+        manifest,
+        model_a="deepseek-v4-flash",
+        backend_a="api",
+        context_window_a=100_000,
+    )
+    assert plan["manifest_sha256"] == MODULE.sha256_file(manifest)
+    assert plan["evaluation_split"] == "dev_feedback"
+
+
+def test_manifest_thinking_drift_fails_closed(tmp_path):
+    manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    manifest["task"] = {
+        "path": str(TASK_FIXTURE.relative_to(ROOT)),
+        "sha256": MODULE.sha256_file(TASK_FIXTURE),
+    }
+    manifest["request_profiles"]["api"]["thinking"] = {"type": "enabled"}
+    path = tmp_path / "manifest-thinking-drift.yaml"
+    path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="request_profiles"):
+        MODULE.prepare_plan(
+            path,
+            model_a="deepseek-v4-flash",
+            backend_a="api",
+            context_window_a=100_000,
+        )
 
 
 def test_matrix_rejects_same_model_id():

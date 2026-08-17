@@ -1,9 +1,10 @@
 project: findver-agent
-current_phase: bclass-experiment-preflight
-current_goal: Complete the B-class experiment preflight and stop before any real-model
-  Canary or paid evaluation.
-last_completed_phase: bclass-experiment-preflight
-last_git_commit: 88573d23e387c1860261d495e9f0ec06430682d8
+current_phase: single-model-concurrency-thinking-truncation-upgrade
+current_goal: Complete the single-model planning, bounded question concurrency, DeepSeek
+  non-thinking, and truncation-monitoring upgrade; publish it publicly, then stop
+  before any real-model Canary or paid evaluation.
+last_completed_phase: single-model-concurrency-thinking-truncation-upgrade
+last_git_commit: 8806de4d02ceadb792ee462b1a862cb4bba5c770
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -144,12 +145,99 @@ decisions:
   host source.
 - No paid model call, real-model Canary, second-model matrix, holdout, or final_hidden
   execution is authorized by this checkpoint.
+- Allow Model B only as an all-or-none optional planner group; omit it for a seven-row
+  Model-A-only plan with a matrix ID distinct from the fourteen-row paired plan.
+- Freeze configured question concurrency at 32 with bounded workers, per-question
+  serial phases, durable completion-order partial journals, task-order final output,
+  and fail-closed resume identity.
+- 'Use closed request profiles: deepseek_v4_openai requires exactly thinking.type=disabled,
+  while generic_openai sends no DeepSeek field and no arbitrary request-extension
+  dictionary exists.'
+- Accept only stop, length, and content_filter finish reasons; count length separately
+  and fail closed on unknown reasons or nonempty hidden reasoning under disabled thinking
+  without persisting its value.
+- Retain temperature=0, top_p=1, seed=7, and max_output_tokens=1024; truncation evidence,
+  not condition-specific tuning, will govern any later ceiling proposal.
 files_changed:
+- .github/workflows/ci.yml
+- configs/A0_API.yaml
+- configs/A1_API.yaml
+- configs/A2_API.yaml
+- configs/B0_API.yaml
+- configs/B1_API.yaml
+- configs/B2_API.yaml
+- configs/B3_API.yaml
+- configs/agent_api.yaml
+- configs/agent_local.yaml
+- configs/agent_no_calculator_api.yaml
+- configs/agent_no_calculator_local.yaml
+- configs/agent_review_api.yaml
+- configs/agent_review_local.yaml
+- configs/baseline_api.yaml
+- configs/baseline_bm25_api.yaml
+- configs/baseline_bm25_local.yaml
+- configs/baseline_cot_api.yaml
+- configs/baseline_cot_local.yaml
+- configs/baseline_local.yaml
+- configs/bclass/ablations/RAG10_SEEDED.yaml
+- configs/bclass/ablations/RAG3_SEEDED.yaml
+- configs/bclass/ablations/RAG5_SEEDED.yaml
+- configs/bclass/api/A_SCRATCH.yaml
+- configs/bclass/api/BITER_RAG10.yaml
+- configs/bclass/api/BLC_FINDVER_COT.yaml
+- configs/bclass/api/BRAG10_FINDVER_COT.yaml
+- configs/bclass/api/M0_RAG10_SEEDED.yaml
+- configs/bclass/api/M1_BUDGET_AWARE.yaml
+- configs/bclass/api/M2_SELECTIVE_REVIEW.yaml
+- configs/bclass/local/A_SCRATCH.yaml
+- configs/bclass/local/BITER_RAG10.yaml
+- configs/bclass/local/BLC_FINDVER_COT.yaml
+- configs/bclass/local/BRAG10_FINDVER_COT.yaml
+- configs/bclass/local/M0_RAG10_SEEDED.yaml
+- configs/bclass/local/M1_BUDGET_AWARE.yaml
+- configs/bclass/local/M2_SELECTIVE_REVIEW.yaml
+- docs/ARCHITECTURE.md
 - docs/B_CLASS_RUNBOOK.md
+- docs/CONCURRENCY_THINKING_TRUNCATION_AUDIT.md
 - docs/EXPERIMENT_PLAN.md
 - docs/SCORER_PROTOCOL.md
-- docs/SESSION_HANDOFF.md
 - docs/STATE.yaml
+- docs/TEST_PLAN.md
+- experiments/bclass_dev_feedback_template.yaml
+- scripts/prepare_bclass_matrix.py
+- scripts/run_bclass_plan.py
+- scripts/run_concurrent_mock_smoke.sh
+- scripts/summarize_run.py
+- scripts/verify_concurrent_mock_smoke.py
+- scripts/verify_stateful_mock_smoke.py
+- src/findver_agent/baseline.py
+- src/findver_agent/cli.py
+- src/findver_agent/config.py
+- src/findver_agent/iterative_rag.py
+- src/findver_agent/model_backends/base.py
+- src/findver_agent/model_backends/openai_compatible.py
+- src/findver_agent/orchestrator.py
+- src/findver_agent/run_identity.py
+- src/findver_agent/runner.py
+- src/findver_agent/state.py
+- src/findver_agent/submission.py
+- src/findver_gateway/app.py
+- tests/fixtures/concurrent_smoke_tasks.jsonl
+- tests/fixtures/mock_openai_server.py
+- tests/integration/test_agent_loop.py
+- tests/integration/test_concurrent_stateful_agent.py
+- tests/integration/test_runner.py
+- tests/integration/test_thinking_protocol.py
+- tests/unit/test_bclass_configs.py
+- tests/unit/test_ci_workflow.py
+- tests/unit/test_config.py
+- tests/unit/test_gateway.py
+- tests/unit/test_model_backend.py
+- tests/unit/test_prepare_bclass_matrix.py
+- tests/unit/test_run_bclass_plan.py
+- tests/unit/test_submission.py
+- tests/unit/test_summarize_run.py
+- tests/unit/test_summarize_run_v2.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -266,6 +354,21 @@ tests_passed:
 - The 700-task public input and Top-10 retrieval matched their frozen SHA256 values;
   a synthetic preparation-only plan validated schema v2, prepared_not_executed status,
   and 14 unique run IDs.
+- 'Pre-change recovery suite: 188 Agent tests passed with one existing Starlette deprecation
+  warning.'
+- 'Final directed single-model, executor drift, concurrency/resume/order, thinking,
+  finish-reason, summary, and sealing suite: 81 tests passed with the same warning.'
+- 'Full post-upgrade Agent suite: 225 tests passed with the same warning; compileall,
+  all shell syntax, CLI help, diff check, and API/Local Compose expansion passed.'
+- Runtime and Gateway images rebuilt from separate allowlisted contexts; sensitive-marker
+  and image-content scans passed.
+- Stateful M2 Docker smoke retained 8 actions, 9 model calls, and review_fallback;
+  40-task concurrent Docker smoke reached configured/effective/peak 32/32/32, preserved
+  task order and sidecar order, sealed successfully, and reported 40 stop with zero
+  length or protocol drift.
+- Preparation-only Model A plan validated schema v2, prepared_not_executed, seven
+  unique rows, a distinct single-model matrix ID, exact disabled-thinking provenance,
+  and concurrency 32.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -277,8 +380,9 @@ known_issues:
 - The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
   candidates use temperature=0; no API call was made.
 next_actions:
-- Obtain explicit Model A and Model B IDs, backend paths, 100000-token capacity guarantees,
-  cost/call ceilings, and user authorization for a hash-bound Model A dev_feedback
-  Canary; do not run a real-model experiment before that report and approval.
+- Create the focused development commit, publish its allowlisted tree as a history-free
+  public commit, wait for that commit own Python 3.11, Python 3.12, and Stateful Docker
+  CI, then stop; do not run a real API Canary, paid matrix, Model B, dev_holdout,
+  or final_hidden without new explicit authorization.
 blocked_items: []
-last_updated: '2026-08-17T14:47:41+08:00'
+last_updated: '2026-08-17T16:04:06+08:00'

@@ -123,6 +123,13 @@ def _configured_retrieval_file(config: AppConfig) -> Path | None:
     return host_path.resolve(strict=True)
 
 
+def _configured_concurrency(config: AppConfig) -> int:
+    section = config.baseline or config.agent or config.iterative_rag
+    if section is None:
+        raise ValueError("planned configuration mode section is missing")
+    return section.concurrency
+
+
 def _select_run(plan: dict[str, Any], run_id: str) -> dict[str, Any]:
     if not PLAIN_NAME.fullmatch(run_id):
         raise ValueError("plan run ID must be a plain name")
@@ -201,11 +208,52 @@ def prepare_execution(
         raise ValueError(
             "planned model context window does not match the effective config"
         )
+    configured_thinking = (
+        config.backend.thinking.model_dump(mode="json")
+        if config.backend.thinking is not None
+        else None
+    )
+    planned_profile = run.get("request_profile")
+    planned_thinking = run.get("thinking")
+    planned_concurrency = run.get("configured_concurrency")
+    plan_profiles = plan.get("request_profiles")
+    if not isinstance(plan_profiles, dict):
+        raise ValueError("plan request_profiles provenance is required")
+    selected_profile = plan_profiles.get(backend_kind)
+    if not isinstance(selected_profile, dict):
+        raise ValueError("selected plan request profile is invalid")
+    if (
+        planned_profile != config.backend.request_profile
+        or config_spec.get("request_profile") != planned_profile
+        or selected_profile.get("name") != planned_profile
+        or planned_thinking != configured_thinking
+        or config_spec.get("thinking") != planned_thinking
+        or selected_profile.get("thinking") != planned_thinking
+    ):
+        raise ValueError(
+            "planned request profile or thinking mode does not match the effective config"
+        )
+    configured_concurrency = _configured_concurrency(config)
+    if (
+        planned_concurrency != configured_concurrency
+        or config_spec.get("configured_concurrency") != planned_concurrency
+    ):
+        raise ValueError(
+            "planned concurrency does not match the effective config"
+        )
 
 
     effective_model_id = _model_from_env(env_path)
     if effective_model_id != run.get("model_id"):
         raise ValueError("MODEL_NAME does not match the planned effective model ID")
+    if "deepseek-v4" in effective_model_id.casefold() and (
+        backend_kind != "api"
+        or planned_profile != "deepseek_v4_openai"
+        or planned_thinking != {"type": "disabled"}
+    ):
+        raise ValueError(
+            "DeepSeek V4 formal execution requires explicit disabled thinking"
+        )
     commit = _git_commit()
     if commit != plan.get("code_commit"):
         raise ValueError("HEAD does not match the planned code commit")
@@ -239,6 +287,13 @@ def prepare_execution(
         planned_retrieval_sha256=retrieval_sha256,
         effective_retrieval_sha256=effective_retrieval_sha256,
         model_context_window_tokens=run["model_context_window_tokens"],
+        request_profile=planned_profile,
+        thinking_mode=(
+            planned_thinking["type"]
+            if isinstance(planned_thinking, dict)
+            else "unsupported"
+        ),
+        configured_concurrency=configured_concurrency,
     )
     config_name = str(config_path.relative_to(REPO_ROOT / "configs"))
     arguments = [

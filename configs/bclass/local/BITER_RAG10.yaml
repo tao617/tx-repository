@@ -8,6 +8,7 @@ backend:
   timeout_seconds: 180
   max_retries: 2
   model_context_window_tokens: 100000
+  request_profile: generic_openai
 generation:
   temperature: 0
   top_p: 1
@@ -24,4 +25,4 @@ iterative_rag:
   max_total_unique_paragraphs: 40
   finalization_steps: 2
   prompt_type: findver_cot_json
-  concurrency: 1
+  concurrency: 32

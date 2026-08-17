@@ -8,6 +8,7 @@ backend:
   timeout_seconds: 180
   max_retries: 2
   model_context_window_tokens: 100000
+  request_profile: generic_openai
 generation:
   temperature: 0
   top_p: 1
@@ -31,4 +32,4 @@ agent:
     enabled: false
   cross_question_memory: false
   scorer_feedback: false
-  concurrency: 1
+  concurrency: 32

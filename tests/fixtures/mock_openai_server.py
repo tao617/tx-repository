@@ -120,6 +120,9 @@ class Handler(BaseHTTPRequestHandler):
         if payload.get("model") != self.expected_model:
             self.send_error(400, "gateway did not rewrite the model alias")
             return
+        if payload.get("thinking") != {"type": "disabled"}:
+            self.send_error(400, "DeepSeek thinking was not explicitly disabled")
+            return
         try:
             call_number, content = self.next_response()
         except IndexError:
@@ -129,7 +132,13 @@ class Handler(BaseHTTPRequestHandler):
             {
                 "id": f"mock-completion-{call_number}",
                 "object": "chat.completion",
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}}],
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }
+                ],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             },
             separators=(",", ":"),

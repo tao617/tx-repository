@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import math
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ContextWindowExceededError(RuntimeError):
     """A request violates the locally declared model context capacity."""
+
+
+class ProtocolDriftError(RuntimeError):
+    """An upstream response violates the selected request profile."""
+
+
+FinishReason = Literal["stop", "length", "content_filter"]
 
 
 class GenerationConfig(BaseModel):
@@ -77,6 +84,7 @@ class ModelResponse(BaseModel):
     output_tokens: int = 0
     latency_ms: float = 0
     response_id: str | None = None
+    finish_reason: FinishReason = "stop"
 
 
 class ModelBackend(Protocol):
@@ -93,4 +101,3 @@ class ModelBackend(Protocol):
     async def aclose(self) -> None:
         """Release backend resources."""
         ...
-

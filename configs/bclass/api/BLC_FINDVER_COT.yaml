@@ -8,6 +8,9 @@ backend:
   timeout_seconds: 120
   max_retries: 3
   model_context_window_tokens: 100000
+  request_profile: deepseek_v4_openai
+  thinking:
+    type: disabled
 generation:
   temperature: 0
   top_p: 1
@@ -18,4 +21,4 @@ baseline:
   prompt_type: findver_cot_json
   retrieval: none
   top_k: 10
-  concurrency: 1
+  concurrency: 32

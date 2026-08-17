@@ -33,9 +33,28 @@ class RunIdentity(BaseModel):
         pattern=SHA256_PATTERN,
     )
     model_context_window_tokens: int = Field(ge=8192, le=1_000_000)
+    request_profile: Literal[
+        "generic_openai", "deepseek_v4_openai"
+    ] = "generic_openai"
+    thinking_mode: Literal["disabled", "unsupported"] = "unsupported"
+    configured_concurrency: int = Field(default=1, ge=1, le=32)
 
     @model_validator(mode="after")
     def run_name_is_matrix_scoped(self) -> "RunIdentity":
         if not self.plan_run_id.startswith(f"{self.matrix_id}-"):
             raise ValueError("plan_run_id must be scoped by matrix_id")
+        if (
+            self.request_profile == "deepseek_v4_openai"
+            and self.thinking_mode != "disabled"
+        ):
+            raise ValueError(
+                "deepseek_v4_openai run identity requires disabled thinking"
+            )
+        if (
+            self.request_profile == "generic_openai"
+            and self.thinking_mode != "unsupported"
+        ):
+            raise ValueError(
+                "generic_openai run identity cannot declare DeepSeek thinking"
+            )
         return self

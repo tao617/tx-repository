@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and freeze a non-executing, paired two-model B-class run plan."""
+"""Validate and freeze a non-executing one- or two-model B-class run plan."""
 
 from __future__ import annotations
 
@@ -29,6 +29,16 @@ CONDITION_ORDER = (
     "M2_SELECTIVE_REVIEW",
 )
 PLAIN_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+EXPECTED_REQUEST_PROFILES = {
+    "api": {
+        "name": "deepseek_v4_openai",
+        "thinking": {"type": "disabled"},
+    },
+    "local": {"name": "generic_openai", "thinking": None},
+}
+PLACEHOLDER_MODEL_IDS = frozenset(
+    {"tbd", "todo", "placeholder", "pending", "unknown", "n/a", "na"}
+)
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -116,6 +126,35 @@ def _maximum_model_calls(config: AppConfig) -> int:
     )
 
 
+def _configured_concurrency(config: AppConfig) -> int:
+    section = config.baseline or config.agent or config.iterative_rag
+    if section is None:
+        raise ValueError("configuration mode section is missing")
+    return section.concurrency
+
+
+def _profile_spec(config: AppConfig) -> dict[str, Any]:
+    return {
+        "name": config.backend.request_profile,
+        "thinking": (
+            config.backend.thinking.model_dump(mode="json")
+            if config.backend.thinking is not None
+            else None
+        ),
+    }
+
+
+def _model_id(value: object, *, slot: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{slot} model ID must be an explicit string")
+    model_id = value.strip()
+    if not model_id or len(model_id) > 256:
+        raise ValueError(f"{slot} model ID must be 1-256 characters")
+    if slot == "model B" and model_id.casefold() in PLACEHOLDER_MODEL_IDS:
+        raise ValueError("model B cannot be a placeholder or pending value")
+    return model_id
+
+
 def _validate_condition_shape(condition_id: str, config: AppConfig) -> None:
     if condition_id == "BLC_FINDVER_COT":
         valid = (
@@ -193,11 +232,16 @@ def freeze_manifest(path: Path) -> dict[str, Any]:
     task = manifest.get("task")
     retrieval = manifest.get("retrieval")
     generation = manifest.get("generation")
+    request_profiles = manifest.get("request_profiles")
     conditions = manifest.get("conditions")
     if not all(isinstance(item, dict) for item in (task, retrieval, generation)):
         raise ValueError("task, retrieval, and generation sections are required")
     if not isinstance(conditions, list):
         raise ValueError("conditions must be a list")
+    if request_profiles != EXPECTED_REQUEST_PROFILES:
+        raise ValueError(
+            "B-class request_profiles must explicitly freeze DeepSeek thinking disabled and generic local transport"
+        )
     condition_ids = [
         item.get("condition_id") for item in conditions if isinstance(item, dict)
     ]
@@ -233,6 +277,14 @@ def freeze_manifest(path: Path) -> dict[str, Any]:
                 raise ValueError(
                     f"{condition_id} {backend_kind} generation differs from the manifest"
                 )
+            if _profile_spec(config) != request_profiles[backend_kind]:
+                raise ValueError(
+                    f"{condition_id} {backend_kind} request profile differs from the manifest"
+                )
+            if _configured_concurrency(config) != 32:
+                raise ValueError(
+                    f"{condition_id} {backend_kind} concurrency must be frozen at 32"
+                )
             _validate_condition_shape(condition_id, config)
             configs[backend_kind] = config
             paths[backend_kind] = config_path
@@ -254,6 +306,15 @@ def freeze_manifest(path: Path) -> dict[str, Any]:
                             configs[
                                 backend_kind
                             ].backend.model_context_window_tokens
+                        ),
+                        "request_profile": configs[
+                            backend_kind
+                        ].backend.request_profile,
+                        "thinking": _profile_spec(configs[backend_kind])[
+                            "thinking"
+                        ],
+                        "configured_concurrency": _configured_concurrency(
+                            configs[backend_kind]
                         ),
                     }
                     for backend_kind in ("api", "local")
@@ -279,6 +340,7 @@ def freeze_manifest(path: Path) -> dict[str, Any]:
             "top_k": retrieval["top_k"],
         },
         "generation": generation,
+        "request_profiles": request_profiles,
         "conditions": frozen_conditions,
     }
 
@@ -287,27 +349,43 @@ def prepare_plan(
     manifest_path: Path,
     *,
     model_a: str,
-    model_b: str,
     backend_a: Literal["api", "local"],
-    backend_b: Literal["api", "local"],
     context_window_a: int,
-    context_window_b: int,
+    model_b: str | None = None,
+    backend_b: Literal["api", "local"] | None = None,
+    context_window_b: int | None = None,
 ) -> dict[str, Any]:
-    model_a = model_a.strip()
-    model_b = model_b.strip()
-    if not model_a or not model_b or len(model_a) > 256 or len(model_b) > 256:
-        raise ValueError("both explicit model IDs must be 1-256 characters")
-    if model_a == model_b:
+    model_a = _model_id(model_a, slot="model A")
+    model_b_group = (model_b, backend_b, context_window_b)
+    provided_b = [value is not None for value in model_b_group]
+    if any(provided_b) and not all(provided_b):
+        raise ValueError(
+            "model B ID, backend, and context window must be provided together or all omitted"
+        )
+    validated_model_b = (
+        _model_id(model_b, slot="model B") if all(provided_b) else None
+    )
+    if validated_model_b is not None and model_a == validated_model_b:
         raise ValueError("model A and model B IDs must be different")
     if not 8192 <= context_window_a <= 1_000_000:
         raise ValueError("model A context window must be 8192-1000000 tokens")
-    if not 8192 <= context_window_b <= 1_000_000:
+    if context_window_b is not None and not 8192 <= context_window_b <= 1_000_000:
         raise ValueError("model B context window must be 8192-1000000 tokens")
     frozen = freeze_manifest(manifest_path)
-    models = (
-        ("model_a", model_a, backend_a, context_window_a),
-        ("model_b", model_b, backend_b, context_window_b),
-    )
+    matrix_id = frozen["matrix_id"]
+    models: list[tuple[str, str, Literal["api", "local"], int]] = [
+        ("model_a", model_a, backend_a, context_window_a)
+    ]
+    if validated_model_b is not None:
+        if backend_b is None or context_window_b is None:  # closed by group check
+            raise ValueError("model B group is incomplete")
+        models.append(
+            ("model_b", validated_model_b, backend_b, context_window_b)
+        )
+    else:
+        matrix_id = f"{matrix_id}-single-model-a"
+        if len(matrix_id) > 256 or not PLAIN_NAME.fullmatch(matrix_id):
+            raise ValueError("single-model matrix ID is invalid")
     runs = []
     for slot, model_id, backend_kind, context_window in models:
         configured_windows = {
@@ -320,6 +398,28 @@ def prepare_plan(
             raise ValueError(
                 f"{slot} context window does not match selected B-class configs"
             )
+        configured_profiles = {
+            (
+                condition["configs"][backend_kind]["request_profile"],
+                json.dumps(
+                    condition["configs"][backend_kind]["thinking"],
+                    sort_keys=True,
+                ),
+            )
+            for condition in frozen["conditions"]
+        }
+        if len(configured_profiles) != 1:
+            raise ValueError(f"{slot} request profile differs across conditions")
+        request_profile, serialized_thinking = next(iter(configured_profiles))
+        thinking = json.loads(serialized_thinking)
+        if "deepseek-v4" in model_id.casefold() and (
+            backend_kind != "api"
+            or request_profile != "deepseek_v4_openai"
+            or thinking != {"type": "disabled"}
+        ):
+            raise ValueError(
+                f"{slot} DeepSeek V4 requires the explicit disabled API request profile"
+            )
         for condition in frozen["conditions"]:
             runs.append(
                 {
@@ -327,9 +427,14 @@ def prepare_plan(
                     "model_id": model_id,
                     "backend_kind": backend_kind,
                     "model_context_window_tokens": context_window,
+                    "request_profile": request_profile,
+                    "thinking": thinking,
+                    "configured_concurrency": condition["configs"][
+                        backend_kind
+                    ]["configured_concurrency"],
                     "condition_id": condition["condition_id"],
                     "run_id": (
-                        f"{frozen['matrix_id']}-{slot}-{condition['condition_id']}"
+                        f"{matrix_id}-{slot}-{condition['condition_id']}"
                     ),
                     "command": condition["command"],
                     "config": condition["configs"][backend_kind],
@@ -341,12 +446,19 @@ def prepare_plan(
         "schema_version": 2,
         "status": "prepared_not_executed",
         **frozen,
+        "matrix_id": matrix_id,
         "models": [
             {
                 "slot": slot,
                 "model_id": model_id,
                 "backend_kind": backend_kind,
                 "model_context_window_tokens": context_window,
+                "request_profile": frozen["request_profiles"][backend_kind][
+                    "name"
+                ],
+                "thinking": frozen["request_profiles"][backend_kind][
+                    "thinking"
+                ],
             }
             for slot, model_id, backend_kind, context_window in models
         ],
@@ -358,11 +470,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--model-a", required=True)
-    parser.add_argument("--model-b", required=True)
+    parser.add_argument("--model-b")
     parser.add_argument("--backend-a", choices=("api", "local"), required=True)
-    parser.add_argument("--backend-b", choices=("api", "local"), required=True)
+    parser.add_argument("--backend-b", choices=("api", "local"))
     parser.add_argument("--model-a-context-window", required=True, type=int)
-    parser.add_argument("--model-b-context-window", required=True, type=int)
+    parser.add_argument("--model-b-context-window", type=int)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     plan = prepare_plan(

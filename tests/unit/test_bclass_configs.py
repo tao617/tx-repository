@@ -30,6 +30,11 @@ def test_api_and_local_bclass_configs_are_paired_and_loadable():
         assert local.run.backend_kind == "local"
         assert api.backend.model == "external-model-name"
         assert local.backend.model == "local-small-model"
+        assert api.backend.request_profile == "deepseek_v4_openai"
+        assert api.backend.thinking is not None
+        assert api.backend.thinking.type == "disabled"
+        assert local.backend.request_profile == "generic_openai"
+        assert local.backend.thinking is None
         assert api.backend.model_context_window_tokens == local.backend.model_context_window_tokens == 100_000
         assert api.generation == local.generation
         assert api.generation.model_dump() == {
@@ -40,6 +45,7 @@ def test_api_and_local_bclass_configs_are_paired_and_loadable():
             "prompt_budget_tokens": 32768,
         }
         assert method_section(api) == method_section(local)
+        assert method_section(api).concurrency == 32
 
 
 def test_main_bclass_method_settings_match_the_frozen_design():

@@ -12,6 +12,7 @@ from findver_agent.model_backends.base import (
     GenerationConfig,
     ModelBackend,
     ModelResponse,
+    ProtocolDriftError,
     context_window_metadata,
 )
 from findver_agent.report_store import ReportSession, ReportStore
@@ -328,6 +329,12 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
                 "phase": phase,
                 "phase_attempt": attempt,
                 "messages": messages,
+                "request_profile": getattr(
+                    self.backend, "request_profile", "generic_openai"
+                ),
+                "thinking_mode": getattr(
+                    self.backend, "thinking_mode", "unsupported"
+                ),
                 "prompt_budget_tokens": self.generation.prompt_budget_tokens,
                 **context_metadata,
             },
@@ -339,7 +346,11 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
                 trace,
                 phase=phase,
                 attempt=attempt,
-                kind="model",
+                kind=(
+                    "protocol_drift"
+                    if isinstance(error, ProtocolDriftError)
+                    else "model"
+                ),
                 message=f"{type(error).__name__}: {error}",
             )
             return None
@@ -354,6 +365,7 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
                 "actual_provider_input_tokens": response.input_tokens,
                 "latency_ms": response.latency_ms,
                 "response_id": response.response_id,
+                "finish_reason": response.finish_reason,
             },
         )
         return response

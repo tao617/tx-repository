@@ -186,8 +186,10 @@ def seal_submission(run_dir: Path, output: Path, *, repository_root: Path | None
     if not isinstance(expected_ids, list) or any(not isinstance(item, str) for item in expected_ids):
         raise SubmissionError("run metadata does not contain task_ids")
     prediction_ids = [prediction.example_id for prediction in predictions]
-    if set(prediction_ids) != set(expected_ids) or len(prediction_ids) != len(expected_ids):
-        raise SubmissionError("prediction IDs do not exactly match public task IDs")
+    if prediction_ids != expected_ids:
+        raise SubmissionError(
+            "prediction IDs do not exactly match public task order"
+        )
     if metadata.get("expected_examples") != len(expected_ids):
         raise SubmissionError("metadata expected count does not match task_ids")
     sidecar_sha256 = None
@@ -354,4 +356,3 @@ def verify_submission_archive(
             except EvidenceSidecarError as error:
                 raise SubmissionError(str(error)) from error
     return manifest, predictions
-

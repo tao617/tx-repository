@@ -18,6 +18,7 @@ from findver_agent.fixed_retrieval import FixedRetrievalIndex
 from findver_agent.model_backends.base import (
     GenerationConfig,
     ModelBackend,
+    ProtocolDriftError,
     context_window_metadata,
 )
 from findver_agent.prompt_builder import PromptBuilder
@@ -43,7 +44,7 @@ from findver_agent.state import (
 from findver_agent.trace_writer import TraceWriter
 
 
-ErrorKind = Literal["parse", "model", "skill", "protocol"]
+ErrorKind = Literal["parse", "model", "skill", "protocol", "protocol_drift"]
 
 
 class AgentOrchestrator:
@@ -128,6 +129,12 @@ class AgentOrchestrator:
                 {
                     "step": state.step,
                     "messages": messages,
+                    "request_profile": getattr(
+                        self.backend, "request_profile", "generic_openai"
+                    ),
+                    "thinking_mode": getattr(
+                        self.backend, "thinking_mode", "unsupported"
+                    ),
                     **self.prompt_builder.evidence_visibility(state),
                     "prompt_budget_tokens": self.generation.prompt_budget_tokens,
                     **context_metadata,
@@ -149,18 +156,27 @@ class AgentOrchestrator:
                         "output_tokens": response.output_tokens,
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
+                        "finish_reason": response.finish_reason,
                     },
                 )
             except Exception as error:
+                kind: ErrorKind = (
+                    "protocol_drift"
+                    if isinstance(error, ProtocolDriftError)
+                    else "model"
+                )
                 self._record_v1_error(
-                    state, trace, f"model error: {type(error).__name__}: {error}"
+                    state,
+                    trace,
+                    f"model error: {type(error).__name__}: {error}",
+                    kind=kind,
                 )
                 continue
 
             try:
                 action = parse_action(response.content)
             except ActionParseError as error:
-                self._record_v1_error(state, trace, str(error))
+                self._record_v1_error(state, trace, str(error), kind="parse")
                 continue
 
             trace.write("action", action.model_dump(mode="json"))
@@ -214,7 +230,9 @@ class AgentOrchestrator:
                 else:  # pragma: no cover - discriminated parser makes this unreachable
                     raise SkillError("unknown action")
             except (SkillError, ValueError, TypeError) as error:
-                self._record_v1_error(state, trace, f"skill error: {error}")
+                self._record_v1_error(
+                    state, trace, f"skill error: {error}", kind="skill"
+                )
                 continue
             self._complete_v1_step(state, trace, observation)
 
@@ -311,6 +329,12 @@ class AgentOrchestrator:
                     "phase": phase,
                     "phase_attempt": self._phase_step(state, phase),
                     "messages": messages,
+                    "request_profile": getattr(
+                        self.backend, "request_profile", "generic_openai"
+                    ),
+                    "thinking_mode": getattr(
+                        self.backend, "thinking_mode", "unsupported"
+                    ),
                     **self.prompt_builder.evidence_visibility(state),
                     "prompt_budget_tokens": self.generation.prompt_budget_tokens,
                     **context_metadata,
@@ -333,14 +357,20 @@ class AgentOrchestrator:
                         "output_tokens": response.output_tokens,
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
+                        "finish_reason": response.finish_reason,
                     },
                 )
             except Exception as error:
+                kind: ErrorKind = (
+                    "protocol_drift"
+                    if isinstance(error, ProtocolDriftError)
+                    else "model"
+                )
                 self._record_v2_error(
                     state,
                     trace,
                     phase,
-                    "model",
+                    kind,
                     f"model error: {type(error).__name__}: {error}",
                 )
                 continue
@@ -918,10 +948,22 @@ class AgentOrchestrator:
         state: QuestionState,
         trace: TraceWriter,
         message: str,
+        *,
+        kind: ErrorKind | None = None,
     ) -> None:
         state.step += 1
         state.remaining_steps = max(0, self.config.max_steps - state.step)
         state.errors.append(message[:1000])
-        state.last_observation = {"error": message[:1000]}
-        trace.write("recoverable_error", {"step": state.step - 1, "error": message[:1000]})
+        state.last_observation = {
+            "error": message[:1000],
+            **({"error_type": kind} if kind is not None else {}),
+        }
+        trace.write(
+            "recoverable_error",
+            {
+                "step": state.step - 1,
+                "error": message[:1000],
+                **({"error_type": kind} if kind is not None else {}),
+            },
+        )
         self.state_store.save(state)

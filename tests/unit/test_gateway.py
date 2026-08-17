@@ -4,15 +4,17 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from findver_gateway.app import Settings, create_app
+from findver_gateway.app import MAX_SHARED_CONNECTIONS, Settings, create_app
 
 
 def test_gateway_forwards_only_to_fixed_chat_endpoint_and_rewrites_model():
+    assert MAX_SHARED_CONNECTIONS == 32
     def upstream(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://fixed.example/v1/chat/completions"
         assert request.headers["authorization"] == "Bearer private-token"
         payload = json.loads(request.content)
         assert payload["model"] == "provider-model"
+        assert payload["thinking"] == {"type": "disabled"}
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "ok"}}]},
@@ -33,6 +35,7 @@ def test_gateway_forwards_only_to_fixed_chat_endpoint_and_rewrites_model():
                 "temperature": 0,
                 "top_p": 1,
                 "max_tokens": 32,
+                "thinking": {"type": "disabled"},
             },
         )
 
@@ -65,6 +68,61 @@ def test_gateway_rejects_unknown_alias_and_arbitrary_fields():
 
 
 @pytest.mark.parametrize(
+    "thinking",
+    [
+        None,
+        {"type": "enabled"},
+        {"type": "disabled", "effort": "high"},
+        {"mode": "disabled"},
+    ],
+)
+def test_gateway_rejects_non_disabled_or_extended_thinking(thinking):
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="provider-model",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(
+            settings,
+            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+        )
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "claim"}],
+                "thinking": thinking,
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_gateway_generic_request_does_not_invent_deepseek_thinking():
+    def upstream(request: httpx.Request) -> httpx.Response:
+        assert "thinking" not in json.loads(request.content)
+        return httpx.Response(200, json={"choices": []})
+
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="provider-model",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(settings, transport=httpx.MockTransport(upstream))
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "claim"}],
+            },
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
     "url",
     ["file:///private/gold.jsonl", "http://user:secret@host/v1", "https://host/v1?target=other"],
 )
@@ -75,4 +133,3 @@ def test_gateway_settings_reject_unsafe_upstream_urls(url):
             upstream_model="model",
             model_aliases=frozenset({"alias"}),
         )
-

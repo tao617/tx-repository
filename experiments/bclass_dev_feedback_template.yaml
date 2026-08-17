@@ -18,6 +18,14 @@ generation:
   seed: 7
   max_output_tokens: 1024
   prompt_budget_tokens: 32768
+request_profiles:
+  api:
+    name: deepseek_v4_openai
+    thinking:
+      type: disabled
+  local:
+    name: generic_openai
+    thinking: null
 conditions:
   - condition_id: BLC_FINDVER_COT
     prompt_profile: findver_cot_json

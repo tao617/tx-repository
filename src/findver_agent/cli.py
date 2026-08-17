@@ -43,12 +43,30 @@ async def execute(args: argparse.Namespace) -> Path:
     }[args.command]
     if config.run.mode != expected_mode:
         raise ValueError(f"configuration mode must be {expected_mode}")
+    configured_thinking_mode = (
+        config.backend.thinking.type
+        if config.backend.thinking is not None
+        else "unsupported"
+    )
+    if run_identity is not None and (
+        run_identity.request_profile != config.backend.request_profile
+        or run_identity.thinking_mode != configured_thinking_mode
+    ):
+        raise ValueError(
+            "runtime request profile does not match planned run identity"
+        )
     backend = OpenAICompatibleBackend(
         base_url=config.backend.base_url,
         model=config.backend.model,
         timeout_seconds=config.backend.timeout_seconds,
         max_retries=config.backend.max_retries,
         model_context_window_tokens=config.backend.model_context_window_tokens,
+        request_profile=config.backend.request_profile,
+        thinking_type=(
+            config.backend.thinking.type
+            if config.backend.thinking is not None
+            else None
+        ),
     )
     try:
         reports = ReportStore(args.reports)
@@ -62,6 +80,7 @@ async def execute(args: argparse.Namespace) -> Path:
                 report_store=reports,
                 run_dir=args.run_dir,
             )
+            concurrency = config.agent.concurrency
         elif expected_mode == "baseline":
             if config.baseline is None:
                 raise ValueError("baseline configuration is missing")
@@ -72,6 +91,7 @@ async def execute(args: argparse.Namespace) -> Path:
                 report_store=reports,
                 run_dir=args.run_dir,
             )
+            concurrency = config.baseline.concurrency
         else:
             if config.iterative_rag is None:
                 raise ValueError("iterative_rag configuration is missing")
@@ -82,6 +102,7 @@ async def execute(args: argparse.Namespace) -> Path:
                 report_store=reports,
                 run_dir=args.run_dir,
             )
+            concurrency = config.iterative_rag.concurrency
         return await run_batch(
             tasks_path=args.tasks,
             config_path=args.config,
@@ -89,6 +110,7 @@ async def execute(args: argparse.Namespace) -> Path:
             mode=expected_mode,
             model=config.backend.model,
             backend_kind=config.run.backend_kind,
+            concurrency=concurrency,
             answer=engine.run_question,
             run_identity=run_identity,
         )

@@ -6,7 +6,7 @@ The host supplies one sealed `submission-<run_id>.tar.gz`. The archive must cont
 - `manifest.json`
 - `SHA256SUMS`
 
-The scorer rejects partial or malformed submissions, extra or duplicate entries, links, non-regular files, absolute or traversing paths, hash mismatches, unknown or duplicate IDs, and schema violations. Missing or invalid labels score as incorrect; the full gold count is the accuracy denominator. Scoring is deterministic and never calls a model.
+The scorer rejects partial or malformed submissions, extra or duplicate entries, links, non-regular files, absolute or traversing paths, hash mismatches, unknown or duplicate IDs, task-order drift, and schema violations. Runtime may journal concurrent completions in arbitrary order, but the final sealed predictions and the separately transferred ID-only evidence sidecar must have the exact public-task population and order. Missing or invalid labels score as incorrect; the full gold count is the accuracy denominator. Scoring is deterministic and never calls a model.
 
 `dev-detailed` produces `summary.json` and private `feedback.jsonl`. `final-aggregate` produces only `summary.json`. The summary reports aggregate overall and IE/Numeric/Knowledge accuracy, coverage, and correct/wrong/valid/missing/invalid counts. Neither mode mutates the submission, and aggregate output contains no gold content or per-example data.
 

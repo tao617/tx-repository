@@ -8,6 +8,7 @@ backend:
   timeout_seconds: 180
   max_retries: 2
   model_context_window_tokens: 100000
+  request_profile: generic_openai
 generation:
   temperature: 0
   top_p: 1
@@ -20,4 +21,4 @@ baseline:
   retrieval_file: /retrieval/findver_embedding3large_top10.json
   retriever: text-embedding-3-large
   top_k: 10
-  concurrency: 1
+  concurrency: 32

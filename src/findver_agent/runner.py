@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 import tempfile
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +69,7 @@ class PredictionJournal:
         self.expected_ids = expected_ids
         self.expected_set = set(expected_ids)
         self.predictions: dict[str, Prediction] = {}
+        loaded_ids: list[str] = []
         source = self.final if self.final.exists() else self.partial
         if source.exists():
             with source.open(encoding="utf-8") as handle:
@@ -82,8 +85,11 @@ class PredictionJournal:
                     if prediction.example_id in self.predictions:
                         raise ValueError(f"duplicate prediction id: {prediction.example_id}")
                     self.predictions[prediction.example_id] = prediction
+                    loaded_ids.append(prediction.example_id)
         if self.final.exists() and set(self.predictions) != self.expected_set:
             raise ValueError("final predictions file is incomplete")
+        if self.final.exists() and loaded_ids != self.expected_ids:
+            raise ValueError("final predictions are not in public task order")
 
     def append(self, prediction: Prediction) -> None:
         if self.final.exists():
@@ -95,7 +101,10 @@ class PredictionJournal:
         data = (prediction.model_dump_json() + "\n").encode("utf-8")
         descriptor = os.open(self.partial, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         try:
-            os.write(descriptor, data)
+            view = memoryview(data)
+            while view:
+                written = os.write(descriptor, view)
+                view = view[written:]
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
@@ -106,8 +115,38 @@ class PredictionJournal:
             missing = self.expected_set - set(self.predictions)
             raise ValueError(f"cannot complete run with {len(missing)} missing predictions")
         if self.final.exists():
+            try:
+                self.partial.unlink()
+            except FileNotFoundError:
+                pass
             return self.final
-        os.replace(self.partial, self.final)
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{self.final.name}.", dir=self.final.parent
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                for example_id in self.expected_ids:
+                    handle.write(self.predictions[example_id].model_dump_json())
+                    handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, self.final)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+            raise
+        directory = os.open(self.final.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        try:
+            self.partial.unlink()
+        except FileNotFoundError:
+            pass
         directory = os.open(self.final.parent, os.O_RDONLY)
         try:
             os.fsync(directory)
@@ -124,9 +163,12 @@ async def run_batch(
     mode: str,
     model: str,
     backend_kind: str,
+    concurrency: int = 1,
     answer: Callable[[PublicTask], Awaitable[Prediction]],
     run_identity: RunIdentity | None = None,
 ) -> Path:
+    if not 1 <= concurrency <= 32:
+        raise ValueError("concurrency must be between 1 and 32")
     tasks = load_public_tasks(tasks_path)
     if not tasks:
         raise ValueError("public task file is empty")
@@ -149,6 +191,10 @@ async def run_batch(
             raise ValueError("runtime config does not match planned run identity")
         if public_tasks_hash != run_identity.public_tasks_sha256:
             raise ValueError("runtime tasks do not match planned run identity")
+        if concurrency != run_identity.configured_concurrency:
+            raise ValueError(
+                "runtime concurrency does not match planned run identity"
+            )
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if metadata.get("public_tasks_sha256") != public_tasks_hash:
@@ -165,9 +211,20 @@ async def run_batch(
             raise ValueError("backend changed since the run started")
         if metadata.get("run_identity") != identity_data:
             raise ValueError("run identity changed since the run started")
+        if metadata.get("configured_concurrency", 1) != concurrency:
+            raise ValueError("configured concurrency changed since the run started")
         started_at = metadata["started_at"]
+        prior_duration = float(metadata.get("wall_clock_duration_seconds", 0.0))
+        prior_peak = int(metadata.get("peak_concurrency", 0))
     else:
         started_at = datetime.now(timezone.utc).isoformat()
+        prior_duration = 0.0
+        prior_peak = 0
+    invocation_started = time.perf_counter()
+    remaining = [
+        task for task in tasks if task.example_id not in journal.predictions
+    ]
+    effective_concurrency = min(concurrency, len(remaining))
     metadata = {
         "status": "running",
         "mode": mode,
@@ -179,21 +236,74 @@ async def run_batch(
         "expected_examples": len(tasks),
         "task_ids": task_ids,
         "run_identity": identity_data,
+        "configured_concurrency": concurrency,
+        "effective_concurrency": effective_concurrency,
+        "peak_concurrency": prior_peak,
+        "wall_clock_duration_seconds": prior_duration,
         "completed_examples": len(journal.predictions),
         "started_at": started_at,
         "completed_at": None,
+        "interrupted_at": None,
+        "fatal_error_type": None,
     }
     _atomic_json(metadata_path, metadata)
-    for task in tasks:
-        if task.example_id in journal.predictions:
-            continue
-        prediction = await answer(task)
-        journal.append(prediction)
-        metadata["completed_examples"] = len(journal.predictions)
+    next_index = 0
+    active = 0
+    peak = prior_peak
+    stop_assigning = asyncio.Event()
+    assignment_lock = asyncio.Lock()
+    first_error: list[BaseException] = []
+
+    def update_elapsed() -> None:
+        metadata["wall_clock_duration_seconds"] = round(
+            prior_duration + time.perf_counter() - invocation_started,
+            6,
+        )
+
+    async def worker() -> None:
+        nonlocal next_index, active, peak
+        while True:
+            async with assignment_lock:
+                if stop_assigning.is_set() or next_index >= len(remaining):
+                    return
+                task = remaining[next_index]
+                next_index += 1
+                active += 1
+                peak = max(peak, active)
+                metadata["peak_concurrency"] = peak
+            try:
+                prediction = await answer(task)
+                if prediction.example_id != task.example_id:
+                    raise ValueError(
+                        "answer returned a prediction for the wrong example"
+                    )
+                journal.append(prediction)
+                metadata["completed_examples"] = len(journal.predictions)
+                update_elapsed()
+                _atomic_json(metadata_path, metadata)
+            except BaseException as error:
+                if not first_error:
+                    first_error.append(error)
+                    stop_assigning.set()
+                return
+            finally:
+                active -= 1
+
+    workers = [
+        asyncio.create_task(worker()) for _ in range(effective_concurrency)
+    ]
+    if workers:
+        await asyncio.gather(*workers)
+    if first_error:
+        metadata["status"] = "interrupted"
+        metadata["interrupted_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["fatal_error_type"] = type(first_error[0]).__name__
+        update_elapsed()
         _atomic_json(metadata_path, metadata)
+        raise first_error[0]
     predictions_path = journal.complete()
     metadata["status"] = "completed"
     metadata["completed_at"] = datetime.now(timezone.utc).isoformat()
+    update_elapsed()
     _atomic_json(metadata_path, metadata)
     return predictions_path
-

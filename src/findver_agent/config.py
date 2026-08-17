@@ -16,6 +16,13 @@ RetrieverName = Literal["bm25", "text-embedding-3-large", "contriever-msmarco"]
 RetrievalTopK = Literal[3, 5, 10]
 ProtocolVersion = Literal["v1", "v2"]
 ReviewPolicy = Literal["none", "mandatory", "selective"]
+RequestProfile = Literal["generic_openai", "deepseek_v4_openai"]
+
+
+class ThinkingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["disabled"]
 
 
 class RunConfig(BaseModel):
@@ -34,6 +41,8 @@ class BackendConfig(BaseModel):
     timeout_seconds: float = Field(default=120, gt=0, le=600)
     max_retries: int = Field(default=3, ge=0, le=10)
     model_context_window_tokens: int = Field(default=32768, ge=8192, le=1_000_000)
+    request_profile: RequestProfile = "generic_openai"
+    thinking: ThinkingConfig | None = None
 
     @model_validator(mode="after")
     def fixed_gateway_only(self) -> "BackendConfig":
@@ -42,6 +51,15 @@ class BackendConfig(BaseModel):
             raise ValueError("runtime backend base_url must target http://model-gateway")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("runtime backend base_url cannot contain credentials or query data")
+        if self.request_profile == "deepseek_v4_openai":
+            if self.thinking is None or self.thinking.type != "disabled":
+                raise ValueError(
+                    "deepseek_v4_openai requires thinking.type=disabled"
+                )
+        elif self.thinking is not None:
+            raise ValueError(
+                "generic_openai does not accept the DeepSeek thinking field"
+            )
         return self
 
 
@@ -176,6 +194,13 @@ class AppConfig(BaseModel):
         for name, section in required.items():
             if name != self.run.mode and section is not None:
                 raise ValueError(f"{name} configuration is not valid in {self.run.mode} mode")
+        if (
+            self.run.backend_kind in {"local", "mock"}
+            and self.backend.request_profile != "generic_openai"
+        ):
+            raise ValueError(
+                "local and mock backends must use the generic_openai request profile"
+            )
         return self
 
 

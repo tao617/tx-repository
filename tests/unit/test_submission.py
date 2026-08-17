@@ -138,6 +138,24 @@ def test_seal_rejects_partial_run(tmp_path):
         seal_submission(run_dir, tmp_path / "submission.tar.gz", repository_root=Path.cwd())
 
 
+def test_seal_rejects_prediction_order_drift_before_sidecar_creation(tmp_path):
+    run_dir = make_completed_run(tmp_path)
+    predictions = (run_dir / "predictions.jsonl").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    (run_dir / "predictions.jsonl").write_text(
+        "\n".join(reversed(predictions)) + "\n", encoding="utf-8"
+    )
+
+    with pytest.raises(SubmissionError, match="public task order"):
+        seal_submission(
+            run_dir,
+            tmp_path / "submission.tar.gz",
+            repository_root=Path.cwd(),
+        )
+    assert not (run_dir / SIDECAR_NAME).exists()
+
+
 def _write_archive(path, members):
     with path.open("wb") as raw:
         with gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed:

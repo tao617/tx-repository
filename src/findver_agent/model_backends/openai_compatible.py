@@ -11,6 +11,7 @@ from findver_agent.model_backends.base import (
     ContextWindowExceededError,
     GenerationConfig,
     ModelResponse,
+    ProtocolDriftError,
     context_window_metadata,
 )
 from findver_agent.model_backends.retry_policy import retry_async
@@ -18,6 +19,13 @@ from findver_agent.model_backends.retry_policy import retry_async
 
 class BackendError(RuntimeError):
     """A model backend returned an unusable response."""
+
+
+MAX_SHARED_CONNECTIONS = 32
+SUPPORTED_FINISH_REASONS = frozenset({"stop", "length", "content_filter"})
+SUPPORTED_REQUEST_PROFILES = frozenset(
+    {"generic_openai", "deepseek_v4_openai"}
+)
 
 
 class OpenAICompatibleBackend:
@@ -29,13 +37,35 @@ class OpenAICompatibleBackend:
         timeout_seconds: float,
         max_retries: int,
         model_context_window_tokens: int,
+        request_profile: str = "generic_openai",
+        thinking_type: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
+        if request_profile not in SUPPORTED_REQUEST_PROFILES:
+            raise ValueError("unsupported model request profile")
+        if request_profile == "deepseek_v4_openai":
+            if thinking_type != "disabled":
+                raise ValueError(
+                    "deepseek_v4_openai requires thinking_type=disabled"
+                )
+        elif thinking_type is not None:
+            raise ValueError(
+                "generic_openai cannot send the DeepSeek thinking field"
+            )
         self.model_name = model
         self.model_context_window_tokens = model_context_window_tokens
+        self.request_profile = request_profile
+        self.thinking_mode = thinking_type or "unsupported"
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._max_retries = max_retries
-        self._client = httpx.AsyncClient(timeout=timeout_seconds, transport=transport)
+        self._client = httpx.AsyncClient(
+            timeout=timeout_seconds,
+            transport=transport,
+            limits=httpx.Limits(
+                max_connections=MAX_SHARED_CONNECTIONS,
+                max_keepalive_connections=MAX_SHARED_CONNECTIONS,
+            ),
+        )
 
     @staticmethod
     def _retryable(error: BaseException) -> bool:
@@ -71,6 +101,8 @@ class OpenAICompatibleBackend:
         }
         if config.seed is not None:
             payload["seed"] = config.seed
+        if self.request_profile == "deepseek_v4_openai":
+            payload["thinking"] = {"type": "disabled"}
 
         started = time.perf_counter()
 
@@ -87,12 +119,26 @@ class OpenAICompatibleBackend:
         latency_ms = (time.perf_counter() - started) * 1000
         try:
             data = response.json()
-            content = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            message = choice["message"]
+            content = message["content"]
+            finish_reason = choice["finish_reason"]
             usage = data.get("usage") or {}
         except (ValueError, KeyError, IndexError, TypeError) as error:
             raise BackendError("gateway returned an invalid chat completion") from error
         if not isinstance(content, str):
             raise BackendError("gateway completion content must be a string")
+        if finish_reason not in SUPPORTED_FINISH_REASONS:
+            raise BackendError("gateway returned an unsupported finish_reason")
+        reasoning_content = message.get("reasoning_content")
+        if (
+            self.request_profile == "deepseek_v4_openai"
+            and reasoning_content is not None
+            and reasoning_content != ""
+        ):
+            raise ProtocolDriftError(
+                "upstream returned non-empty hidden reasoning while thinking was disabled"
+            )
         input_tokens = int(usage.get("prompt_tokens") or 0)
         if (
             input_tokens > 0
@@ -111,8 +157,8 @@ class OpenAICompatibleBackend:
             output_tokens=int(usage.get("completion_tokens") or 0),
             latency_ms=latency_ms,
             response_id=data.get("id"),
+            finish_reason=finish_reason,
         )
 
     async def aclose(self) -> None:
         await self._client.aclose()
-

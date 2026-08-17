@@ -31,6 +31,22 @@ class AbortRun(BaseException):
     pass
 
 
+class LengthTruncatedBackend:
+    model_name = "mock-model"
+
+    async def generate(self, messages, config):
+        return ModelResponse(
+            content='{"action":"submit_answer"',
+            input_tokens=10,
+            output_tokens=4,
+            latency_ms=1,
+            finish_reason="length",
+        )
+
+    async def aclose(self):
+        return None
+
+
 @pytest.fixture
 def task_and_reports(tmp_path):
     reports = tmp_path / "reports"
@@ -187,3 +203,27 @@ async def test_baseline_uses_one_submit_call(tmp_path, task_and_reports):
     assert prediction.status == PredictionStatus.COMPLETED
     assert backend.responses == []
 
+
+@pytest.mark.asyncio
+async def test_length_truncated_incomplete_json_uses_existing_parse_failure(tmp_path, task_and_reports):
+    task, reports = task_and_reports
+    run_dir = tmp_path / "baseline-length"
+    baseline = BaselineRunner(
+        backend=LengthTruncatedBackend(),
+        generation=GenerationConfig(max_context_tokens=4096),
+        baseline_config=BaselineConfig(prompt_type="direct", retrieval="none"),
+        report_store=reports,
+        run_dir=run_dir,
+    )
+
+    prediction = await baseline.run_question(task)
+    events = [
+        json.loads(line)
+        for path in (run_dir / "traces").glob("*.jsonl")
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert prediction.status == PredictionStatus.INVALID
+    responses = [event for event in events if event["event"] == "model_response"]
+    assert responses[0]["payload"]["finish_reason"] == "length"
+    assert any(event["event"] == "baseline_error" for event in events)

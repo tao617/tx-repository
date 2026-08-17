@@ -96,6 +96,7 @@ class ErrorCounts(BaseModel):
     model: int = 0
     skill: int = 0
     protocol: int = 0
+    protocol_drift: int = 0
 
 
 class PhaseErrors(BaseModel):

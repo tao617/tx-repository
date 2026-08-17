@@ -1,8 +1,11 @@
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
+
+from findver_agent.run_identity import RunIdentity
 
 
 ROOT = Path(__file__).parents[2]
@@ -36,6 +39,13 @@ def _prepared_fixture(tmp_path, monkeypatch):
         "status": "prepared_not_executed",
         "matrix_id": "matrix",
         "code_commit": commit,
+        "request_profiles": {
+            "api": {
+                "name": "deepseek_v4_openai",
+                "thinking": {"type": "disabled"},
+            },
+            "local": {"name": "generic_openai", "thinking": None},
+        },
         "task": {
             "path": "runtime_data/public/tasks.jsonl",
             "sha256": MODULE.sha256_file(task_path),
@@ -51,11 +61,17 @@ def _prepared_fixture(tmp_path, monkeypatch):
                 "model_id": "provider/model-a",
                 "backend_kind": "api",
                 "model_context_window_tokens": 100_000,
+                "request_profile": "deepseek_v4_openai",
+                "thinking": {"type": "disabled"},
+                "configured_concurrency": 32,
                 "command": "baseline",
                 "config": {
                     "path": "configs/bclass/api/BLC_FINDVER_COT.yaml",
                     "sha256": MODULE.sha256_file(config_path),
                     "model_context_window_tokens": 100_000,
+                    "request_profile": "deepseek_v4_openai",
+                    "thinking": {"type": "disabled"},
+                    "configured_concurrency": 32,
                 },
             }
         ],
@@ -91,6 +107,9 @@ def test_executor_binds_plan_model_artifacts_commit_and_context(tmp_path, monkey
     assert identity.model_alias == "external-model-name"
     assert identity.git_commit_at_start == "1" * 40
     assert identity.model_context_window_tokens == 100_000
+    assert identity.request_profile == "deepseek_v4_openai"
+    assert identity.thinking_mode == "disabled"
+    assert identity.configured_concurrency == 32
     assert identity.effective_retrieval_sha256 is None
     assert command[-5:] == ["api", "tasks.jsonl", run_id, "baseline", "bclass/api/BLC_FINDVER_COT.yaml"]
     assert json.loads(environment["FINDVER_RUN_IDENTITY_JSON"])["plan_run_id"] == run_id
@@ -120,6 +139,9 @@ def test_executor_accepts_frozen_api_ablation_config_directory(tmp_path, monkeyp
         "path": "configs/bclass/ablations/RAG3_SEEDED.yaml",
         "sha256": MODULE.sha256_file(target),
         "model_context_window_tokens": 100_000,
+        "request_profile": "deepseek_v4_openai",
+        "thinking": {"type": "disabled"},
+        "configured_concurrency": 32,
     }
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
 
@@ -213,3 +235,121 @@ def test_executor_rejects_context_window_drift(tmp_path, monkeypatch):
             env_path=env_path,
             resume=False,
         )
+
+
+def test_executor_rejects_thinking_profile_drift(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["runs"][0]["thinking"] = None
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="request profile or thinking"):
+        MODULE.prepare_execution(
+            plan_path,
+            plan_run_id=run_id,
+            env_path=env_path,
+            resume=False,
+        )
+
+
+def test_executor_rejects_config_hash_drift(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["runs"][0]["config"]["sha256"] = "0" * 64
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="config SHA256"):
+        MODULE.prepare_execution(
+            plan_path,
+            plan_run_id=run_id,
+            env_path=env_path,
+            resume=False,
+        )
+
+
+def test_executor_rejects_retrieval_drift(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["retrieval"]["sha256"] = "0" * 64
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="retrieval SHA256"):
+        MODULE.prepare_execution(
+            plan_path,
+            plan_run_id=run_id,
+            env_path=env_path,
+            resume=False,
+        )
+
+
+def test_executor_rejects_commit_drift(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["code_commit"] = "2" * 40
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="HEAD"):
+        MODULE.prepare_execution(
+            plan_path,
+            plan_run_id=run_id,
+            env_path=env_path,
+            resume=False,
+        )
+
+
+def test_executor_main_launches_exactly_one_single_model_plan_row(tmp_path, monkeypatch):
+    identity = RunIdentity(
+        plan_sha256="a" * 64,
+        matrix_id="matrix-single-model-a",
+        condition_id="BLC_FINDVER_COT",
+        plan_run_id="matrix-single-model-a-model_a-BLC_FINDVER_COT",
+        effective_model_id="deepseek-v4-flash",
+        model_alias="external-model-name",
+        backend_kind="api",
+        git_commit_at_start="b" * 40,
+        config_sha256="c" * 64,
+        public_tasks_sha256="d" * 64,
+        planned_retrieval_sha256="e" * 64,
+        model_context_window_tokens=100_000,
+        request_profile="deepseek_v4_openai",
+        thinking_mode="disabled",
+        configured_concurrency=32,
+    )
+    plan_path = tmp_path / "plan.json"
+    env_path = tmp_path / "model.env"
+    plan_path.write_text("{}", encoding="utf-8")
+    env_path.write_text("MODEL_NAME=deepseek-v4-flash\n", encoding="utf-8")
+    command = ["launcher", "one-row"]
+    environment = {"BOUND": "1"}
+    monkeypatch.setattr(
+        MODULE,
+        "prepare_execution",
+        lambda *args, **kwargs: (identity, command, environment),
+    )
+    launched = []
+
+    def fake_run(arguments, **kwargs):
+        launched.append((arguments, kwargs))
+
+    monkeypatch.setattr(MODULE.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_bclass_plan.py",
+            "--plan",
+            str(plan_path),
+            "--plan-run-id",
+            identity.plan_run_id,
+            "--env",
+            str(env_path),
+        ],
+    )
+
+    assert MODULE.main() == 0
+    assert launched == [
+        (
+            command,
+            {"cwd": MODULE.REPO_ROOT, "env": environment, "check": True},
+        )
+    ]

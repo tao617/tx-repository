@@ -22,5 +22,4 @@ agent:
   max_total_unique_paragraphs: 30
   cross_question_memory: false
   scorer_feedback: false
-  concurrency: 1
-
+  concurrency: 32

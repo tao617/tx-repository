@@ -19,7 +19,8 @@ PHASES = (
     "legacy",
     "baseline",
 )
-ERROR_KINDS = ("parse", "model", "skill", "protocol")
+ERROR_KINDS = ("parse", "model", "skill", "protocol", "protocol_drift")
+FINISH_REASONS = ("stop", "length", "content_filter")
 TOOL_NAMES = ("search_report", "read_paragraphs", "calculator")
 VISIBILITY_KEYS = (
     "ledger_evidence_ids",
@@ -131,6 +132,7 @@ def summarize(
     overflow_statuses: Counter[str] = Counter()
     legacy_context_limits: Counter[str] = Counter()
     visibility_counts: Counter[str] = Counter()
+    finish_reasons: Counter[str] = Counter()
 
     trace_files = sorted((run_dir / "traces").glob("*.jsonl"))
     for trace_path in trace_files:
@@ -211,6 +213,13 @@ def summarize(
                     if type(actual_input) is int and actual_input >= 0:
                         actual_provider_input_records += 1
                         actual_provider_input_tokens += actual_input
+                    finish_reason = payload.get("finish_reason")
+                    if finish_reason is not None:
+                        if finish_reason not in FINISH_REASONS:
+                            raise ValueError(
+                                f"{trace_path.name}:{line_number} has unknown finish_reason"
+                            )
+                        finish_reasons[str(finish_reason)] += 1
                 elif event_name == "action":
                     action_name = payload.get("action")
                     if isinstance(action_name, str):
@@ -374,6 +383,14 @@ def summarize(
         "action_attempts": dict(sorted(action_attempts.items())),
         "termination_reasons": dict(sorted(termination_reasons.items())),
         "phase_errors": phase_error_output,
+        "finish_reason_counts": {
+            reason: int(finish_reasons.get(reason, 0))
+            for reason in FINISH_REASONS
+        },
+        "length_finish_reason_count": int(finish_reasons.get("length", 0)),
+        "protocol_drift_count": sum(
+            phase_errors[phase].get("protocol_drift", 0) for phase in PHASES
+        ),
     }
     means = {
         "steps": _mean(model_calls, expected),
@@ -412,7 +429,23 @@ def summarize(
                 "public_tasks_sha256",
                 "expected_examples",
                 "completed_examples",
+                "configured_concurrency",
+                "effective_concurrency",
+                "peak_concurrency",
+                "wall_clock_duration_seconds",
             )
+        },
+        "execution": {
+            "configured_concurrency": int(
+                metadata.get("configured_concurrency", 1)
+            ),
+            "effective_concurrency": int(
+                metadata.get("effective_concurrency", 1)
+            ),
+            "peak_concurrency": int(metadata.get("peak_concurrency", 1)),
+            "wall_clock_duration_seconds": round(
+                float(metadata.get("wall_clock_duration_seconds", 0.0)), 6
+            ),
         },
         "rates": {
             "file_completion_rate": _mean(len(predictions), expected),

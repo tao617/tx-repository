@@ -17,4 +17,4 @@ baseline:
   prompt_type: direct
   retrieval: fixed_bm25
   top_k: 10
-  concurrency: 1
+  concurrency: 32

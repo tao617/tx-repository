@@ -94,6 +94,18 @@ def verify(run_dir: Path) -> dict[str, int | str]:
     model_responses = [event for event in events if event.get("event") == "model_response"]
     if len(model_requests) != 9 or len(model_responses) != 9:
         raise AssertionError("stateful trace must contain nine requests and responses")
+    if any(
+        event.get("payload", {}).get("request_profile")
+        != "deepseek_v4_openai"
+        or event.get("payload", {}).get("thinking_mode") != "disabled"
+        for event in model_requests
+    ):
+        raise AssertionError("DeepSeek disabled-thinking provenance is incomplete")
+    if any(
+        event.get("payload", {}).get("finish_reason") != "stop"
+        for event in model_responses
+    ):
+        raise AssertionError("stateful finish reasons were not retained")
     phases = Counter(
         str(event.get("payload", {}).get("phase")) for event in model_requests
     )
@@ -119,6 +131,14 @@ def verify(run_dir: Path) -> dict[str, int | str]:
         raise AssertionError("missing finalization protocol error trace")
     if ("review", "parse") not in error_pairs:
         raise AssertionError("missing review parse error trace")
+
+    persisted = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in run_dir.rglob("*")
+        if path.is_file()
+    )
+    if "reasoning_content" in persisted:
+        raise AssertionError("hidden reasoning field leaked into Runtime artifacts")
 
     return {
         "model_calls": len(model_requests),

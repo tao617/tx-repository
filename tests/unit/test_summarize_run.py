@@ -132,3 +132,19 @@ def test_cost_requires_both_prices(tmp_path):
 
     with pytest.raises(ValueError, match="both input and output prices"):
         MODULE.summarize(run, input_cost_per_million=1.0)
+
+
+def test_summary_rejects_unknown_finish_reason(tmp_path):
+    run = tmp_path / "run"
+    (run / "traces").mkdir(parents=True)
+    (run / "run_metadata.json").write_text(
+        json.dumps({"expected_examples": 1}), encoding="utf-8"
+    )
+    (run / "predictions.jsonl").write_text("", encoding="utf-8")
+    write_jsonl(
+        run / "traces" / "trace.jsonl",
+        [{"event": "model_response", "payload": {"finish_reason": "mystery"}}],
+    )
+
+    with pytest.raises(ValueError, match="unknown finish_reason"):
+        MODULE.summarize(run)

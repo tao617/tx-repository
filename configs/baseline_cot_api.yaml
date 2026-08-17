@@ -17,4 +17,4 @@ baseline:
   prompt_type: cot
   retrieval: none
   top_k: 10
-  concurrency: 1
+  concurrency: 32

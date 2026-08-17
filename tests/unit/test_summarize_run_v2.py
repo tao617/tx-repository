@@ -27,6 +27,10 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
                 "backend": "mock",
                 "expected_examples": 1,
                 "completed_examples": 1,
+                "configured_concurrency": 32,
+                "effective_concurrency": 1,
+                "peak_concurrency": 1,
+                "wall_clock_duration_seconds": 2.5,
             }
         ),
         encoding="utf-8",
@@ -66,14 +70,16 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
                     "actual_provider_input_tokens": 10,
                     "output_tokens": 2,
                     "latency_ms": 3,
+                    "finish_reason": "stop",
                 },
             },
             {"event": "model_request", "payload": {"phase": "finalization"}},
             {"event": "model_request", "payload": {"phase": "review"}},
-            {"event": "model_response", "payload": {"input_tokens": 12, "output_tokens": 4, "latency_ms": 5}},
+            {"event": "model_response", "payload": {"input_tokens": 12, "output_tokens": 4, "latency_ms": 5, "finish_reason": "length"}},
             {"event": "recoverable_error", "payload": {"phase": "exploration", "error_type": "parse", "error": "private parse"}},
             {"event": "recoverable_error", "payload": {"phase": "finalization", "error_type": "model", "error": "private model"}},
             {"event": "recoverable_error", "payload": {"phase": "review", "error_type": "skill", "error": "private skill"}},
+            {"event": "recoverable_error", "payload": {"phase": "review", "error_type": "protocol_drift", "error": "private drift"}},
             {"event": "review_triggered", "payload": {"reasons": ["private reason"]}},
             {"event": "input_context", "payload": {"report_paragraph_count": 9, "report_character_count": 900, "assembled_paragraph_count": 9, "full_report_assembled": True, "local_truncation": False, "model_context_limit": 8192}},
             {"event": "baseline_error", "payload": {"error": "private context", "provider_context_error": True}},
@@ -130,6 +136,20 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
     assert summary["totals"]["phase_errors"]["exploration"]["parse"] == 1
     assert summary["totals"]["phase_errors"]["finalization"]["model"] == 1
     assert summary["totals"]["phase_errors"]["review"]["skill"] == 1
+    assert summary["totals"]["phase_errors"]["review"]["protocol_drift"] == 1
+    assert summary["totals"]["protocol_drift_count"] == 1
+    assert summary["totals"]["finish_reason_counts"] == {
+        "stop": 1,
+        "length": 1,
+        "content_filter": 0,
+    }
+    assert summary["totals"]["length_finish_reason_count"] == 1
+    assert summary["execution"] == {
+        "configured_concurrency": 32,
+        "effective_concurrency": 1,
+        "peak_concurrency": 1,
+        "wall_clock_duration_seconds": 2.5,
+    }
     assert summary["long_context"]["provider_context_error_count"] == 1
     assert summary["long_context"]["legacy_configured_context_limits"] == {"8192": 1}
     context = summary["long_context"]

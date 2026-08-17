@@ -11,6 +11,7 @@ from findver_agent.model_backends.base import (
     ContextWindowExceededError,
     GenerationConfig,
     ModelBackend,
+    ProtocolDriftError,
     context_window_metadata,
 )
 from findver_agent.report_store import ReportSession, ReportStore
@@ -136,6 +137,12 @@ class BaselineRunner:
             "model_request",
             {
                 "messages": messages,
+                "request_profile": getattr(
+                    self.backend, "request_profile", "generic_openai"
+                ),
+                "thinking_mode": getattr(
+                    self.backend, "thinking_mode", "unsupported"
+                ),
                 "prompt_budget_tokens": self.generation.prompt_budget_tokens,
                 **context_metadata,
             },
@@ -159,6 +166,11 @@ class BaselineRunner:
                 "baseline_error",
                 {
                     "error": error_text,
+                    "error_type": (
+                        "protocol_drift"
+                        if isinstance(error, ProtocolDriftError)
+                        else "model"
+                    ),
                     "provider_context_error": isinstance(
                         error, ContextWindowExceededError
                     )
