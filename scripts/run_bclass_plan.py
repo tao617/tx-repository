@@ -268,11 +268,30 @@ def prepare_execution(
         if effective_retrieval_path is not None
         else None
     )
+    effective_retrieval_required = run.get("effective_retrieval_required")
+    if effective_retrieval_required is not None:
+        if type(effective_retrieval_required) is not bool:
+            raise ValueError("planned effective-retrieval requirement is invalid")
+        if effective_retrieval_required != (effective_retrieval_path is not None):
+            raise ValueError(
+                "effective retrieval presence does not match the planned condition"
+            )
     if (
         effective_retrieval_sha256 is not None
         and effective_retrieval_sha256 != retrieval_sha256
     ):
         raise ValueError("effective retrieval does not match the planned retrieval")
+    planned_long_context_scope = run.get("long_context_scope")
+    if planned_long_context_scope is not None:
+        if (
+            config.agent is None
+            or not config.agent.long_context.enabled
+            or config.agent.long_context.scope != planned_long_context_scope
+            or config.agent.initial_retrieval.enabled
+        ):
+            raise ValueError(
+                "effective long-context scope does not match the planned condition"
+            )
 
     identity = RunIdentity(
         plan_sha256=sha256_file(plan_path),

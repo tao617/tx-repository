@@ -47,6 +47,14 @@ EXTENSIONS = {
         "mode": "agent",
         "exploration_steps": 4,
     },
+    "LC_AGENT_FIRSTPASS": {
+        "config": "configs/bclass/ablations/LC_AGENT_FIRSTPASS.yaml",
+        "prompt_profile": "action_compatible_findver_v2_full_report_firstpass",
+        "top_k": 10,
+        "mode": "agent",
+        "uses_effective_retrieval": False,
+        "long_context_scope": "first_exploration_attempt",
+    },
 }
 EXPECTED_API_PROFILE = {
     "name": "deepseek_v4_openai",
@@ -131,6 +139,24 @@ def _retrieval_spec(config: AppConfig) -> tuple[Path, str, int]:
     return host_path, retriever, top_k
 
 
+def _manifest_retrieval_spec(
+    manifest: dict[str, Any],
+) -> tuple[Path, str, int]:
+    retrieval = manifest.get("retrieval")
+    if not isinstance(retrieval, dict):
+        raise ValueError("manifest retrieval provenance is required")
+    host_path = _repository_path(retrieval.get("path"))
+    if host_path.parent != (REPO_ROOT / "runtime_data" / "retrieval"):
+        raise ValueError("manifest retrieval must be under runtime_data/retrieval")
+    if sha256_file(host_path) != retrieval.get("sha256"):
+        raise ValueError("manifest retrieval SHA256 does not match")
+    retriever = retrieval.get("retriever")
+    top_k = retrieval.get("top_k")
+    if not isinstance(retriever, str) or type(top_k) is not int:
+        raise ValueError("manifest retrieval identity is invalid")
+    return host_path, retriever, top_k
+
+
 def _maximum_model_calls(config: AppConfig) -> int:
     if config.agent is not None:
         return (
@@ -206,7 +232,27 @@ def prepare_extension_plan(
     concurrency = _configured_concurrency(config)
     if concurrency != 32:
         raise ValueError("extension concurrency must be frozen at 32")
-    retrieval_path, retriever, top_k = _retrieval_spec(config)
+    uses_effective_retrieval = extension.get("uses_effective_retrieval", True)
+    if uses_effective_retrieval:
+        retrieval_path, retriever, top_k = _retrieval_spec(config)
+    else:
+        retrieval_path, retriever, top_k = _manifest_retrieval_spec(manifest)
+        long_context_scope = extension.get("long_context_scope")
+        if (
+            config.agent is None
+            or config.agent.initial_retrieval.enabled
+            or not config.agent.long_context.enabled
+            or config.agent.long_context.scope != long_context_scope
+            or config.agent.long_context.preload_as_evidence
+            or config.agent.protocol_version != "v2"
+            or config.agent.review_policy != "selective"
+            or config.agent.exploration_steps != 6
+            or config.agent.finalization_steps != 2
+            or config.agent.review_steps != 1
+        ):
+            raise ValueError(
+                "LC Agent extension requires no retrieval and the frozen first-pass 6/2/1 controller"
+            )
     if retriever != "text-embedding-3-large" or top_k != extension["top_k"]:
         raise ValueError("extension retrieval identity does not match its condition")
     expected_rounds = extension.get("retrieval_rounds")
@@ -280,6 +326,8 @@ def prepare_extension_plan(
                 "config": config_spec,
                 "prompt_profile": extension["prompt_profile"],
                 "maximum_model_calls": _maximum_model_calls(config),
+                "effective_retrieval_required": uses_effective_retrieval,
+                "long_context_scope": extension.get("long_context_scope"),
             }
         ],
     }

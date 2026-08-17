@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 run_name="${1:-bclass-stateful-mock-m2}"
 port="${2:-18080}"
+config_name="${3:-bclass/api/M2_SELECTIVE_REVIEW.yaml}"
 temporary_env="$(mktemp /tmp/findver-stateful-mock.XXXXXX.env)"
 mock_pid=""
 
@@ -50,7 +51,13 @@ export FINDVER_UID="${FINDVER_UID:-$(id -u)}"
 export FINDVER_GID="${FINDVER_GID:-$(id -g)}"
 "$repo_root/scripts/run_agent_with_env.sh" \
   "$temporary_env" api smoke-tasks.jsonl "$run_name" run \
-  bclass/api/M2_SELECTIVE_REVIEW.yaml
+  "$config_name"
 
-python3 "$repo_root/scripts/verify_stateful_mock_smoke.py" \
+verification=(
+  python3 "$repo_root/scripts/verify_stateful_mock_smoke.py"
   --run-dir "$repo_root/runs/$run_name"
+)
+if [[ "$config_name" == "bclass/ablations/LC_AGENT_FIRSTPASS.yaml" ]]; then
+  verification+=(--expect-long-context)
+fi
+"${verification[@]}"

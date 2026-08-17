@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from findver_agent.schemas import (
     Confidence,
@@ -81,6 +81,23 @@ class InitialRetrievalState(BaseModel):
         return value
 
 
+class LongContextState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report: str
+    serialized_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paragraph_count: int = Field(ge=0)
+    report_character_count: int = Field(ge=0)
+    injected: bool = False
+    injection_attempt: Literal[1] | None = None
+
+    @model_validator(mode="after")
+    def injection_fields_are_consistent(self) -> "LongContextState":
+        if self.injected != (self.injection_attempt == 1):
+            raise ValueError("long-context injection state is inconsistent")
+        return self
+
+
 class PhaseBudgets(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -123,6 +140,7 @@ class QuestionState(BaseModel):
     finalization_step: int = 0
     review_step: int = 0
     initial_retrieval_state: InitialRetrievalState | None = None
+    long_context_state: LongContextState | None = None
     evidence_status: EvidenceStatus = EvidenceStatus.NONE
     evidence_confidence: Confidence = Confidence.LOW
     risk_flags: list[RiskFlag] = Field(default_factory=list)

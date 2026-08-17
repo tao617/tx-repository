@@ -62,6 +62,7 @@ ablations:
     - configs/bclass/ablations/RAG5_SEEDED.yaml
     - configs/bclass/ablations/RAG10_SEEDED.yaml
     - configs/bclass/ablations/M2_BUDGET4.yaml
+    - configs/bclass/ablations/LC_AGENT_FIRSTPASS.yaml
   required_artifacts:
     top3: /retrieval/findver_embedding3large_top3.json
     top5: /retrieval/findver_embedding3large_top5.json

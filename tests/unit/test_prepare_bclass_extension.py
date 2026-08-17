@@ -27,16 +27,37 @@ def _manifest(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("condition", "top_k", "config_name", "maximum_calls", "command"),
+    (
+        "condition",
+        "top_k",
+        "config_name",
+        "maximum_calls",
+        "command",
+        "effective_retrieval",
+    ),
     [
-        ("RAG3_SEEDED", 3, "RAG3_SEEDED.yaml", 9, "run"),
-        ("RAG5_SEEDED", 5, "RAG5_SEEDED.yaml", 9, "run"),
-        ("BITER2_RAG10", 10, "BITER2_RAG10.yaml", 4, "iterative-rag"),
-        ("M2_BUDGET4", 10, "M2_BUDGET4.yaml", 7, "run"),
+        ("RAG3_SEEDED", 3, "RAG3_SEEDED.yaml", 9, "run", True),
+        ("RAG5_SEEDED", 5, "RAG5_SEEDED.yaml", 9, "run", True),
+        ("BITER2_RAG10", 10, "BITER2_RAG10.yaml", 4, "iterative-rag", True),
+        ("M2_BUDGET4", 10, "M2_BUDGET4.yaml", 7, "run", True),
+        (
+            "LC_AGENT_FIRSTPASS",
+            10,
+            "LC_AGENT_FIRSTPASS.yaml",
+            9,
+            "run",
+            False,
+        ),
     ],
 )
 def test_extension_plan_binds_condition_retrieval_and_transport(
-    tmp_path, condition, top_k, config_name, maximum_calls, command
+    tmp_path,
+    condition,
+    top_k,
+    config_name,
+    maximum_calls,
+    command,
+    effective_retrieval,
 ):
     plan = MODULE.prepare_extension_plan(
         _manifest(tmp_path),
@@ -57,6 +78,12 @@ def test_extension_plan_binds_condition_retrieval_and_transport(
     assert run["maximum_model_calls"] == maximum_calls
     assert run["configured_concurrency"] == 32
     assert run["config"]["path"].endswith(config_name)
+    assert run["effective_retrieval_required"] is effective_retrieval
+    assert run["long_context_scope"] == (
+        "first_exploration_attempt"
+        if condition == "LC_AGENT_FIRSTPASS"
+        else None
+    )
 
 
 def test_extension_is_dev_feedback_only(tmp_path):

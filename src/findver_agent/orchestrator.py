@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,6 +23,7 @@ from findver_agent.model_backends.base import (
     context_window_metadata,
 )
 from findver_agent.prompt_builder import PromptBuilder
+from findver_agent.report_format import format_full_report
 from findver_agent.report_store import ReportSession, ReportStore
 from findver_agent.schemas import (
     Confidence,
@@ -37,6 +39,7 @@ from findver_agent.state import (
     CalculationRecord,
     EvidenceRecord,
     InitialRetrievalState,
+    LongContextState,
     QuestionState,
     SearchRecord,
     StateStore,
@@ -88,6 +91,13 @@ class AgentOrchestrator:
         trace = TraceWriter(self.trace_root, task.example_id)
         session = self.report_store.open_session(task.report)
         self._initialize_retrieval(
+            task,
+            session,
+            state,
+            trace,
+            resumed=state_path_existed,
+        )
+        self._initialize_long_context(
             task,
             session,
             state,
@@ -314,7 +324,12 @@ class AgentOrchestrator:
 
             phase = state.phase
             self._begin_v2_attempt(state)
-            messages = self.prompt_builder.build(state)
+            full_report_preview = self._claim_long_context_preview(state, session)
+            long_context_injected = full_report_preview is not None
+            messages = self.prompt_builder.build(
+                state,
+                full_report_preview=full_report_preview,
+            )
             context_metadata = context_window_metadata(
                 messages,
                 max_output_tokens=self.generation.max_output_tokens,
@@ -322,6 +337,27 @@ class AgentOrchestrator:
                     self.backend, "model_context_window_tokens", None
                 ),
             )
+            if long_context_injected:
+                long_context = state.long_context_state
+                if long_context is None:  # pragma: no cover - claim validates state
+                    raise ValueError("long-context state is missing after injection")
+                trace.write(
+                    "input_context",
+                    {
+                        "phase": phase,
+                        "phase_attempt": self._phase_step(state, phase),
+                        "long_context_injected": True,
+                        "long_context_scope": self.config.long_context.scope,
+                        "report_serialized_sha256": long_context.serialized_sha256,
+                        "report_paragraph_count": long_context.paragraph_count,
+                        "report_character_count": long_context.report_character_count,
+                        "assembled_paragraph_count": long_context.paragraph_count,
+                        "full_report_assembled": True,
+                        "local_truncation": False,
+                        "prompt_budget_tokens": self.generation.prompt_budget_tokens,
+                        **context_metadata,
+                    },
+                )
             trace.write(
                 "model_request",
                 {
@@ -335,6 +371,7 @@ class AgentOrchestrator:
                     "thinking_mode": getattr(
                         self.backend, "thinking_mode", "unsupported"
                     ),
+                    "long_context_injected": long_context_injected,
                     **self.prompt_builder.evidence_visibility(state),
                     "prompt_budget_tokens": self.generation.prompt_budget_tokens,
                     **context_metadata,
@@ -358,6 +395,7 @@ class AgentOrchestrator:
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
                         "finish_reason": response.finish_reason,
+                        "long_context_injected": long_context_injected,
                     },
                 )
             except Exception as error:
@@ -827,6 +865,91 @@ class AgentOrchestrator:
     @staticmethod
     def _phase_step(state: QuestionState, phase: str) -> int:
         return int(getattr(state, f"{phase}_step"))
+
+    def _initialize_long_context(
+        self,
+        task: PublicTask,
+        session: ReportSession,
+        state: QuestionState,
+        trace: TraceWriter,
+        *,
+        resumed: bool,
+    ) -> None:
+        configured = self.config.long_context
+        if not configured.enabled:
+            if state.long_context_state is not None:
+                raise ValueError(
+                    "long-context resume mismatch: saved state enables a preview but config disables it"
+                )
+            return
+
+        serialized = format_full_report(session)
+        expected = LongContextState(
+            report=task.report,
+            serialized_sha256=hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+            paragraph_count=len(session.paragraphs),
+            report_character_count=sum(
+                len(paragraph.text) for paragraph in session.paragraphs
+            ),
+        )
+        if resumed:
+            saved = state.long_context_state
+            if saved is None or (
+                saved.report,
+                saved.serialized_sha256,
+                saved.paragraph_count,
+                saved.report_character_count,
+            ) != (
+                expected.report,
+                expected.serialized_sha256,
+                expected.paragraph_count,
+                expected.report_character_count,
+            ):
+                raise ValueError(
+                    "long-context resume mismatch: report identity or serialization changed"
+                )
+            return
+        if state.long_context_state is not None:
+            raise ValueError("new question state unexpectedly contains long-context state")
+        state.long_context_state = expected
+        self.state_store.save(state)
+        trace.write(
+            "long_context_initialized",
+            {
+                "scope": configured.scope,
+                "source": configured.source,
+                "preload_as_evidence": configured.preload_as_evidence,
+                "report_serialized_sha256": expected.serialized_sha256,
+                "report_paragraph_count": expected.paragraph_count,
+                "report_character_count": expected.report_character_count,
+            },
+        )
+
+    def _claim_long_context_preview(
+        self,
+        state: QuestionState,
+        session: ReportSession,
+    ) -> str | None:
+        if not self.config.long_context.enabled:
+            return None
+        long_context = state.long_context_state
+        if long_context is None:
+            raise ValueError("enabled long_context is missing durable state")
+        if (
+            state.phase != "exploration"
+            or state.exploration_step != 1
+            or long_context.injected
+        ):
+            return None
+        serialized = format_full_report(session)
+        if hashlib.sha256(serialized.encode("utf-8")).hexdigest() != (
+            long_context.serialized_sha256
+        ):
+            raise ValueError("long-context report changed before injection")
+        long_context.injected = True
+        long_context.injection_attempt = 1
+        self.state_store.save(state)
+        return serialized
 
     def _initialize_retrieval(
         self,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from findver_agent.actions import ActionParseError, SearchAction, SubmitAction, parse_action
-from findver_agent.baseline import format_paragraphs
 from findver_agent.config import IterativeRAGConfig
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
 from findver_agent.model_backends.base import (
@@ -15,6 +14,7 @@ from findver_agent.model_backends.base import (
     ProtocolDriftError,
     context_window_metadata,
 )
+from findver_agent.report_format import format_paragraphs
 from findver_agent.report_store import ReportSession, ReportStore
 from findver_agent.schemas import Prediction, PredictionStatus, PublicTask
 from findver_agent.skills import ReadParagraphsSkill, SearchReportSkill, SubmitAnswerSkill

@@ -155,11 +155,25 @@ When evidence is sufficient, submit. Otherwise target the listed evidence gap in
 Allowed actions:
 {rendered}"""
 
-    def build(self, state: QuestionState) -> list[dict[str, str]]:
+    def build(
+        self,
+        state: QuestionState,
+        *,
+        full_report_preview: str | None = None,
+    ) -> list[dict[str, str]]:
         if state.protocol_version == "v2":
             if state.phase in {"finalization", "review"}:
+                if full_report_preview is not None:
+                    raise ValueError(
+                        "full-report preview is forbidden outside Exploration"
+                    )
                 return self._build_submit_only(state)
-            return self._build_v2_exploration(state)
+            return self._build_v2_exploration(
+                state,
+                full_report_preview=full_report_preview,
+            )
+        if full_report_preview is not None:
+            raise ValueError("full-report preview requires protocol v2")
         return self._build_v1(state)
 
     def _build_v1(self, state: QuestionState) -> list[dict[str, str]]:
@@ -212,7 +226,12 @@ Return exactly one JSON action object and no other text."""
             {"role": "user", "content": user},
         ]
 
-    def _build_v2_exploration(self, state: QuestionState) -> list[dict[str, str]]:
+    def _build_v2_exploration(
+        self,
+        state: QuestionState,
+        *,
+        full_report_preview: str | None = None,
+    ) -> list[dict[str, str]]:
         if state.phase_budgets is None:
             raise ValueError("v2 exploration is missing phase budgets")
         evidence = select_evidence(state, self._max_evidence_characters)
@@ -230,6 +249,17 @@ Return exactly one JSON action object and no other text."""
         remaining_exploration = max(
             0, state.phase_budgets.exploration - state.exploration_step
         )
+        preview = ""
+        if full_report_preview is not None:
+            preview = f"""
+
+One-request full-report preview:
+The following complete report is visible only in this Exploration attempt.
+Its paragraph IDs are preview IDs, not legal final evidence. Before citing any
+preview paragraph, call read_paragraphs so it enters the exact evidence ledger.
+Do not submit an evidence ID that appears only in this preview.
+<full_report_preview>
+{full_report_preview}</full_report_preview>"""
         user = f"""Statement to verify:
 {state.statement}
 
@@ -241,7 +271,7 @@ Current phase and independent budgets:
 - skill counts: {state.tool_counts.model_dump_json()}
 
 Loaded frozen RAG Seed:
-{json.dumps(seed, ensure_ascii=False, separators=(",", ":"))}
+{json.dumps(seed, ensure_ascii=False, separators=(",", ":"))}{preview}
 
 Search history (result IDs only):
 {json.dumps(searches, ensure_ascii=False, separators=(",", ":"))}
@@ -263,7 +293,16 @@ Last observation:
 
 Choose one action. Submit when evidence is sufficient; otherwise act on a specific missing fact. Return exactly one JSON action with control metadata and no other text."""
         return [
-            {"role": "system", "content": self._v2_system_prompt()},
+            {
+                "role": "system",
+                "content": self._v2_system_prompt()
+                + (
+                    "\nThis request also contains a read-only full-report preview. "
+                    "It may guide the next action but does not change the evidence ledger."
+                    if full_report_preview is not None
+                    else ""
+                ),
+            },
             {"role": "user", "content": user},
         ]
 

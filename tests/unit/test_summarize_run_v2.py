@@ -54,6 +54,8 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
                 "event": "model_request",
                 "payload": {
                     "phase": "exploration",
+                    "phase_attempt": 1,
+                    "long_context_injected": True,
                     "messages": ["private"],
                     "estimated_input_tokens": 900,
                     "estimated_total_tokens": 1924,
@@ -71,6 +73,7 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
                     "output_tokens": 2,
                     "latency_ms": 3,
                     "finish_reason": "stop",
+                    "long_context_injected": True,
                 },
             },
             {"event": "model_request", "payload": {"phase": "finalization"}},
@@ -154,6 +157,14 @@ def test_v2_summary_reports_phase_failure_review_evidence_and_context_aggregates
     assert summary["long_context"]["legacy_configured_context_limits"] == {"8192": 1}
     context = summary["long_context"]
     assert context["instrumented_model_requests"] == 1
+    assert context["full_report_injection_examples"] == 1
+    assert context["full_report_injection_requests"] == 1
+    assert context["injection_phase_counts"] == {"exploration": 1}
+    assert context["injection_attempt_counts"] == {"1": 1}
+    assert context["instrumented_injection_requests"] == 1
+    assert context["mean_injection_estimated_input_tokens"] == 900.0
+    assert context["instrumented_injection_provider_responses"] == 1
+    assert context["mean_injection_actual_provider_input_tokens"] == 10.0
     assert context["mean_estimated_input_tokens"] == 900.0
     assert context["instrumented_provider_responses"] == 1
     assert context["mean_actual_provider_input_tokens"] == 10.0

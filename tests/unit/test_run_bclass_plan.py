@@ -11,6 +11,9 @@ from findver_agent.run_identity import RunIdentity
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts" / "run_bclass_plan.py"
 CONFIG_FIXTURE = ROOT / "configs" / "bclass" / "api" / "BLC_FINDVER_COT.yaml"
+LC_CONFIG_FIXTURE = (
+    ROOT / "configs" / "bclass" / "ablations" / "LC_AGENT_FIRSTPASS.yaml"
+)
 SPEC = importlib.util.spec_from_file_location("run_bclass_plan", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -154,6 +157,51 @@ def test_executor_accepts_frozen_api_ablation_config_directory(tmp_path, monkeyp
 
     assert identity.backend_kind == "api"
     assert command[-1] == "bclass/ablations/RAG3_SEEDED.yaml"
+
+
+def test_executor_enforces_planned_long_context_without_effective_retrieval(
+    tmp_path, monkeypatch
+):
+    plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
+    target = (
+        MODULE.REPO_ROOT
+        / "configs"
+        / "bclass"
+        / "ablations"
+        / "LC_AGENT_FIRSTPASS.yaml"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_text(LC_CONFIG_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    run = plan["runs"][0]
+    run.update(
+        {
+            "condition_id": "LC_AGENT_FIRSTPASS",
+            "command": "run",
+            "effective_retrieval_required": False,
+            "long_context_scope": "first_exploration_attempt",
+            "config": {
+                "path": "configs/bclass/ablations/LC_AGENT_FIRSTPASS.yaml",
+                "sha256": MODULE.sha256_file(target),
+                "model_context_window_tokens": 100_000,
+                "request_profile": "deepseek_v4_openai",
+                "thinking": {"type": "disabled"},
+                "configured_concurrency": 32,
+            },
+        }
+    )
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    identity, command, _ = MODULE.prepare_execution(
+        plan_path,
+        plan_run_id=run_id,
+        env_path=env_path,
+        resume=False,
+    )
+
+    assert identity.condition_id == "LC_AGENT_FIRSTPASS"
+    assert identity.effective_retrieval_sha256 is None
+    assert command[-2:] == ["run", "bclass/ablations/LC_AGENT_FIRSTPASS.yaml"]
 
 
 def test_executor_rejects_ablation_directory_for_local_backend(tmp_path, monkeypatch):

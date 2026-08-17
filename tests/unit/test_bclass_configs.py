@@ -147,3 +147,22 @@ def test_budget4_sensitivity_changes_only_exploration_steps():
     main_method.pop("exploration_steps")
     budget4_method.pop("exploration_steps")
     assert main_method == budget4_method
+
+
+def test_lc_agent_firstpass_changes_only_the_scratch_initial_context():
+    scratch = load_config(BCLASS / "api" / "A_SCRATCH.yaml")
+    firstpass = load_config(BCLASS / "ablations" / "LC_AGENT_FIRSTPASS.yaml")
+
+    assert scratch.agent is not None
+    assert firstpass.agent is not None
+    assert scratch.generation == firstpass.generation
+    assert scratch.backend == firstpass.backend
+    assert not firstpass.agent.initial_retrieval.enabled
+    assert firstpass.agent.long_context.enabled
+    assert firstpass.agent.long_context.scope == "first_exploration_attempt"
+    assert not firstpass.agent.long_context.preload_as_evidence
+    scratch_method = scratch.agent.model_dump()
+    firstpass_method = firstpass.agent.model_dump()
+    scratch_method.pop("long_context")
+    firstpass_method.pop("long_context")
+    assert scratch_method == firstpass_method

@@ -53,6 +53,61 @@ def test_runtime_config_cannot_enable_memory_or_scorer_feedback():
         AppConfig.model_validate(raw)
 
 
+def test_long_context_requires_v2_exploration_without_initial_retrieval():
+    raw = agent_config()
+    raw["agent"].update(
+        {
+            "protocol_version": "v2",
+            "long_context": {"enabled": True},
+        }
+    )
+    config = AppConfig.model_validate(raw)
+    assert config.agent is not None
+    assert config.agent.long_context.enabled is True
+    assert config.agent.long_context.scope == "first_exploration_attempt"
+    assert config.agent.long_context.preload_as_evidence is False
+
+    raw["agent"]["protocol_version"] = "v1"
+    with pytest.raises(ValidationError, match="protocol v2"):
+        AppConfig.model_validate(raw)
+
+    raw["agent"]["protocol_version"] = "v2"
+    raw["agent"]["exploration_steps"] = 0
+    with pytest.raises(ValidationError, match="Exploration"):
+        AppConfig.model_validate(raw)
+
+    raw["agent"]["exploration_steps"] = 1
+    raw["agent"]["initial_retrieval"] = {
+        "enabled": True,
+        "retrieval_file": "/retrieval/top10.json",
+        "retriever": "text-embedding-3-large",
+    }
+    with pytest.raises(ValidationError, match="initial_retrieval"):
+        AppConfig.model_validate(raw)
+
+
+def test_long_context_rejects_preloading_or_unknown_scope():
+    raw = agent_config()
+    raw["agent"].update(
+        {
+            "protocol_version": "v2",
+            "long_context": {
+                "enabled": True,
+                "preload_as_evidence": True,
+            },
+        }
+    )
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(raw)
+
+    raw["agent"]["long_context"] = {
+        "enabled": True,
+        "scope": "until_first_valid_action",
+    }
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(raw)
+
+
 def test_deepseek_profile_requires_explicit_disabled_thinking():
     raw = agent_config()
     raw["backend"]["request_profile"] = "deepseek_v4_openai"

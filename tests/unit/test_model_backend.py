@@ -62,6 +62,62 @@ async def test_openai_backend_calls_gateway_without_authorization_header():
     assert result.output_tokens == 5
     assert result.finish_reason == "stop"
 
+
+@pytest.mark.asyncio
+async def test_openai_backend_transport_retry_reuses_identical_long_context_payload():
+    request_bodies: list[dict[str, object]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        request_bodies.append(json.loads(request.content))
+        if len(request_bodies) == 1:
+            return httpx.Response(500, json={"error": "temporary"})
+        return httpx.Response(
+            200,
+            json={
+                "id": "response-after-retry",
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"action":"submit_answer","arguments":{}}'
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1200, "completion_tokens": 5},
+            },
+        )
+
+    messages = [
+        {"role": "system", "content": "Use the report preview once."},
+        {
+            "role": "user",
+            "content": (
+                "<full_report_preview>[paragraph id = 0] text\n"
+                "</full_report_preview>"
+            ),
+        },
+    ]
+    backend = OpenAICompatibleBackend(
+        base_url="http://model-gateway:8080/v1",
+        model="fixed-model",
+        timeout_seconds=2,
+        max_retries=1,
+        transport=httpx.MockTransport(handler),
+        model_context_window_tokens=100_000,
+    )
+    try:
+        await backend.generate(
+            messages,
+            GenerationConfig(max_output_tokens=64, prompt_budget_tokens=90_000),
+        )
+    finally:
+        await backend.aclose()
+
+    assert len(request_bodies) == 2
+    assert request_bodies[0] == request_bodies[1]
+    assert "<full_report_preview>" in request_bodies[0]["messages"][1]["content"]
+
+
 @pytest.mark.asyncio
 async def test_openai_backend_rejects_estimated_overflow_before_transport():
     transport_called = False

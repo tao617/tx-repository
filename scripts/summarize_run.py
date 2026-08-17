@@ -131,6 +131,13 @@ def summarize(
     prompt_budgets: Counter[str] = Counter()
     overflow_statuses: Counter[str] = Counter()
     legacy_context_limits: Counter[str] = Counter()
+    long_context_injection_examples = long_context_injection_requests = 0
+    long_context_injection_estimated_records = 0
+    long_context_injection_estimated_tokens = 0
+    long_context_injection_provider_records = 0
+    long_context_injection_provider_tokens = 0
+    long_context_injection_phases: Counter[str] = Counter()
+    long_context_injection_attempts: Counter[str] = Counter()
     visibility_counts: Counter[str] = Counter()
     finish_reasons: Counter[str] = Counter()
 
@@ -138,6 +145,7 @@ def summarize(
     for trace_path in trace_files:
         trace_seed_count: int | None = None
         trace_nonfull_context_count: int | None = None
+        trace_long_context_injected = False
         with trace_path.open(encoding="utf-8") as handle:
             for line_number, line in enumerate(handle, 1):
                 if not line.strip():
@@ -170,6 +178,26 @@ def summarize(
                             "within_window", "estimated_overflow", "not_enforced"
                         }:
                             overflow_statuses[str(overflow_status)] += 1
+                    injected = payload.get("long_context_injected", False)
+                    if type(injected) is not bool:
+                        raise ValueError(
+                            f"{trace_path.name}:{line_number} has invalid long-context injection flag"
+                        )
+                    if injected:
+                        trace_long_context_injected = True
+                        long_context_injection_requests += 1
+                        phase_name = str(phase) if phase in PHASES else "unknown"
+                        long_context_injection_phases[phase_name] += 1
+                        phase_attempt = payload.get("phase_attempt")
+                        attempt_name = (
+                            str(phase_attempt)
+                            if type(phase_attempt) is int and phase_attempt >= 0
+                            else "unknown"
+                        )
+                        long_context_injection_attempts[attempt_name] += 1
+                        if type(estimated) is int and estimated >= 0:
+                            long_context_injection_estimated_records += 1
+                            long_context_injection_estimated_tokens += estimated
                     present_visibility = [
                         key for key in VISIBILITY_KEYS if key in payload
                     ]
@@ -209,10 +237,18 @@ def summarize(
                     input_tokens += int(payload.get("input_tokens", 0))
                     output_tokens += int(payload.get("output_tokens", 0))
                     latency_ms += float(payload.get("latency_ms", 0))
+                    response_injected = payload.get("long_context_injected", False)
+                    if type(response_injected) is not bool:
+                        raise ValueError(
+                            f"{trace_path.name}:{line_number} has invalid long-context injection flag"
+                        )
                     actual_input = payload.get("actual_provider_input_tokens")
                     if type(actual_input) is int and actual_input >= 0:
                         actual_provider_input_records += 1
                         actual_provider_input_tokens += actual_input
+                        if response_injected:
+                            long_context_injection_provider_records += 1
+                            long_context_injection_provider_tokens += actual_input
                     finish_reason = payload.get("finish_reason")
                     if finish_reason is not None:
                         if finish_reason not in FINISH_REASONS:
@@ -294,6 +330,7 @@ def summarize(
             seed_paragraphs_from_trace += trace_seed_count
         elif trace_nonfull_context_count is not None:
             seed_paragraphs_from_trace += trace_nonfull_context_count
+        long_context_injection_examples += int(trace_long_context_injected)
 
     state_files = sorted((run_dir / "state").glob("*.json"))
     state_tool_calls: Counter[str] = Counter()
@@ -489,6 +526,36 @@ def summarize(
         "long_context": {
             "instrumented_examples": context_records,
             "instrumented_model_requests": context_request_records,
+            "full_report_injection_examples": long_context_injection_examples,
+            "full_report_injection_requests": long_context_injection_requests,
+            "injection_phase_counts": dict(
+                sorted(long_context_injection_phases.items())
+            ),
+            "injection_attempt_counts": dict(
+                sorted(long_context_injection_attempts.items())
+            ),
+            "instrumented_injection_requests": (
+                long_context_injection_estimated_records
+            ),
+            "mean_injection_estimated_input_tokens": (
+                _mean(
+                    long_context_injection_estimated_tokens,
+                    long_context_injection_estimated_records,
+                )
+                if long_context_injection_estimated_records
+                else 0.0
+            ),
+            "instrumented_injection_provider_responses": (
+                long_context_injection_provider_records
+            ),
+            "mean_injection_actual_provider_input_tokens": (
+                _mean(
+                    long_context_injection_provider_tokens,
+                    long_context_injection_provider_records,
+                )
+                if long_context_injection_provider_records
+                else 0.0
+            ),
             "mean_estimated_input_tokens": (
                 _mean(estimated_input_tokens, context_request_records)
                 if context_request_records

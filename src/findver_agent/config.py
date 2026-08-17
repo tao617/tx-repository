@@ -87,6 +87,15 @@ class InitialRetrievalConfig(BaseModel):
         return self
 
 
+class LongContextConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    source: Literal["full_report"] = "full_report"
+    scope: Literal["first_exploration_attempt"] = "first_exploration_attempt"
+    preload_as_evidence: Literal[False] = False
+
+
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -106,6 +115,7 @@ class AgentConfig(BaseModel):
     initial_retrieval: InitialRetrievalConfig = Field(
         default_factory=InitialRetrievalConfig
     )
+    long_context: LongContextConfig = Field(default_factory=LongContextConfig)
     cross_question_memory: Literal[False] = False
     scorer_feedback: Literal[False] = False
     concurrency: int = Field(default=1, ge=1, le=32)
@@ -118,6 +128,17 @@ class AgentConfig(BaseModel):
             raise ValueError("protocol v2 uses review_policy, not pre_submit_review")
         if self.review_policy != "none" and self.review_steps < 1:
             raise ValueError("enabled review_policy requires at least one review step")
+        if self.long_context.enabled:
+            if self.protocol_version != "v2":
+                raise ValueError("long_context requires protocol v2")
+            if self.exploration_steps < 1:
+                raise ValueError(
+                    "long_context requires at least one Exploration attempt"
+                )
+            if self.initial_retrieval.enabled:
+                raise ValueError(
+                    "long_context cannot be combined with initial_retrieval"
+                )
         return self
 
 

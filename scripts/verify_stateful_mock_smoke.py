@@ -47,7 +47,11 @@ def _only_path(root: Path, pattern: str) -> Path:
     return paths[0]
 
 
-def verify(run_dir: Path) -> dict[str, int | str]:
+def verify(
+    run_dir: Path,
+    *,
+    expect_long_context: bool = False,
+) -> dict[str, int | str]:
     metadata = _load_object(run_dir / "run_metadata.json")
     if metadata.get("status") != "completed":
         raise AssertionError("stateful smoke run did not complete")
@@ -88,6 +92,17 @@ def verify(run_dir: Path) -> dict[str, int | str]:
         raise AssertionError("rejected finalization action polluted draft risk")
     if "calculation" not in state.get("draft_risk_flags", []):
         raise AssertionError("accepted calculator risk is missing from the draft")
+    if expect_long_context:
+        long_context = state.get("long_context_state")
+        if not isinstance(long_context, dict):
+            raise AssertionError("LC smoke is missing durable long-context state")
+        if (
+            long_context.get("injected") is not True
+            or long_context.get("injection_attempt") != 1
+        ):
+            raise AssertionError("LC smoke did not claim exactly the first attempt")
+        if state.get("initial_retrieval_state") is not None:
+            raise AssertionError("LC smoke unexpectedly loaded initial retrieval")
 
     events = _load_jsonl(_only_path(run_dir / "traces", "*.jsonl"))
     model_requests = [event for event in events if event.get("event") == "model_request"]
@@ -111,6 +126,23 @@ def verify(run_dir: Path) -> dict[str, int | str]:
     )
     if phases != {"exploration": 6, "finalization": 2, "review": 1}:
         raise AssertionError("stateful trace has unexpected phase attempts")
+    if expect_long_context:
+        injection_flags = [
+            event.get("payload", {}).get("long_context_injected")
+            for event in model_requests
+        ]
+        if injection_flags != [True, *([False] * 8)]:
+            raise AssertionError("LC smoke did not inject exactly one first-pass report")
+        contexts = [
+            event.get("payload", {})
+            for event in events
+            if event.get("event") == "input_context"
+            and event.get("payload", {}).get("long_context_injected") is True
+        ]
+        if len(contexts) != 1 or (
+            contexts[0].get("phase"), contexts[0].get("phase_attempt")
+        ) != ("exploration", 1):
+            raise AssertionError("LC smoke has invalid context injection telemetry")
     actions = [
         event.get("payload", {}).get("action")
         for event in events
@@ -150,8 +182,12 @@ def verify(run_dir: Path) -> dict[str, int | str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", required=True, type=Path)
+    parser.add_argument("--expect-long-context", action="store_true")
     args = parser.parse_args()
-    result = verify(args.run_dir.resolve(strict=True))
+    result = verify(
+        args.run_dir.resolve(strict=True),
+        expect_long_context=args.expect_long_context,
+    )
     print(json.dumps(result, sort_keys=True), flush=True)
     return 0
 

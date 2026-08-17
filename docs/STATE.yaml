@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: lc-agent-firstpass-protocol-freeze
+current_phase: lc-agent-firstpass-implementation
 current_goal: Implement and offline-verify the single authorized LC_AGENT_FIRSTPASS
   post-hoc exploratory extension while preserving the frozen primary comparison and
   stopping before any real-model or Private Scorer execution.
-last_completed_phase: lc-agent-firstpass-protocol-freeze
-last_git_commit: 2cebc7c55794cf7b574b495a919b025f9fe00428
+last_completed_phase: lc-agent-firstpass-implementation
+last_git_commit: f5adc7072d650707b56f44bcdb423c866cebb75a
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -191,10 +191,36 @@ decisions:
   attempt; transport retries reuse it, while later Agent attempts do not.
 - Keep M2 versus BLC and the five-comparison Holm family frozen; LC results cannot
   replace M2 in the current holdout protocol.
+- LC_AGENT_FIRSTPASS is identical to API A_SCRATCH except for a preview-only full
+  report on the first durably charged Exploration attempt.
+- Transport retries reuse the identical request; later Agent attempts never receive
+  the report after the durable first-attempt claim.
+- The full report never preloads the evidence ledger; final evidence still requires
+  read_paragraphs and the sealed sidecar remains unchanged.
 files_changed:
-- docs/EXPERIMENT_PLAN.md
-- docs/STATE.yaml
-- docs/adr/0005-one-shot-full-report-warm-start.md
+- configs/bclass/ablations/LC_AGENT_FIRSTPASS.yaml
+- experiments/bclass_dev_feedback_template.yaml
+- scripts/preflight_lc_agent.py
+- scripts/prepare_bclass_extension.py
+- scripts/run_bclass_plan.py
+- scripts/run_stateful_mock_smoke.sh
+- scripts/summarize_run.py
+- scripts/verify_stateful_mock_smoke.py
+- src/findver_agent/baseline.py
+- src/findver_agent/config.py
+- src/findver_agent/iterative_rag.py
+- src/findver_agent/orchestrator.py
+- src/findver_agent/prompt_builder.py
+- src/findver_agent/report_format.py
+- src/findver_agent/state.py
+- tests/integration/test_long_context_firstpass.py
+- tests/unit/test_bclass_configs.py
+- tests/unit/test_config.py
+- tests/unit/test_model_backend.py
+- tests/unit/test_preflight_lc_agent.py
+- tests/unit/test_prepare_bclass_extension.py
+- tests/unit/test_run_bclass_plan.py
+- tests/unit/test_summarize_run_v2.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -351,6 +377,12 @@ tests_passed:
 - 'Pre-change recovery suite: 236 Agent tests passed with one existing Starlette deprecation
   warning.'
 - Protocol documentation diff check passed.
+- 248 pytest tests passed.
+- 700-task offline LC preflight completed with 700 first-pass injections, zero model
+  requests, and zero estimated context overflows.
+- Stateful Mock Docker run completed with 9 calls and exactly one Exploration-attempt-1
+  full-report injection; cleanup verified.
+- Python compileall, shell syntax, and git diff checks passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -366,7 +398,8 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Implement the hash-bound LC_AGENT_FIRSTPASS Runtime, telemetry, planner, and offline
-  tests; stop before any paid or Private Scorer execution.
+- Create the focused implementation commit, then generate and inspect one immutable
+  schema-v2 hash-bound plan without executing it; real model, scorer, holdout, and
+  hidden runs remain unauthorized.
 blocked_items: []
-last_updated: '2026-08-17T22:24:52+08:00'
+last_updated: '2026-08-17T22:40:32+08:00'
