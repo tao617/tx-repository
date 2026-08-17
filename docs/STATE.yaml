@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: bclass-model-a-development-freeze
-current_goal: Repair the BITER finalization evidence-ID protocol exposed by the Model
-  A dev-feedback 40-task gate, verify it locally, commit the focused change, and stop
-  before any additional real-API execution.
-last_completed_phase: bclass-model-a-development-freeze
-last_git_commit: 2ce96aa51ae422b66db143f892a88d359db1776e
+current_phase: lc-agent-firstpass-protocol-freeze
+current_goal: Implement and offline-verify the single authorized LC_AGENT_FIRSTPASS
+  post-hoc exploratory extension while preserving the frozen primary comparison and
+  stopping before any real-model or Private Scorer execution.
+last_completed_phase: lc-agent-firstpass-protocol-freeze
+last_git_commit: 2cebc7c55794cf7b574b495a919b025f9fe00428
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -185,9 +185,16 @@ decisions:
   under Holm familywise alpha 0.05. Retain budget-4 only as an exploratory lower-cost
   point, do not run budget 8, and permit no further Model-A top-k, BITER-round, or
   exploration-budget tuning before holdout.
+- Authorize implementation and offline verification of exactly one LC_AGENT_FIRSTPASS
+  post-hoc dev_feedback extension while keeping paid execution unauthorized.
+- Inject the exact full report at most once in the first durably charged Exploration
+  attempt; transport retries reuse it, while later Agent attempts do not.
+- Keep M2 versus BLC and the five-comparison Holm family frozen; LC results cannot
+  replace M2 in the current holdout protocol.
 files_changed:
-- docs/B_CLASS_MODEL_A_DEV_FEEDBACK_REPORT.md
 - docs/EXPERIMENT_PLAN.md
+- docs/STATE.yaml
+- docs/adr/0005-one-shot-full-report-warm-start.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -341,6 +348,9 @@ tests_passed:
 - 236 full Agent tests passed with one existing Starlette deprecation warning; 26
   Private Scorer tests passed; all four extension archives verified and are immutable
   mode 0444; no evaluation containers remain active; git diff check passed.
+- 'Pre-change recovery suite: 236 Agent tests passed with one existing Starlette deprecation
+  warning.'
+- Protocol documentation diff check passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -356,8 +366,7 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Do not tune Model A further. Obtain separately frozen dev_holdout inputs and explicit
-  authorization before any holdout execution; keep M2 versus BLC and the five-comparison
-  Holm family unchanged.
+- Implement the hash-bound LC_AGENT_FIRSTPASS Runtime, telemetry, planner, and offline
+  tests; stop before any paid or Private Scorer execution.
 blocked_items: []
-last_updated: '2026-08-17T21:56:14+08:00'
+last_updated: '2026-08-17T22:24:52+08:00'
