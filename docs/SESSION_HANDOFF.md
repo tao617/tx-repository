@@ -2,27 +2,22 @@
 
 ## Current state
 
-Phase `bclass-budget4-and-statistical-freeze` completed: Authorized exactly one M2 budget-4 development sensitivity row from aggregate Runtime telemetry, added a fail-closed hash-bound config/planner path, rejected budget 8, and froze the holdout primary comparator and multiplicity family before any holdout score.
+Phase `bclass-model-a-development-freeze` completed: Completed aggregate-only private scoring for seven main Model-A conditions plus Top-3, Top-5, BITER2, and telemetry-authorized M2 budget-4. Consolidated accuracy, paired bootstrap, exact McNemar, Holm-adjusted secondary comparisons, evidence metrics, runtime efficiency, and final protocol decisions in the development report.
 
-- Git commit at checkpoint start: `863700392f942a3542df8d161f66511ec6640f6b`
-- Changed files: 8
+- Git commit at checkpoint start: `2ce96aa51ae422b66db143f892a88d359db1776e`
+- Changed files: 2
 
 ## Diff summary
 
 ```text
-docs/B_CLASS_RUNBOOK.md                       |  4 ++--
- docs/EXPERIMENT_PLAN.md                       |  6 +++---
- docs/TEST_PLAN.md                             |  2 +-
- experiments/bclass_dev_feedback_template.yaml |  1 +
- scripts/prepare_bclass_extension.py           | 13 +++++++++++++
- tests/unit/test_bclass_configs.py             | 17 +++++++++++++++++
- tests/unit/test_prepare_bclass_extension.py   |  1 +
- 7 files changed, 38 insertions(+), 6 deletions(-)
+docs/B_CLASS_MODEL_A_DEV_FEEDBACK_REPORT.md | 160 ++++++++++++++++++----------
+ docs/EXPERIMENT_PLAN.md                     |   6 +-
+ 2 files changed, 108 insertions(+), 58 deletions(-)
 ```
 
 ## Tests passed
 
-- 26 focused configuration/planner/executor tests passed; 236 full Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
+- 236 full Agent tests passed with one existing Starlette deprecation warning; 26 Private Scorer tests passed; all four extension archives verified and are immutable mode 0444; no evaluation containers remain active; git diff check passed.
 
 ## Tests failed or unavailable
 
@@ -44,4 +39,4 @@ pytest -q
 
 ## Next action
 
-Commit this phase, generate and preflight a fresh budget-4 plan at the commit, run and privately score it against M2, then finalize the aggregate-only report and checkpoint.
+Do not tune Model A further. Obtain separately frozen dev_holdout inputs and explicit authorization before any holdout execution; keep M2 versus BLC and the five-comparison Holm family unchanged.

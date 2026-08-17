@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: bclass-budget4-and-statistical-freeze
+current_phase: bclass-model-a-development-freeze
 current_goal: Repair the BITER finalization evidence-ID protocol exposed by the Model
   A dev-feedback 40-task gate, verify it locally, commit the focused change, and stop
   before any additional real-API execution.
-last_completed_phase: bclass-budget4-and-statistical-freeze
-last_git_commit: 863700392f942a3542df8d161f66511ec6640f6b
+last_completed_phase: bclass-model-a-development-freeze
+last_git_commit: 2ce96aa51ae422b66db143f892a88d359db1776e
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -180,15 +180,14 @@ decisions:
   calls and none max-step terminated. Freeze M2 versus BLC as the sole primary accuracy
   comparison; Holm-adjust the five named secondary method comparisons; treat top-k,
   budget, and BITER calibration as exploratory.
+- Freeze M2 as the primary candidate and BLC as the sole primary comparator on accuracy
+  with two-sided exact McNemar alpha 0.05. Freeze five secondary method comparisons
+  under Holm familywise alpha 0.05. Retain budget-4 only as an exploratory lower-cost
+  point, do not run budget 8, and permit no further Model-A top-k, BITER-round, or
+  exploration-budget tuning before holdout.
 files_changed:
-- configs/bclass/ablations/M2_BUDGET4.yaml
-- docs/B_CLASS_RUNBOOK.md
+- docs/B_CLASS_MODEL_A_DEV_FEEDBACK_REPORT.md
 - docs/EXPERIMENT_PLAN.md
-- docs/TEST_PLAN.md
-- experiments/bclass_dev_feedback_template.yaml
-- scripts/prepare_bclass_extension.py
-- tests/unit/test_bclass_configs.py
-- tests/unit/test_prepare_bclass_extension.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -339,6 +338,9 @@ tests_passed:
 - 26 focused configuration/planner/executor tests passed; 236 full Agent tests passed
   with one existing Starlette deprecation warning; compileall and git diff checks
   passed.
+- 236 full Agent tests passed with one existing Starlette deprecation warning; 26
+  Private Scorer tests passed; all four extension archives verified and are immutable
+  mode 0444; no evaluation containers remain active; git diff check passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -354,7 +356,8 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Commit this phase, generate and preflight a fresh budget-4 plan at the commit, run
-  and privately score it against M2, then finalize the aggregate-only report and checkpoint.
+- Do not tune Model A further. Obtain separately frozen dev_holdout inputs and explicit
+  authorization before any holdout execution; keep M2 versus BLC and the five-comparison
+  Holm family unchanged.
 blocked_items: []
-last_updated: '2026-08-17T21:50:00+08:00'
+last_updated: '2026-08-17T21:56:14+08:00'

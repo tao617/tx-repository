@@ -51,10 +51,10 @@ Iterate only on `dev_feedback`; select using aggregate-only `dev_holdout`; freez
 
 | Split | Model A | Model B | Status |
 |---|---|---|---|
-| `dev_feedback` | seven main conditions, Top-3, Top-5, and BITER2 complete; budget-4 sensitivity authorized | pending authorization | Model A development results only |
+| `dev_feedback` | seven main conditions, Top-3, Top-5, BITER2, and budget-4 complete | pending authorization | Model A development results only; protocol frozen |
 | `dev_holdout` | pending private split/hash | pending private split/hash | not run |
 | `final_hidden` | run once after freeze | run once after freeze | not run |
 
-No paid API, second-model formal, top-k ablation, budget ablation, or final-hidden run is authorized by this plan.
+No further paid Model-A development extension, second-model formal, holdout, or final-hidden run is authorized by this plan.
 
-The Model A development aggregates justified the single permitted BITER calibration: three fixed rounds averaged 4.001 calls versus M2 at 3.260, so one two-round BITER development condition is authorized before final protocol freeze. No further BITER round tuning is permitted after reading that result. Freeze the complete experiment protocol before any aggregate-only holdout or hidden evaluation.
+The completed BITER calibration found 75.86% accuracy at two rounds versus 76.57% at three, a paired difference of -0.71 percentage points with a 95% interval of [-2.57, +1.14]. BITER2 averaged 3.003 calls versus M2 at 3.260 and is the frozen budget-aligned fixed-loop secondary comparator. No further BITER round tuning is permitted. The completed budget-4 sensitivity averaged 3.026 calls and 81.29% accuracy versus M2 at 3.260 calls and 82.29%; it is retained as an exploratory lower-cost point. Budget 8 is not authorized. The complete comparison protocol is frozen before any aggregate-only holdout or hidden evaluation.
