@@ -2,31 +2,26 @@
 
 ## Current state
 
-Phase `bclass-development-extension-planning` completed: Added a fail-closed single-row Model-A extension planner for independent Top-3, Top-5, and the one permitted two-round BITER calibration, with the calibration changing only retrieval_rounds.
+Phase `bclass-planned-run-postprocessing` completed: Made the formal single-row executor create the aggregate runtime summary, seal the submission, bind and verify the evidence-ledger sidecar, and reject incomplete or mismatched runs. Top3 was manually postprocessed and verified after exposing the missing executor step.
 
-- Git commit at checkpoint start: `4500494cf135bf55ed3b7ce55e9165ee1f0cc06c`
-- Changed files: 8
+- Git commit at checkpoint start: `0233a48f9a03d82ac92d1971aa17148da6b8ee29`
+- Changed files: 2
 
 ## Diff summary
 
 ```text
-docs/B_CLASS_RUNBOOK.md                       | 16 ++++++++++++++++
- docs/EXPERIMENT_PLAN.md                       |  2 +-
- docs/TEST_PLAN.md                             |  2 +-
- experiments/bclass_dev_feedback_template.yaml |  4 ++++
- tests/unit/test_bclass_configs.py             | 17 +++++++++++++++++
- 5 files changed, 39 insertions(+), 2 deletions(-)
+scripts/run_bclass_plan.py         | 51 +++++++++++++++++++++++++++++++
+ tests/unit/test_run_bclass_plan.py | 61 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 112 insertions(+)
 ```
 
 ## Tests passed
 
-- 22 focused extension planner, B-class config, and formal executor tests passed.
-- 232 full Agent tests passed with one existing Starlette deprecation warning.
-- Python compileall, all shell syntax checks, CLI help, and git diff checks passed.
+- 15 formal executor unit tests passed; 33 focused postprocessing/submission/summary tests passed; 234 full Agent tests passed with one existing Starlette deprecation warning.
 
 ## Tests failed or unavailable
 
-- None
+- None.
 
 ## Recovery protocol
 
@@ -44,4 +39,4 @@ pytest -q
 
 ## Next action
 
-Commit this phase, generate fresh hash-bound plans at that commit, preflight each plan, then execute Top-3, Top-5, and BITER2 with new run IDs.
+Commit the fix, regenerate Top5 and BITER2 plans at that commit, then execute and privately score Top3, Top5, and BITER2.

@@ -332,6 +332,8 @@ def test_executor_main_launches_exactly_one_single_model_plan_row(tmp_path, monk
         launched.append((arguments, kwargs))
 
     monkeypatch.setattr(MODULE.subprocess, "run", fake_run)
+    postprocessed = []
+    monkeypatch.setattr(MODULE, "postprocess_completed_run", postprocessed.append)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -353,3 +355,62 @@ def test_executor_main_launches_exactly_one_single_model_plan_row(tmp_path, monk
             {"cwd": MODULE.REPO_ROOT, "env": environment, "check": True},
         )
     ]
+    assert postprocessed == [identity.plan_run_id]
+
+
+def test_postprocess_completed_run_summarizes_seals_and_verifies(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    run_id = "matrix-model_a-RAG3_SEEDED"
+    run_dir = repo / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_metadata.json").write_text(
+        json.dumps({"status": "completed"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
+    launched = []
+
+    def fake_run(arguments, **kwargs):
+        launched.append((arguments, kwargs))
+        if "summarize_run.py" in arguments[1]:
+            (run_dir / "efficiency-summary.json").write_text("{}\n", encoding="utf-8")
+        if "seal_submission.py" in arguments[1]:
+            (run_dir / "submission.tar.gz").write_bytes(b"sealed")
+            (run_dir / MODULE.SIDECAR_NAME).write_text("", encoding="utf-8")
+
+    verified = []
+
+    class Manifest:
+        def __init__(self, value):
+            self.run_id = value
+
+    def fake_verify(archive, *, evidence_ledger_sidecar):
+        verified.append((archive, evidence_ledger_sidecar))
+        return Manifest(run_id), []
+
+    monkeypatch.setattr(MODULE.subprocess, "run", fake_run)
+    monkeypatch.setattr(MODULE, "verify_submission_archive", fake_verify)
+
+    MODULE.postprocess_completed_run(run_id)
+
+    assert [Path(call[0][1]).name for call in launched] == [
+        "summarize_run.py",
+        "seal_submission.py",
+    ]
+    assert all(call[1] == {"cwd": repo, "check": True} for call in launched)
+    assert verified == [
+        (run_dir / "submission.tar.gz", run_dir / MODULE.SIDECAR_NAME)
+    ]
+
+
+def test_postprocess_completed_run_rejects_incomplete_metadata(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    run_id = "matrix-model_a-RAG3_SEEDED"
+    run_dir = repo / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_metadata.json").write_text(
+        json.dumps({"status": "running"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
+
+    with pytest.raises(ValueError, match="did not complete"):
+        MODULE.postprocess_completed_run(run_id)

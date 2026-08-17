@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from findver_agent.config import AppConfig, load_config
+from findver_agent.evidence_sidecar import SIDECAR_NAME
 from findver_agent.run_identity import RunIdentity
 from findver_agent.runner import sha256_file
+from findver_agent.submission import verify_submission_archive
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -313,6 +315,54 @@ def prepare_execution(
     return identity, arguments, environment
 
 
+def postprocess_completed_run(run_id: str) -> None:
+    """Create and validate the aggregate summary and sealed scorer handoff."""
+    run_dir = REPO_ROOT / "runs" / run_id
+    metadata_path = run_dir / "run_metadata.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("planned Runtime run metadata is missing or invalid") from error
+    if not isinstance(metadata, dict) or metadata.get("status") != "completed":
+        raise ValueError("planned Runtime run did not complete")
+
+    summary_path = run_dir / "efficiency-summary.json"
+    if not summary_path.exists():
+        subprocess.run(
+            [
+                str(REPO_ROOT / ".venv" / "bin" / "python"),
+                str(REPO_ROOT / "scripts" / "summarize_run.py"),
+                "--run-dir",
+                str(run_dir),
+                "--output",
+                str(summary_path),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+
+    sealed_path = run_dir / "submission.tar.gz"
+    if not sealed_path.exists():
+        subprocess.run(
+            [
+                str(REPO_ROOT / ".venv" / "bin" / "python"),
+                str(REPO_ROOT / "scripts" / "seal_submission.py"),
+                "--run-dir",
+                str(run_dir),
+                "--output",
+                str(sealed_path),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+    manifest, _ = verify_submission_archive(
+        sealed_path,
+        evidence_ledger_sidecar=run_dir / SIDECAR_NAME,
+    )
+    if manifest.run_id != run_id:
+        raise ValueError("sealed submission run_id mismatch")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--plan", required=True, type=Path)
@@ -327,6 +377,7 @@ def main() -> int:
         resume=args.resume,
     )
     subprocess.run(command, cwd=REPO_ROOT, env=environment, check=True)
+    postprocess_completed_run(identity.plan_run_id)
     print(
         f"completed planned run={identity.plan_run_id} "
         f"plan_sha256={identity.plan_sha256}",

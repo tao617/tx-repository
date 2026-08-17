@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: bclass-development-extension-planning
+current_phase: bclass-planned-run-postprocessing
 current_goal: Repair the BITER finalization evidence-ID protocol exposed by the Model
   A dev-feedback 40-task gate, verify it locally, commit the focused change, and stop
   before any additional real-API execution.
-last_completed_phase: bclass-development-extension-planning
-last_git_commit: 4500494cf135bf55ed3b7ce55e9165ee1f0cc06c
+last_completed_phase: bclass-planned-run-postprocessing
+last_git_commit: 0233a48f9a03d82ac92d1971aa17148da6b8ee29
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -173,15 +173,11 @@ decisions:
   is plan-level.
 - BITER2 changes only fixed retrieval rounds from three to two and is the only permitted
   BITER calibration before freeze.
+- Do not start another paid row until summarize-seal-verify is automatic and committed;
+  regenerate remaining plans because plan commit binding is fail-closed.
 files_changed:
-- configs/bclass/ablations/BITER2_RAG10.yaml
-- docs/B_CLASS_RUNBOOK.md
-- docs/EXPERIMENT_PLAN.md
-- docs/TEST_PLAN.md
-- experiments/bclass_dev_feedback_template.yaml
-- scripts/prepare_bclass_extension.py
-- tests/unit/test_bclass_configs.py
-- tests/unit/test_prepare_bclass_extension.py
+- scripts/run_bclass_plan.py
+- tests/unit/test_run_bclass_plan.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -326,8 +322,12 @@ tests_passed:
 - 22 focused extension planner, B-class config, and formal executor tests passed.
 - 232 full Agent tests passed with one existing Starlette deprecation warning.
 - Python compileall, all shell syntax checks, CLI help, and git diff checks passed.
+- 15 formal executor unit tests passed; 33 focused postprocessing/submission/summary
+  tests passed; 234 full Agent tests passed with one existing Starlette deprecation
+  warning.
 tests_failed:
 - pytest unavailable before development environment bootstrap
+- None.
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -336,8 +336,11 @@ known_issues:
 - One upstream Starlette TestClient deprecation warning remains.
 - The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
   candidates use temperature=0; no API call was made.
+- Top3 Runtime completed 700 examples under commit 0233a48, but the prior executor
+  omitted documented postprocessing; it was recovered with the existing standard tools
+  and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Commit this phase, generate fresh hash-bound plans at that commit, preflight each
-  plan, then execute Top-3, Top-5, and BITER2 with new run IDs.
+- Commit the fix, regenerate Top5 and BITER2 plans at that commit, then execute and
+  privately score Top3, Top5, and BITER2.
 blocked_items: []
-last_updated: '2026-08-17T21:34:06+08:00'
+last_updated: '2026-08-17T21:40:46+08:00'
