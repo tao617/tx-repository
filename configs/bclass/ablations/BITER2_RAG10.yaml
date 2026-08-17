@@ -1,0 +1,30 @@
+run:
+  mode: iterative_rag
+  backend_kind: api
+backend:
+  type: openai_compatible
+  base_url: http://model-gateway:8080/v1
+  model: external-model-name
+  timeout_seconds: 120
+  max_retries: 3
+  model_context_window_tokens: 100000
+  request_profile: deepseek_v4_openai
+  thinking:
+    type: disabled
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+iterative_rag:
+  retrieval_file: /retrieval/findver_embedding3large_top10.json
+  retriever: text-embedding-3-large
+  top_k: 10
+  retrieval_rounds: 2
+  results_per_round: 5
+  auto_read_per_round: 5
+  max_total_unique_paragraphs: 40
+  finalization_steps: 2
+  prompt_type: findver_cot_json
+  concurrency: 32

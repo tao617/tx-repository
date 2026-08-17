@@ -63,6 +63,22 @@ All paired configs use temperature 0, top-p 1, seed 7, 1024 maximum output token
 
 Top-k development ablations are under `configs/bclass/ablations/` and remain scoped to one primary model on `dev_feedback`. The workspace contains the independent official `text-embedding-3-large` top-3, top-5, and top-10 outputs from frozen FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`. The gold-free Runtime artifacts preserve those upstream cutoffs rather than truncating the paragraph-ID-sorted top-10 file; top-3 SHA256 is `4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7` and top-5 SHA256 is `78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d`.
 
+The single permitted BITER calibration is `configs/bclass/ablations/BITER2_RAG10.yaml`. It changes only the fixed retrieval-round count from three to two; retrieval, finalization, generation, transport, and concurrency remain frozen.
+
+Prepare each development extension as its own schema-v2 plan because retrieval identity is plan-level. The planner accepts only the enumerated Model-A API extensions and never overwrites an existing plan:
+
+```bash
+.venv/bin/python scripts/prepare_bclass_extension.py \
+  --manifest experiments/bclass_dev_feedback_template.yaml \
+  --condition RAG3_SEEDED \
+  --matrix-id findver-bclass-a-devfb-top3-v1 \
+  --model-a deepseek-v4-flash \
+  --model-a-context-window 100000 \
+  --output /secure/findver-bclass-a-devfb-top3-v1.plan.json
+```
+
+Use the same command shape with `RAG5_SEEDED` or `BITER2_RAG10` and a distinct matrix ID/output. Execute the resulting single row only through `scripts/run_bclass_plan.py`.
+
 ## Prepare a one- or two-model plan
 
 Model A ID, backend, and context capacity are mandatory. The following preparation-only command validates seven Model A rows and freezes the current commit, task/retrieval/config hashes, prompt profile, generation settings, DeepSeek non-thinking transport, concurrency, independent run IDs, and maximum call budgets. It does not call a model. The single-model matrix ID receives a `-single-model-a` suffix.

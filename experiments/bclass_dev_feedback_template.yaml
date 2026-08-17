@@ -65,3 +65,7 @@ ablations:
     top3: /retrieval/findver_embedding3large_top3.json
     top5: /retrieval/findver_embedding3large_top5.json
     top10: /retrieval/findver_embedding3large_top10.json
+calibrations:
+  scope: one-primary-model-dev-feedback-only
+  configs:
+    - configs/bclass/ablations/BITER2_RAG10.yaml

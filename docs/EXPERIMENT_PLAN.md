@@ -57,4 +57,4 @@ Iterate only on `dev_feedback`; select using aggregate-only `dev_holdout`; freez
 
 No paid API, second-model formal, top-k ablation, budget ablation, or final-hidden run is authorized by this plan.
 
-The implementation is only candidate-frozen before the Model A Canary. If development aggregates justify one BITER round adjustment, make that single adjustment and then freeze the complete experiment protocol before any aggregate-only holdout or hidden evaluation.
+The Model A development aggregates justified the single permitted BITER calibration: three fixed rounds averaged 4.001 calls versus M2 at 3.260, so one two-round BITER development condition is authorized before final protocol freeze. No further BITER round tuning is permitted after reading that result. Freeze the complete experiment protocol before any aggregate-only holdout or hidden evaluation.

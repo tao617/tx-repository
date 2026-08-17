@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: single-model-concurrency-thinking-truncation-upgrade
-current_goal: Complete the single-model planning, bounded question concurrency, DeepSeek
-  non-thinking, and truncation-monitoring upgrade; publish it publicly, then stop
-  before any real-model Canary or paid evaluation.
-last_completed_phase: single-model-concurrency-thinking-truncation-upgrade
-last_git_commit: 8806de4d02ceadb792ee462b1a862cb4bba5c770
+current_phase: bclass-development-extension-planning
+current_goal: Repair the BITER finalization evidence-ID protocol exposed by the Model
+  A dev-feedback 40-task gate, verify it locally, commit the focused change, and stop
+  before any additional real-API execution.
+last_completed_phase: bclass-development-extension-planning
+last_git_commit: 4500494cf135bf55ed3b7ce55e9165ee1f0cc06c
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -158,86 +158,30 @@ decisions:
   without persisting its value.
 - Retain temperature=0, top_p=1, seed=7, and max_output_tokens=1024; truncation evidence,
   not condition-specific tuning, will govern any later ceiling proposal.
+- Iterative-RAG finalization lists exact allowed evidence IDs and carries the prior
+  bounded parse, protocol, skill, or unusable-response error into the next reserved
+  finalization attempt.
+- Keep finalization_steps=2, concurrency=32, generation parameters, strict evidence-subset
+  validation, and all B-class configs unchanged; do not auto-map or silently drop
+  unknown evidence IDs.
+- Treat M2 as the current development point-estimate leader; its accuracy gain over
+  strongest one-call BLC remains exploratory and nonsignificant before the extension
+  runs.
+- Use one permitted two-round BITER calibration because three-round BITER averages
+  4.001 calls versus M2 at 3.260.
+- Use separate schema-v2 plans for Top-3, Top-5, and BITER2 because retrieval identity
+  is plan-level.
+- BITER2 changes only fixed retrieval rounds from three to two and is the only permitted
+  BITER calibration before freeze.
 files_changed:
-- .github/workflows/ci.yml
-- configs/A0_API.yaml
-- configs/A1_API.yaml
-- configs/A2_API.yaml
-- configs/B0_API.yaml
-- configs/B1_API.yaml
-- configs/B2_API.yaml
-- configs/B3_API.yaml
-- configs/agent_api.yaml
-- configs/agent_local.yaml
-- configs/agent_no_calculator_api.yaml
-- configs/agent_no_calculator_local.yaml
-- configs/agent_review_api.yaml
-- configs/agent_review_local.yaml
-- configs/baseline_api.yaml
-- configs/baseline_bm25_api.yaml
-- configs/baseline_bm25_local.yaml
-- configs/baseline_cot_api.yaml
-- configs/baseline_cot_local.yaml
-- configs/baseline_local.yaml
-- configs/bclass/ablations/RAG10_SEEDED.yaml
-- configs/bclass/ablations/RAG3_SEEDED.yaml
-- configs/bclass/ablations/RAG5_SEEDED.yaml
-- configs/bclass/api/A_SCRATCH.yaml
-- configs/bclass/api/BITER_RAG10.yaml
-- configs/bclass/api/BLC_FINDVER_COT.yaml
-- configs/bclass/api/BRAG10_FINDVER_COT.yaml
-- configs/bclass/api/M0_RAG10_SEEDED.yaml
-- configs/bclass/api/M1_BUDGET_AWARE.yaml
-- configs/bclass/api/M2_SELECTIVE_REVIEW.yaml
-- configs/bclass/local/A_SCRATCH.yaml
-- configs/bclass/local/BITER_RAG10.yaml
-- configs/bclass/local/BLC_FINDVER_COT.yaml
-- configs/bclass/local/BRAG10_FINDVER_COT.yaml
-- configs/bclass/local/M0_RAG10_SEEDED.yaml
-- configs/bclass/local/M1_BUDGET_AWARE.yaml
-- configs/bclass/local/M2_SELECTIVE_REVIEW.yaml
-- docs/ARCHITECTURE.md
+- configs/bclass/ablations/BITER2_RAG10.yaml
 - docs/B_CLASS_RUNBOOK.md
-- docs/CONCURRENCY_THINKING_TRUNCATION_AUDIT.md
 - docs/EXPERIMENT_PLAN.md
-- docs/SCORER_PROTOCOL.md
-- docs/STATE.yaml
 - docs/TEST_PLAN.md
 - experiments/bclass_dev_feedback_template.yaml
-- scripts/prepare_bclass_matrix.py
-- scripts/run_bclass_plan.py
-- scripts/run_concurrent_mock_smoke.sh
-- scripts/summarize_run.py
-- scripts/verify_concurrent_mock_smoke.py
-- scripts/verify_stateful_mock_smoke.py
-- src/findver_agent/baseline.py
-- src/findver_agent/cli.py
-- src/findver_agent/config.py
-- src/findver_agent/iterative_rag.py
-- src/findver_agent/model_backends/base.py
-- src/findver_agent/model_backends/openai_compatible.py
-- src/findver_agent/orchestrator.py
-- src/findver_agent/run_identity.py
-- src/findver_agent/runner.py
-- src/findver_agent/state.py
-- src/findver_agent/submission.py
-- src/findver_gateway/app.py
-- tests/fixtures/concurrent_smoke_tasks.jsonl
-- tests/fixtures/mock_openai_server.py
-- tests/integration/test_agent_loop.py
-- tests/integration/test_concurrent_stateful_agent.py
-- tests/integration/test_runner.py
-- tests/integration/test_thinking_protocol.py
+- scripts/prepare_bclass_extension.py
 - tests/unit/test_bclass_configs.py
-- tests/unit/test_ci_workflow.py
-- tests/unit/test_config.py
-- tests/unit/test_gateway.py
-- tests/unit/test_model_backend.py
-- tests/unit/test_prepare_bclass_matrix.py
-- tests/unit/test_run_bclass_plan.py
-- tests/unit/test_submission.py
-- tests/unit/test_summarize_run.py
-- tests/unit/test_summarize_run_v2.py
+- tests/unit/test_prepare_bclass_extension.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -369,6 +313,19 @@ tests_passed:
 - Preparation-only Model A plan validated schema v2, prepared_not_executed, seven
   unique rows, a distinct single-model matrix ID, exact disabled-thinking provenance,
   and concurrency 32.
+- 'Pre-change full Agent suite: 225 tests passed with one existing Starlette deprecation
+  warning.'
+- 'Focused iterative-RAG regression suite: 3 tests passed.'
+- 'Post-change full Agent suite: 226 tests passed with the same warning; compileall
+  and git diff checks passed.'
+- 226 Agent tests passed with one existing Starlette deprecation warning.
+- Private Scorer commits 6cc5a13 and 4bbcc70 passed 26 tests, all three networkless
+  Compose profiles, isolated image build, and hardened CLI checks.
+- Seven 700-example aggregate summaries, six 10,000-resample paired comparisons, and
+  one Top-10 evidence analysis completed in the networkless scorer.
+- 22 focused extension planner, B-class config, and formal executor tests passed.
+- 232 full Agent tests passed with one existing Starlette deprecation warning.
+- Python compileall, all shell syntax checks, CLI help, and git diff checks passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -380,9 +337,7 @@ known_issues:
 - The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
   candidates use temperature=0; no API call was made.
 next_actions:
-- Create the focused development commit, publish its allowlisted tree as a history-free
-  public commit, wait for that commit own Python 3.11, Python 3.12, and Stateful Docker
-  CI, then stop; do not run a real API Canary, paid matrix, Model B, dev_holdout,
-  or final_hidden without new explicit authorization.
+- Commit this phase, generate fresh hash-bound plans at that commit, preflight each
+  plan, then execute Top-3, Top-5, and BITER2 with new run IDs.
 blocked_items: []
-last_updated: '2026-08-17T16:04:06+08:00'
+last_updated: '2026-08-17T21:34:06+08:00'

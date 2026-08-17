@@ -113,3 +113,20 @@ def test_top_k_ablations_use_independent_named_artifacts():
         "findver_embedding3large_top5.json",
         "findver_embedding3large_top10.json",
     ]
+
+
+def test_two_round_biter_calibration_changes_only_fixed_round_budget():
+    main = load_config(BCLASS / "api" / "BITER_RAG10.yaml")
+    calibrated = load_config(BCLASS / "ablations" / "BITER2_RAG10.yaml")
+
+    assert main.iterative_rag is not None
+    assert calibrated.iterative_rag is not None
+    assert main.generation == calibrated.generation
+    assert main.backend == calibrated.backend
+    assert main.iterative_rag.retrieval_rounds == 3
+    assert calibrated.iterative_rag.retrieval_rounds == 2
+    main_method = main.iterative_rag.model_dump()
+    calibrated_method = calibrated.iterative_rag.model_dump()
+    main_method.pop("retrieval_rounds")
+    calibrated_method.pop("retrieval_rounds")
+    assert main_method == calibrated_method
