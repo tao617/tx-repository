@@ -2,9 +2,9 @@
 
 ## Current state
 
-Phase `lc-agent-firstpass-dev-feedback-runtime-complete` completed: Executed the single explicitly authorized deepseek-v4-flash LC_AGENT_FIRSTPASS row on all 700 dev_feedback tasks, then summarized, sealed, and independently verified it without invoking Private Scorer, holdout, or hidden evaluation.
+Phase `lc-agent-firstpass-dev-feedback-scored` completed: The sealed LC_AGENT_FIRSTPASS dev_feedback run was handed one-way to the independent networkless Private Scorer, aggregate-scored, compared pairwise with A_SCRATCH, M2, and BLC, and analyzed for final evidence without running holdout or hidden evaluation.
 
-- Git commit at checkpoint start: `1fff62e293513644b3ec3ec3a936511018096a35`
+- Git commit at checkpoint start: `31113a1494b72569e6651d381672302872e7c25f`
 - Changed files: 0
 
 ## Diff summary
@@ -15,11 +15,10 @@ No tracked-file diff; see files_changed for untracked files.
 
 ## Tests passed
 
-- Pre-run public-data verification covered 700 tasks and all 248 pytest tests passed on commit 1fff62e.
-- The formal schema-v2 executor completed 700/700 examples with strict valid rate 0.995714, 39,268,332 input tokens, 303,935 output tokens, zero local truncations, and zero provider context errors.
-- Long-context telemetry recorded exactly 700 injections, all in Exploration attempt 1, across 2,803 model requests.
-- The sealed archive independently verified with 700 predictions, the bound evidence sidecar, exact three-file contents, and SHA256 9c14142c0609f6cf46e8f1ea44da7b31211022103813049bbc169850108cca4f.
-- Runtime and Gateway containers and networks were removed and the global evaluation lock was released.
+- Private Scorer final-aggregate mode scored 700 examples with 582 correct, 697 valid, and accuracy 0.831429; no per-example feedback artifact was produced.
+- Three 700-example paired comparisons completed with 10,000 bootstrap resamples and exact two-sided McNemar tests.
+- The no-initial-retrieval evidence profile completed aggregate-only analysis after 28 Scorer tests, all Compose profile checks, schema validation, and Private Scorer commit d665d1f.
+- Agent and Scorer containers were absent after scoring, both repositories were clean, and no holdout or hidden input was used.
 
 ## Tests failed or unavailable
 
@@ -41,4 +40,4 @@ pytest -q
 
 ## Next action
 
-Stop at the verified sealed Runtime artifact. Await separate explicit authorization before any one-way Private Scorer handoff or scoring; do not run dev_holdout or final_hidden.
+Keep M2 as the frozen primary candidate and stop. LC_AGENT_FIRSTPASS does not enter holdout because its +0.857 percentage-point accuracy difference versus M2 is below the frozen +1.0-point promotion threshold; await separate authorization for any later work.

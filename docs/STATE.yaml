@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: lc-agent-firstpass-dev-feedback-runtime-complete
+current_phase: lc-agent-firstpass-dev-feedback-scored
 current_goal: Implement and offline-verify the single authorized LC_AGENT_FIRSTPASS
   post-hoc exploratory extension while preserving the frozen primary comparison and
   stopping before any real-model or Private Scorer execution.
-last_completed_phase: lc-agent-firstpass-dev-feedback-runtime-complete
-last_git_commit: 1fff62e293513644b3ec3ec3a936511018096a35
+last_completed_phase: lc-agent-firstpass-dev-feedback-scored
+last_git_commit: 31113a1494b72569e6651d381672302872e7c25f
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -203,6 +203,15 @@ decisions:
 - Accuracy, evidence quality, paired statistics, and the holdout promotion rule remain
   unevaluated because Private Scorer execution was explicitly out of scope.
 - The sealed Runtime artifact remains local; no scorer inbox handoff occurred.
+- LC versus A_SCRATCH was +3.286 points with 95 percent CI +0.571 to +6.000 and exact
+  p=0.0220; LC versus BLC was +3.429 points with CI +0.429 to +6.571 and exact p=0.0369.
+- LC versus M2 was +0.857 points with 95 percent CI -1.714 to +3.286 and exact p=0.5716,
+  so the frozen LC promotion threshold was not met and M2 remains the primary candidate.
+- LC submitted Evidence F1 was 58.736 percent, 2.740 points above M2, while final-ledger
+  Gold recall was 65.014 percent, 10.999 points below M2; initial-RAG and initial-relative
+  recovery metrics are not applicable.
+- No raw scorer output, private Gold, scorer code, or per-example feedback was copied
+  into the Agent workspace.
 files_changed: []
 tests_passed:
 - 9 unit tests
@@ -377,6 +386,15 @@ tests_passed:
   sidecar, exact three-file contents, and SHA256 9c14142c0609f6cf46e8f1ea44da7b31211022103813049bbc169850108cca4f.
 - Runtime and Gateway containers and networks were removed and the global evaluation
   lock was released.
+- Private Scorer final-aggregate mode scored 700 examples with 582 correct, 697 valid,
+  and accuracy 0.831429; no per-example feedback artifact was produced.
+- Three 700-example paired comparisons completed with 10,000 bootstrap resamples and
+  exact two-sided McNemar tests.
+- The no-initial-retrieval evidence profile completed aggregate-only analysis after
+  28 Scorer tests, all Compose profile checks, schema validation, and Private Scorer
+  commit d665d1f.
+- Agent and Scorer containers were absent after scoring, both repositories were clean,
+  and no holdout or hidden input was used.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -392,8 +410,9 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Stop at the verified sealed Runtime artifact. Await separate explicit authorization
-  before any one-way Private Scorer handoff or scoring; do not run dev_holdout or
-  final_hidden.
+- Keep M2 as the frozen primary candidate and stop. LC_AGENT_FIRSTPASS does not enter
+  holdout because its +0.857 percentage-point accuracy difference versus M2 is below
+  the frozen +1.0-point promotion threshold; await separate authorization for any
+  later work.
 blocked_items: []
-last_updated: '2026-08-17T22:52:04+08:00'
+last_updated: '2026-08-17T23:01:42+08:00'
