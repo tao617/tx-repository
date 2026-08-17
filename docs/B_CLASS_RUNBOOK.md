@@ -63,7 +63,7 @@ All paired configs use temperature 0, top-p 1, seed 7, 1024 maximum output token
 
 Top-k development ablations are under `configs/bclass/ablations/` and remain scoped to one primary model on `dev_feedback`. The workspace contains the independent official `text-embedding-3-large` top-3, top-5, and top-10 outputs from frozen FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`. The gold-free Runtime artifacts preserve those upstream cutoffs rather than truncating the paragraph-ID-sorted top-10 file; top-3 SHA256 is `4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7` and top-5 SHA256 is `78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d`.
 
-The single permitted BITER calibration is `configs/bclass/ablations/BITER2_RAG10.yaml`. It changes only the fixed retrieval-round count from three to two; retrieval, finalization, generation, transport, and concurrency remain frozen.
+The single permitted BITER calibration is `configs/bclass/ablations/BITER2_RAG10.yaml`. It changes only the fixed retrieval-round count from three to two; retrieval, finalization, generation, transport, and concurrency remain frozen. The telemetry-authorized lower-budget sensitivity row is `configs/bclass/ablations/M2_BUDGET4.yaml`; relative to M2 it changes only Exploration steps from six to four. Budget 8 is not authorized.
 
 Prepare each development extension as its own schema-v2 plan because retrieval identity is plan-level. The planner accepts only the enumerated Model-A API extensions and never overwrites an existing plan:
 
@@ -77,7 +77,7 @@ Prepare each development extension as its own schema-v2 plan because retrieval i
   --output /secure/findver-bclass-a-devfb-top3-v1.plan.json
 ```
 
-Use the same command shape with `RAG5_SEEDED` or `BITER2_RAG10` and a distinct matrix ID/output. Execute the resulting single row only through `scripts/run_bclass_plan.py`.
+Use the same command shape with `RAG5_SEEDED`, `BITER2_RAG10`, or `M2_BUDGET4` and a distinct matrix ID/output. Execute the resulting single row only through `scripts/run_bclass_plan.py`.
 
 ## Prepare a one- or two-model plan
 

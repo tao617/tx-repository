@@ -40,6 +40,13 @@ EXTENSIONS = {
         "mode": "iterative_rag",
         "retrieval_rounds": 2,
     },
+    "M2_BUDGET4": {
+        "config": "configs/bclass/ablations/M2_BUDGET4.yaml",
+        "prompt_profile": "action_compatible_findver_v2",
+        "top_k": 10,
+        "mode": "agent",
+        "exploration_steps": 4,
+    },
 }
 EXPECTED_API_PROFILE = {
     "name": "deepseek_v4_openai",
@@ -208,6 +215,12 @@ def prepare_extension_plan(
         or config.iterative_rag.retrieval_rounds != expected_rounds
     ):
         raise ValueError("BITER extension retrieval rounds do not match")
+    expected_exploration_steps = extension.get("exploration_steps")
+    if expected_exploration_steps is not None and (
+        config.agent is None
+        or config.agent.exploration_steps != expected_exploration_steps
+    ):
+        raise ValueError("Agent extension exploration budget does not match")
     if "deepseek-v4" in model_id.casefold() and thinking != {"type": "disabled"}:
         raise ValueError("DeepSeek V4 requires disabled thinking")
 

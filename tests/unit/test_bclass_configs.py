@@ -130,3 +130,20 @@ def test_two_round_biter_calibration_changes_only_fixed_round_budget():
     main_method.pop("retrieval_rounds")
     calibrated_method.pop("retrieval_rounds")
     assert main_method == calibrated_method
+
+
+def test_budget4_sensitivity_changes_only_exploration_steps():
+    main = load_config(BCLASS / "api" / "M2_SELECTIVE_REVIEW.yaml")
+    budget4 = load_config(BCLASS / "ablations" / "M2_BUDGET4.yaml")
+
+    assert main.agent is not None
+    assert budget4.agent is not None
+    assert main.generation == budget4.generation
+    assert main.backend == budget4.backend
+    assert main.agent.exploration_steps == 6
+    assert budget4.agent.exploration_steps == 4
+    main_method = main.agent.model_dump()
+    budget4_method = budget4.agent.model_dump()
+    main_method.pop("exploration_steps")
+    budget4_method.pop("exploration_steps")
+    assert main_method == budget4_method

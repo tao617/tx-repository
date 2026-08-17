@@ -32,6 +32,7 @@ def _manifest(tmp_path):
         ("RAG3_SEEDED", 3, "RAG3_SEEDED.yaml", 9, "run"),
         ("RAG5_SEEDED", 5, "RAG5_SEEDED.yaml", 9, "run"),
         ("BITER2_RAG10", 10, "BITER2_RAG10.yaml", 4, "iterative-rag"),
+        ("M2_BUDGET4", 10, "M2_BUDGET4.yaml", 7, "run"),
     ],
 )
 def test_extension_plan_binds_condition_retrieval_and_transport(

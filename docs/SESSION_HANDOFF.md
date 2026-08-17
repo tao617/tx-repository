@@ -2,22 +2,27 @@
 
 ## Current state
 
-Phase `bclass-planned-run-postprocessing` completed: Made the formal single-row executor create the aggregate runtime summary, seal the submission, bind and verify the evidence-ledger sidecar, and reject incomplete or mismatched runs. Top3 was manually postprocessed and verified after exposing the missing executor step.
+Phase `bclass-budget4-and-statistical-freeze` completed: Authorized exactly one M2 budget-4 development sensitivity row from aggregate Runtime telemetry, added a fail-closed hash-bound config/planner path, rejected budget 8, and froze the holdout primary comparator and multiplicity family before any holdout score.
 
-- Git commit at checkpoint start: `0233a48f9a03d82ac92d1971aa17148da6b8ee29`
-- Changed files: 2
+- Git commit at checkpoint start: `863700392f942a3542df8d161f66511ec6640f6b`
+- Changed files: 8
 
 ## Diff summary
 
 ```text
-scripts/run_bclass_plan.py         | 51 +++++++++++++++++++++++++++++++
- tests/unit/test_run_bclass_plan.py | 61 ++++++++++++++++++++++++++++++++++++++
- 2 files changed, 112 insertions(+)
+docs/B_CLASS_RUNBOOK.md                       |  4 ++--
+ docs/EXPERIMENT_PLAN.md                       |  6 +++---
+ docs/TEST_PLAN.md                             |  2 +-
+ experiments/bclass_dev_feedback_template.yaml |  1 +
+ scripts/prepare_bclass_extension.py           | 13 +++++++++++++
+ tests/unit/test_bclass_configs.py             | 17 +++++++++++++++++
+ tests/unit/test_prepare_bclass_extension.py   |  1 +
+ 7 files changed, 38 insertions(+), 6 deletions(-)
 ```
 
 ## Tests passed
 
-- 15 formal executor unit tests passed; 33 focused postprocessing/submission/summary tests passed; 234 full Agent tests passed with one existing Starlette deprecation warning.
+- 26 focused configuration/planner/executor tests passed; 236 full Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
 
 ## Tests failed or unavailable
 
@@ -39,4 +44,4 @@ pytest -q
 
 ## Next action
 
-Commit the fix, regenerate Top5 and BITER2 plans at that commit, then execute and privately score Top3, Top5, and BITER2.
+Commit this phase, generate and preflight a fresh budget-4 plan at the commit, run and privately score it against M2, then finalize the aggregate-only report and checkpoint.

@@ -27,7 +27,7 @@ New configs are isolated under `configs/bclass/api/` and `configs/bclass/local/`
 | `M1_BUDGET_AWARE` | staged budget/controller contribution | embedding top-10 | v2 6/2/0 no review |
 | `M2_SELECTIVE_REVIEW` | complete proposed method | embedding top-10 | v2 6/2/1 selective |
 
-Top-k ablations `RAG3_SEEDED`, `RAG5_SEEDED`, and `RAG10_SEEDED` are one-primary-model `dev_feedback` studies only. Each uses its independent official `text-embedding-3-large` cutoff artifact from FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`; top-3/top-5 are not derived by truncating the paragraph-ID-sorted top-10 file. Exploration-step ablations 4/6/8 are reserved for later development selection and are not part of implementation testing.
+Top-k ablations `RAG3_SEEDED`, `RAG5_SEEDED`, and `RAG10_SEEDED` are one-primary-model `dev_feedback` studies only. Each uses its independent official `text-embedding-3-large` cutoff artifact from FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`; top-3/top-5 are not derived by truncating the paragraph-ID-sorted top-10 file. The six-step M2 reference used more than four Exploration calls on 107/700 examples (15.29%), so one Model-A `M2_BUDGET4` sensitivity row is authorized. Only 39/700 examples (5.57%) entered Finalization after six Exploration calls and none reached a max-step termination, so budget 8 is not authorized. The budget-4 config changes only `exploration_steps` from 6 to 4.
 
 ## Pairing and frozen inputs
 
@@ -43,7 +43,7 @@ Use `scripts/summarize_run.py` for aggregate runtime behavior: file completion, 
 
 Accuracy, Evidence Precision/Recall/F1, All-Gold Evidence Recall, Initial RAG Recall, Final Agent Evidence Recall, Evidence Recovery Rate, conditional correctness, paired-bootstrap 95% intervals, and McNemar comparison belong only to the networkless Private Scorer contract in `docs/PRIVATE_EVIDENCE_METRICS.md`. The adapter is implemented in the separate Private Scorer repository at commit `37aad0d`. Before formal scoring, verify that exact or an explicitly newer frozen scorer commit in its isolated environment; never copy the implementation or its private inputs into this repository.
 
-Before `dev_holdout`, freeze the primary candidate-versus-baseline comparison. Either name the primary baseline in advance or freeze a deterministic development-only selection rule and any multiple-comparison handling; do not select the reported primary comparator after reading holdout or hidden results.
+The holdout protocol is frozen before any `dev_holdout` score is read. `M2_SELECTIVE_REVIEW` is the sole primary candidate, `BLC_FINDVER_COT` is the sole primary comparator, and accuracy is the primary endpoint. The primary test is a two-sided exact McNemar test at alpha 0.05 with the 10,000-resample paired-bootstrap 95% interval reported as the effect estimate; there is no multiplicity adjustment for this single primary hypothesis. The five secondary method comparisons are M2 versus `BRAG10_FINDVER_COT`, calibrated `BITER2_RAG10`, `A_SCRATCH`, `M0_RAG10_SEEDED`, and `M1_BUDGET_AWARE`; their two-sided exact McNemar p-values form one Holm step-down family at familywise alpha 0.05. Top-k, budget, and BITER3-versus-BITER2 calibration results are exploratory sensitivity analyses outside the confirmatory family. Evidence metrics and all subgroup results are estimation-only and receive confidence intervals without confirmatory significance claims. This rule cannot be changed after holdout or hidden results are read.
 
 ## Data lifecycle and result placeholders
 
@@ -51,7 +51,7 @@ Iterate only on `dev_feedback`; select using aggregate-only `dev_holdout`; freez
 
 | Split | Model A | Model B | Status |
 |---|---|---|---|
-| `dev_feedback` | pending authorization | pending authorization | templates only |
+| `dev_feedback` | seven main conditions, Top-3, Top-5, and BITER2 complete; budget-4 sensitivity authorized | pending authorization | Model A development results only |
 | `dev_holdout` | pending private split/hash | pending private split/hash | not run |
 | `final_hidden` | run once after freeze | run once after freeze | not run |
 

@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: bclass-planned-run-postprocessing
+current_phase: bclass-budget4-and-statistical-freeze
 current_goal: Repair the BITER finalization evidence-ID protocol exposed by the Model
   A dev-feedback 40-task gate, verify it locally, commit the focused change, and stop
   before any additional real-API execution.
-last_completed_phase: bclass-planned-run-postprocessing
-last_git_commit: 0233a48f9a03d82ac92d1971aa17148da6b8ee29
+last_completed_phase: bclass-budget4-and-statistical-freeze
+last_git_commit: 863700392f942a3542df8d161f66511ec6640f6b
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -175,9 +175,20 @@ decisions:
   BITER calibration before freeze.
 - Do not start another paid row until summarize-seal-verify is automatic and committed;
   regenerate remaining plans because plan commit binding is fail-closed.
+- Run M2_BUDGET4 because 107/700 M2 examples used more than four Exploration calls.
+  Do not run budget 8 because only 39/700 entered Finalization after six Exploration
+  calls and none max-step terminated. Freeze M2 versus BLC as the sole primary accuracy
+  comparison; Holm-adjust the five named secondary method comparisons; treat top-k,
+  budget, and BITER calibration as exploratory.
 files_changed:
-- scripts/run_bclass_plan.py
-- tests/unit/test_run_bclass_plan.py
+- configs/bclass/ablations/M2_BUDGET4.yaml
+- docs/B_CLASS_RUNBOOK.md
+- docs/EXPERIMENT_PLAN.md
+- docs/TEST_PLAN.md
+- experiments/bclass_dev_feedback_template.yaml
+- scripts/prepare_bclass_extension.py
+- tests/unit/test_bclass_configs.py
+- tests/unit/test_prepare_bclass_extension.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -325,6 +336,9 @@ tests_passed:
 - 15 formal executor unit tests passed; 33 focused postprocessing/submission/summary
   tests passed; 234 full Agent tests passed with one existing Starlette deprecation
   warning.
+- 26 focused configuration/planner/executor tests passed; 236 full Agent tests passed
+  with one existing Starlette deprecation warning; compileall and git diff checks
+  passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -340,7 +354,7 @@ known_issues:
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
 next_actions:
-- Commit the fix, regenerate Top5 and BITER2 plans at that commit, then execute and
-  privately score Top3, Top5, and BITER2.
+- Commit this phase, generate and preflight a fresh budget-4 plan at the commit, run
+  and privately score it against M2, then finalize the aggregate-only report and checkpoint.
 blocked_items: []
-last_updated: '2026-08-17T21:40:46+08:00'
+last_updated: '2026-08-17T21:50:00+08:00'
