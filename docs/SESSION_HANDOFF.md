@@ -2,21 +2,22 @@
 
 ## Current state
 
-Phase `public-release-portability` completed: Made the new B-class context-window validation test independent of untracked runtime task data in public clones.
+Phase `public-ci-smoke-input` completed: Made the public stateful Docker CI job stage a tracked no-Gold smoke task before launching the runtime.
 
-- Git commit at checkpoint start: `a4b09f471a3840c323e14f546925d7a0272177d9`
-- Changed files: 1
+- Git commit at checkpoint start: `50ecb5ee3b7a65cfd67e123063fa0518ce0a65bd`
+- Changed files: 4
 
 ## Diff summary
 
 ```text
-tests/unit/test_prepare_bclass_matrix.py | 5 +++--
- 1 file changed, 3 insertions(+), 2 deletions(-)
+.github/workflows/ci.yml       |  5 +++++
+ tests/unit/test_ci_workflow.py | 16 ++++++++++++++++
+ 2 files changed, 21 insertions(+)
 ```
 
 ## Tests passed
 
-- 7 focused matrix-planner tests; 187 full Agent tests; Python compileall and git diff checks.
+- 12 focused CI/public-data/runtime-bundle tests; 188 full Agent tests; shell syntax, Python compileall, and git diff checks.
 
 ## Tests failed or unavailable
 
@@ -38,4 +39,4 @@ pytest -q
 
 ## Next action
 
-Publish the verified allowlisted update to origin/main.
+Publish the verified public CI smoke-input fix to origin/main and confirm the rerun.

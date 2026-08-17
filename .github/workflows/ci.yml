@@ -49,6 +49,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Prepare public smoke task
+        run: |
+          mkdir -p runtime_data/public
+          cp tests/fixtures/stateful_smoke_tasks.jsonl \
+            runtime_data/public/smoke-tasks.jsonl
       - name: Run no-credential stateful container path
         env:
           GATEWAY_DIAGNOSTICS: "1"

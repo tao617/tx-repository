@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: public-release-portability
+current_phase: public-ci-smoke-input
 current_goal: Build the isolated offline Agent Runtime, Model Gateway, and Private
   Scorer experiment system.
-last_completed_phase: public-release-portability
-last_git_commit: a4b09f471a3840c323e14f546925d7a0272177d9
+last_completed_phase: public-ci-smoke-input
+last_git_commit: 50ecb5ee3b7a65cfd67e123063fa0518ce0a65bd
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -132,8 +132,13 @@ decisions:
   rejected.
 - Public-release tests must use the tracked minimal public-task fixture whenever validation
   reaches frozen artifact hashing.
+- Public CI copies a tracked synthetic task fixture into the ignored runtime_data/public
+  path; the fixture must match a tracked public report and frozen retrieval identity.
 files_changed:
-- tests/unit/test_prepare_bclass_matrix.py
+- .github/workflows/ci.yml
+- tests/fixtures/stateful_smoke_tasks.jsonl
+- tests/unit/test_ci_workflow.py
+- tests/unit/test_ci_workflow.py.orig
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -236,6 +241,8 @@ tests_passed:
 - 8 focused executor tests; 187 full Agent tests; Python compileall and git diff checks.
 - 7 focused matrix-planner tests; 187 full Agent tests; Python compileall and git
   diff checks.
+- 12 focused CI/public-data/runtime-bundle tests; 188 full Agent tests; shell syntax,
+  Python compileall, and git diff checks.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 known_issues:
@@ -249,6 +256,6 @@ known_issues:
 - The strongest sealed one-call baseline uses temperature=1, while the frozen Top-3/Top-5
   candidates use temperature=0; no API call was made.
 next_actions:
-- Publish the verified allowlisted update to origin/main.
+- Publish the verified public CI smoke-input fix to origin/main and confirm the rerun.
 blocked_items: []
-last_updated: '2026-08-17T13:02:55+08:00'
+last_updated: '2026-08-17T13:08:06+08:00'
