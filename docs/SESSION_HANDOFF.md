@@ -2,29 +2,25 @@
 
 ## Current state
 
-Phase `qwen3-5-formal-parity-scored` completed: Completed, sealed, verified, and privately scored all seven Qwen main rows plus four frozen extensions on 700 dev_feedback examples each; produced same-condition Model-A comparisons, frozen within-Qwen comparisons, aggregate evidence analyses, and the Qwen Model-B report without using holdout or hidden data.
+Phase `public-ci-canonical-transport-smoke-fix` completed: Updated both public Docker smoke verifiers to assert the canonical deepseek_openai_chat transport profile emitted by the composable transport adapter; runtime behavior and formal Qwen results are unchanged.
 
-- Git commit at checkpoint start: `c2d3073ee0ee3de06476ff61869ec9ad08e6fb3c`
-- Changed files: 1
-- Aggregate report: `docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md`
-- Qwen M2 scored 572/700 (81.71%) versus Model A M2 at 576/700
-  (82.29%): -0.57 percentage points, paired 95% CI [-3.43, +2.29], exact
-  p=0.772989.
-- Qwen BLC and BRAG10 are immutable transport-degraded observations with 305
-  and 205 failed model responses. Do not retry or tune them without a separate
-  authorization.
-- Private Scorer commit `6ec34204193dce0e2ed7d8644c40b31d3b5598bc`
-  accepted the composable transport identity; it did not change scoring logic.
+- Git commit at checkpoint start: `f5e5b82a20a4b02509e79e092e6b1b8cd9aff3dc`
+- Changed files: 2
 
 ## Diff summary
 
 ```text
-No tracked-file diff; see files_changed for untracked files.
+scripts/verify_concurrent_mock_smoke.py | 2 +-
+ scripts/verify_stateful_mock_smoke.py   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
 ```
 
 ## Tests passed
 
-- 270 Agent tests, compileall, launcher shell syntax, git diff checks, 30 Private Scorer tests, all three networkless Scorer Compose profiles, 11 sealed-submission verifications, byte-for-byte private archive checks, empty scorer inbox, and empty Agent/Scorer container state passed.
+- 270 Agent tests
+- Stateful Docker M2 smoke: 9 calls, 8 actions, review fallback verified
+- Concurrent Docker smoke: 40 examples, configured and peak concurrency 32
+- compileall, shell syntax, and git diff checks
 
 ## Tests failed or unavailable
 
@@ -46,4 +42,4 @@ pytest -q
 
 ## Next action
 
-Keep dev_holdout and final_hidden unopened; require a new frozen plan and explicit authorization for either, and treat any Qwen one-call transport investigation as a separate experiment.
+Push the focused fix to main and confirm all GitHub Actions checks pass.

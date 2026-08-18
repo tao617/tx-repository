@@ -111,7 +111,7 @@ def verify(
         raise AssertionError("stateful trace must contain nine requests and responses")
     if any(
         event.get("payload", {}).get("request_profile")
-        != "deepseek_v4_openai"
+        != "deepseek_openai_chat"
         or event.get("payload", {}).get("thinking_mode") != "disabled"
         for event in model_requests
     ):

@@ -71,7 +71,7 @@ def verify(run_dir: Path, tasks_path: Path, submission: Path) -> dict[str, int |
             raise AssertionError("each concurrent question must have one request and response")
         request_payload = requests[0].get("payload", {})
         response_payload = responses[0].get("payload", {})
-        if request_payload.get("request_profile") != "deepseek_v4_openai":
+        if request_payload.get("request_profile") != "deepseek_openai_chat":
             raise AssertionError("DeepSeek request profile is missing from trace")
         if request_payload.get("thinking_mode") != "disabled":
             raise AssertionError("disabled thinking provenance is missing from trace")

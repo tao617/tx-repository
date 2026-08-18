@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: qwen3-5-formal-parity-scored
+current_phase: public-ci-canonical-transport-smoke-fix
 current_goal: Preserve the completed Qwen3.5-27B Model-B dev_feedback parity evidence
   and require explicit authorization plus a new frozen plan before any holdout, hidden,
   or one-call reliability experiment.
-last_completed_phase: qwen3-5-formal-parity-scored
-last_git_commit: c2d3073ee0ee3de06476ff61869ec9ad08e6fb3c
+last_completed_phase: public-ci-canonical-transport-smoke-fix
+last_git_commit: f5e5b82a20a4b02509e79e092e6b1b8cd9aff3dc
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -272,8 +272,11 @@ decisions:
 - Retain M2_SELECTIVE_REVIEW as the Qwen primary operating point; retain M2_BUDGET4
   as the lower-cost point and BITER2_RAG10 as the low-latency iterative option; do
   not tune from these read development results.
+- Public smoke verification asserts the canonical deepseek_openai_chat trace identity
+  while historical configuration aliases remain supported at load time.
 files_changed:
-- docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md
+- scripts/verify_concurrent_mock_smoke.py
+- scripts/verify_stateful_mock_smoke.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -508,6 +511,10 @@ tests_passed:
   Scorer tests, all three networkless Scorer Compose profiles, 11 sealed-submission
   verifications, byte-for-byte private archive checks, empty scorer inbox, and empty
   Agent/Scorer container state passed.
+- 270 Agent tests
+- 'Stateful Docker M2 smoke: 9 calls, 8 actions, review fallback verified'
+- 'Concurrent Docker smoke: 40 examples, configured and peak concurrency 32'
+- compileall, shell syntax, and git diff checks
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -531,8 +538,6 @@ known_issues:
   their immutable formal results are transport-degraded and require separate authorization
   before reliability investigation.
 next_actions:
-- Keep dev_holdout and final_hidden unopened; require a new frozen plan and explicit
-  authorization for either, and treat any Qwen one-call transport investigation as
-  a separate experiment.
+- Push the focused fix to main and confirm all GitHub Actions checks pass.
 blocked_items: []
-last_updated: '2026-08-18T19:42:23+08:00'
+last_updated: '2026-08-18T22:25:43+08:00'
