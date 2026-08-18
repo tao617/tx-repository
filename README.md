@@ -27,7 +27,27 @@ Credentials are never committed or copied into images. A mode-`0600` `.env.agent
 - [Private evidence metric contract](docs/PRIVATE_EVIDENCE_METRICS.md)
 - [Experiment plan](docs/EXPERIMENT_PLAN.md)
 - [Experiment report](docs/EXPERIMENT_REPORT.md)
+- [Model A B-class development results](docs/B_CLASS_MODEL_A_DEV_FEEDBACK_REPORT.md)
+- [Qwen Model-B development results](docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md)
 - [Session recovery](docs/SESSION_HANDOFF.md)
+
+## Latest Qwen Model-B results
+
+The frozen Qwen3.5-27B parity run completed 11 conditions with 700
+`dev_feedback` examples per condition. These are aggregate development results,
+not holdout, hidden-set, leaderboard, or production claims.
+
+| Operating point | Accuracy | Valid output | Mean model calls | Same-condition Model A |
+|---|---:|---:|---:|---:|
+| `M2_SELECTIVE_REVIEW` | **81.71%** | 99.86% | 2.996 | 82.29% |
+| `M1_BUDGET_AWARE` | 81.29% | 99.86% | 2.546 | 79.71% |
+| `M2_BUDGET4` | 81.14% | 99.71% | 2.749 | 81.29% |
+
+Qwen M2 differs from Model A M2 by -0.57 percentage points, with paired 95%
+CI [-3.43, +2.29] and exact p=0.772989. The one-call Qwen BLC and BRAG10 rows
+had substantial failed model responses and are retained as transport-degraded
+observations. See the [full 11-condition report](docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md)
+for runtime cost, paired comparisons, evidence metrics, and limitations.
 
 ## Quick verification
 
