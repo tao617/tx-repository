@@ -38,7 +38,7 @@ def action(name, arguments):
     return json.dumps({"action": name, "arguments": arguments})
 
 
-def setup_case(tmp_path):
+def setup_case(tmp_path, *, seed_id=0):
     reports_path = tmp_path / "reports"
     reports_path.mkdir()
     (reports_path / "report.json").write_text(
@@ -62,7 +62,7 @@ def setup_case(tmp_path):
                 "items": {
                     "iterative-example": {
                         "report": "report.json",
-                        "retrieved_context": [0],
+                        "retrieved_context": [seed_id],
                     }
                 },
             }
@@ -153,6 +153,80 @@ async def test_fixed_loop_never_stops_early_and_finalization_is_submit_only(tmp_
     assert not any(event["event"] == "review_triggered" for event in trace)
     errors = [event["payload"] for event in trace if event["event"] == "recoverable_error"]
     assert [error["error_type"] for error in errors] == ["protocol", "parse", "protocol"]
+
+
+@pytest.mark.asyncio
+async def test_finalization_retry_receives_allowed_ids_and_prior_rejection(tmp_path):
+    task, reports, config = setup_case(tmp_path, seed_id=1)
+    backend = SequenceBackend(
+        [
+            action(
+                "search_report",
+                {"query": "dynamic recovery target amount", "top_k": 3},
+            ),
+            "not-json",
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [1],
+                    "explanation": "Retrieval rounds may not submit.",
+                },
+            ),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [0],
+                    "explanation": "The placeholder ID is not retrieved evidence.",
+                },
+            ),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [1, 2],
+                    "explanation": "The retrieved evidence supports the statement.",
+                },
+            ),
+        ]
+    )
+    run_dir = tmp_path / "retry"
+    runner = IterativeRAGRunner(
+        backend=backend,
+        generation=GenerationConfig(max_context_tokens=4096),
+        iterative_config=config,
+        report_store=reports,
+        run_dir=run_dir,
+    )
+
+    prediction = await runner.run_question(task)
+
+    assert prediction.status == "completed"
+    assert prediction.evidence_ids == [1, 2]
+    first_finalization = "\n".join(
+        message["content"] for message in backend.messages[-2]
+    )
+    second_finalization = "\n".join(
+        message["content"] for message in backend.messages[-1]
+    )
+    assert (
+        "Allowed evidence IDs (cite only directly relevant IDs from this exact list):\n"
+        "[1,2]" in first_finalization
+    )
+    assert '"evidence_ids":[0]' not in first_finalization
+    assert "Previous finalization rejection:\nnone" in first_finalization
+    assert "submit evidence_ids must be in retrieved evidence: 0" in second_finalization
+    trace = [
+        json.loads(line)
+        for line in next((run_dir / "traces").glob("*.jsonl")).read_text(
+            encoding="utf-8"
+        ).splitlines()
+    ]
+    errors = [
+        event["payload"] for event in trace if event["event"] == "recoverable_error"
+    ]
+    assert [error["error_type"] for error in errors] == ["parse", "protocol", "skill"]
 
 
 def test_iterative_rag_config_and_cli_are_strict(tmp_path):

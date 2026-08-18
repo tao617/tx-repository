@@ -44,25 +44,38 @@ if [[ ! -f "$env_file" || "$(stat -c %a "$env_file")" != "600" ]]; then
   echo "credential file must exist with mode 0600" >&2
   exit 2
 fi
-if [[ ! "$config_name" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\.yaml$ ]]; then
-  echo "configuration must be a safe relative YAML path under configs" >&2
-  exit 2
-fi
-IFS='/' read -r -a config_segments <<< "$config_name"
-for segment in "${config_segments[@]}"; do
-  if [[ "$segment" == "." || "$segment" == ".." ]]; then
-    echo "configuration path cannot contain dot segments" >&2
+config_mount=()
+if [[ "$config_name" =~ ^@effective/([a-f0-9]{64}\.json)$ ]]; then
+  effective_name="${BASH_REMATCH[1]}"
+  config_path="$(realpath -e -- "$repo_root/runtime_data/effective_configs/$effective_name")"
+  if [[ "$config_path" != "$repo_root/runtime_data/effective_configs/$effective_name" ]]; then
+    echo "effective configuration must resolve beneath runtime_data/effective_configs" >&2
     exit 2
   fi
-done
-config_path="$(realpath -e -- "$repo_root/configs/$config_name")"
-case "$config_path" in
-  "$repo_root/configs/"*) ;;
-  *)
-    echo "configuration must resolve beneath configs" >&2
+  runtime_config_path="/effective-config/config.json"
+  config_mount=(--volume "$config_path:$runtime_config_path:ro")
+else
+  if [[ ! "$config_name" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\.yaml$ ]]; then
+    echo "configuration must be a safe path under configs or a bound effective config" >&2
     exit 2
-    ;;
-esac
+  fi
+  IFS='/' read -r -a config_segments <<< "$config_name"
+  for segment in "${config_segments[@]}"; do
+    if [[ "$segment" == "." || "$segment" == ".." ]]; then
+      echo "configuration path cannot contain dot segments" >&2
+      exit 2
+    fi
+  done
+  config_path="$(realpath -e -- "$repo_root/configs/$config_name")"
+  case "$config_path" in
+    "$repo_root/configs/"*) ;;
+    *)
+      echo "configuration must resolve beneath configs" >&2
+      exit 2
+      ;;
+  esac
+  runtime_config_path="/app/configs/$config_name"
+fi
 lock_path=/run/lock/findver-evaluation.lock
 if [[ ! -e "$lock_path" ]]; then
   (umask 022; set -o noclobber; : > "$lock_path") 2>/dev/null || true
@@ -152,7 +165,7 @@ fi
 "${compose[@]}" up -d model-gateway
 runtime_command=(
   python -m findver_agent.cli "$command_name"
-  --config "/app/configs/$config_name"
+  --config "$runtime_config_path"
   --tasks "/public/$task_name"
   --reports /reports
   --run-dir "/output/$run_name"
@@ -160,7 +173,7 @@ runtime_command=(
 if [[ -n "$run_identity_json" ]]; then
   runtime_command+=(--run-identity-json "$run_identity_json")
 fi
-"${compose[@]}" run --rm agent-runtime "${runtime_command[@]}"
+"${compose[@]}" run --rm "${config_mount[@]}" agent-runtime "${runtime_command[@]}"
 if [[ "${GATEWAY_DIAGNOSTICS:-0}" == "1" ]]; then
   "${compose[@]}" logs --no-color --tail 50 model-gateway >&2
 fi

@@ -80,13 +80,29 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = Field(default=1024, ge=1, le=32768)
     seed: int | None = None
     thinking: Thinking | None = None
+    enable_thinking: Literal[False] | None = None
 
     @model_validator(mode="before")
     @classmethod
     def explicit_thinking_cannot_be_null(cls, value: object) -> object:
         if isinstance(value, dict) and "thinking" in value and value["thinking"] is None:
             raise ValueError("thinking must be the explicit disabled structure")
+        if (
+            isinstance(value, dict)
+            and "enable_thinking" in value
+            and (
+                type(value["enable_thinking"]) is not bool
+                or value["enable_thinking"] is not False
+            )
+        ):
+            raise ValueError("enable_thinking must be explicitly false")
         return value
+
+    @model_validator(mode="after")
+    def provider_thinking_fields_are_exclusive(self) -> "ChatCompletionRequest":
+        if self.thinking is not None and self.enable_thinking is not None:
+            raise ValueError("provider thinking fields are mutually exclusive")
+        return self
 
 
 def create_app(

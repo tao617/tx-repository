@@ -6,11 +6,31 @@ from pathlib import Path
 import pytest
 
 from findver_agent.run_identity import RunIdentity
+from findver_agent.experiment_config import (
+    compose_effective_config,
+    effective_config_sha256,
+    effective_config_value,
+    load_experiment_condition,
+    load_model_deployment,
+)
 
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts" / "run_bclass_plan.py"
 CONFIG_FIXTURE = ROOT / "configs" / "bclass" / "api" / "BLC_FINDVER_COT.yaml"
+QWEN_CONDITION_FIXTURE = (
+    ROOT / "configs" / "conditions" / "bclass" / "main" / "BLC_FINDVER_COT.yaml"
+)
+QWEN_DEPLOYMENT_FIXTURE = (
+    ROOT / "configs" / "deployments" / "qwen3_5_27b_dashscope.yaml"
+)
+LOCAL_32K_CONFIG_FIXTURE = (
+    ROOT
+    / "configs"
+    / "local_models"
+    / "deepseek_r1_distill_llama_8b_32k"
+    / "M2_SELECTIVE_REVIEW_32K.yaml"
+)
 LC_CONFIG_FIXTURE = (
     ROOT / "configs" / "bclass" / "ablations" / "LC_AGENT_FIRSTPASS.yaml"
 )
@@ -95,6 +115,116 @@ def _prepared_fixture(tmp_path, monkeypatch):
     return plan_path, env_path, run_id, task_path
 
 
+def _prepared_qwen_fixture(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    task_path = repo / "runtime_data" / "public" / "tasks.jsonl"
+    retrieval_path = repo / "runtime_data" / "retrieval" / "retrieval.jsonl"
+    condition_path = (
+        repo
+        / "configs"
+        / "conditions"
+        / "bclass"
+        / "main"
+        / "BLC_FINDVER_COT.yaml"
+    )
+    deployment_path = repo / "configs" / "deployments" / "qwen.yaml"
+    task_path.parent.mkdir(parents=True)
+    retrieval_path.parent.mkdir(parents=True)
+    condition_path.parent.mkdir(parents=True)
+    deployment_path.parent.mkdir(parents=True)
+    task_path.write_text(
+        '{"example_id":"one","statement":"Claim","report":"one.json"}\n',
+        encoding="utf-8",
+    )
+    retrieval_path.write_text(
+        '{"example_id":"one","paragraph_ids":[1]}\n', encoding="utf-8"
+    )
+    condition_path.write_text(
+        QWEN_CONDITION_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    deployment_path.write_text(
+        QWEN_DEPLOYMENT_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    condition = load_experiment_condition(condition_path)
+    deployment = load_model_deployment(deployment_path)
+    effective = compose_effective_config(condition, deployment)
+    rate_limit = {
+        "requests_per_minute": 540,
+        "tokens_per_minute": 850_000,
+    }
+    commit = "1" * 40
+    run_id = "matrix-model_b-BLC_FINDVER_COT"
+    condition_spec = {
+        "condition_id": "BLC_FINDVER_COT",
+        "family": "main",
+        "path": "configs/conditions/bclass/main/BLC_FINDVER_COT.yaml",
+        "sha256": MODULE.sha256_file(condition_path),
+    }
+    deployment_spec = {
+        "slot": "model_b",
+        "deployment_id": "qwen3_5_27b_dashscope",
+        "path": "configs/deployments/qwen.yaml",
+        "sha256": MODULE.sha256_file(deployment_path),
+    }
+    plan = {
+        "schema_version": 3,
+        "status": "prepared_not_executed",
+        "matrix_id": "matrix",
+        "code_commit": commit,
+        "task": {
+            "path": "runtime_data/public/tasks.jsonl",
+            "sha256": MODULE.sha256_file(task_path),
+        },
+        "retrieval": {
+            "path": "runtime_data/retrieval/retrieval.jsonl",
+            "sha256": MODULE.sha256_file(retrieval_path),
+        },
+        "conditions": [condition_spec],
+        "deployments": [deployment_spec],
+        "runs": [
+            {
+                "slot": "model_b",
+                "deployment_id": "qwen3_5_27b_dashscope",
+                "condition_id": "BLC_FINDVER_COT",
+                "run_id": run_id,
+                "command": "baseline",
+            "model_id": "qwen3.5-27b",
+                "backend_kind": "api",
+                "model_context_window_tokens": 100_000,
+                "transport_profile": "dashscope_openai_chat",
+                "thinking_mode": "disabled",
+            "rate_limit": rate_limit,
+                "configured_concurrency": 32,
+                "effective_retrieval_required": False,
+                "condition": {
+                    key: condition_spec[key] for key in ("family", "path", "sha256")
+                },
+                "deployment": {
+                    key: deployment_spec[key] for key in ("path", "sha256")
+                },
+                "effective_config": {
+                    "sha256": effective_config_sha256(effective),
+                    "value": effective_config_value(effective),
+                },
+            }
+        ],
+    }
+    plan_path = tmp_path / "qwen-plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    env_path = tmp_path / "qwen.env"
+    env_path.write_text(
+        "MODEL_BASE_URL=https://example.invalid/v1\n"
+        "MODEL_API_KEY=secret\n"
+        "MODEL_NAME=qwen3.5-27b\n",
+        encoding="utf-8",
+    )
+    env_path.chmod(0o600)
+    monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
+    monkeypatch.setattr(MODULE, "_git_commit", lambda: commit)
+    monkeypatch.setattr(MODULE, "_git_is_clean", lambda: True)
+    return plan_path, env_path, run_id, task_path
+
+
 def test_executor_binds_plan_model_artifacts_commit_and_context(tmp_path, monkeypatch):
     plan_path, env_path, run_id, _ = _prepared_fixture(tmp_path, monkeypatch)
 
@@ -117,6 +247,25 @@ def test_executor_binds_plan_model_artifacts_commit_and_context(tmp_path, monkey
     assert command[-5:] == ["api", "tasks.jsonl", run_id, "baseline", "bclass/api/BLC_FINDVER_COT.yaml"]
     assert json.loads(environment["FINDVER_RUN_IDENTITY_JSON"])["plan_run_id"] == run_id
     assert environment["FINDVER_EXPECTED_MODEL_ID"] == "provider/model-a"
+
+
+def test_executor_composes_qwen_deployment_and_binds_rate_limits(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_qwen_fixture(tmp_path, monkeypatch)
+
+    identity, command, _ = MODULE.prepare_execution(
+        plan_path,
+        plan_run_id=run_id,
+        env_path=env_path,
+        resume=False,
+    )
+
+    assert identity.effective_model_id == "qwen3.5-27b"
+    assert identity.request_profile == "dashscope_openai_chat"
+    assert identity.thinking_mode == "disabled"
+    assert identity.rate_limit_requests_per_minute == 540
+    assert identity.rate_limit_tokens_per_minute == 850_000
+    assert command[-1].startswith("@effective/")
+    assert command[-1].endswith(".json")
 
 
 def test_executor_accepts_frozen_api_ablation_config_directory(tmp_path, monkeypatch):
@@ -207,9 +356,56 @@ def test_executor_enforces_planned_long_context_without_effective_retrieval(
 def test_executor_rejects_ablation_directory_for_local_backend(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
-    with pytest.raises(ValueError, match="outside the selected B-class"):
+    with pytest.raises(ValueError, match="outside the selected formal"):
         MODULE._configuration_path(
             "configs/bclass/ablations/RAG3_SEEDED.yaml",
+            backend_kind="local",
+        )
+
+
+def test_executor_allows_dedicated_32k_directories_for_local_model_plan(
+    tmp_path, monkeypatch
+):
+    repo = tmp_path / "repo"
+    target = (
+        repo
+        / "configs"
+        / "local_models"
+        / "deepseek_r1_distill_llama_8b_32k"
+        / "M2_SELECTIVE_REVIEW_32K.yaml"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        LOCAL_32K_CONFIG_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
+
+    assert MODULE._configuration_path(
+        "configs/local_models/deepseek_r1_distill_llama_8b_32k/"
+        "M2_SELECTIVE_REVIEW_32K.yaml",
+        backend_kind="local",
+        plan_purpose="independent-local-model-public-development",
+    ) == target
+    qwen_target = (
+        repo
+        / "configs"
+        / "local_models"
+        / "qwen2_5_7b_32k"
+        / "QWEN2_5_7B_M2_32K.yaml"
+    )
+    qwen_target.parent.mkdir(parents=True)
+    qwen_target.write_text(
+        LOCAL_32K_CONFIG_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    assert MODULE._configuration_path(
+        "configs/local_models/qwen2_5_7b_32k/QWEN2_5_7B_M2_32K.yaml",
+        backend_kind="local",
+        plan_purpose="independent-local-model-public-development",
+    ) == qwen_target
+    with pytest.raises(ValueError, match="outside the selected formal"):
+        MODULE._configuration_path(
+            "configs/local_models/deepseek_r1_distill_llama_8b_32k/"
+            "M2_SELECTIVE_REVIEW_32K.yaml",
             backend_kind="local",
         )
 
@@ -292,6 +488,21 @@ def test_executor_rejects_thinking_profile_drift(tmp_path, monkeypatch):
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
 
     with pytest.raises(ValueError, match="request profile or thinking"):
+        MODULE.prepare_execution(
+            plan_path,
+            plan_run_id=run_id,
+            env_path=env_path,
+            resume=False,
+        )
+
+
+def test_executor_rejects_composable_rate_limit_drift(tmp_path, monkeypatch):
+    plan_path, env_path, run_id, _ = _prepared_qwen_fixture(tmp_path, monkeypatch)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["runs"][0]["rate_limit"]["tokens_per_minute"] = 999_999
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="rate limit"):
         MODULE.prepare_execution(
             plan_path,
             plan_run_id=run_id,

@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: lc-agent-firstpass-dev-feedback-scored
-current_goal: Implement and offline-verify the single authorized LC_AGENT_FIRSTPASS
-  post-hoc exploratory extension while preserving the frozen primary comparison and
-  stopping before any real-model or Private Scorer execution.
-last_completed_phase: lc-agent-firstpass-dev-feedback-scored
-last_git_commit: 31113a1494b72569e6651d381672302872e7c25f
+current_phase: qwen3-5-formal-parity-scored
+current_goal: Preserve the completed Qwen3.5-27B Model-B dev_feedback parity evidence
+  and require explicit authorization plus a new frozen plan before any holdout, hidden,
+  or one-call reliability experiment.
+last_completed_phase: qwen3-5-formal-parity-scored
+last_git_commit: c2d3073ee0ee3de06476ff61869ec9ad08e6fb3c
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -212,7 +212,68 @@ decisions:
   recovery metrics are not applicable.
 - No raw scorer output, private Gold, scorer code, or per-example feedback was copied
   into the Agent workspace.
-files_changed: []
+- Use an independent M2_SELECTIVE_REVIEW_32K local configuration with model_context_window_tokens=32768,
+  request_profile=generic_openai, prompt_budget_tokens=28672, and concurrency=2.
+- Do not run LC_AGENT_FIRSTPASS or any full-report long-context injection in this
+  local-model experiment.
+- All local-model plans are public-development Runtime-only and explicitly leave Scorer
+  handoff, dev_holdout, and final_hidden unauthorized.
+- Do not run the three-example pilot or 700-example public development set after the
+  strict-validity gate failure.
+- Do not loosen the JSON parser, add example-specific prompt rules, or run any long-context
+  condition to mask this failure.
+- Keep Qwen gates outside frozen 100K/B-class history; use identical generic_openai
+  M2 method and generation settings for both models.
+- Do not run 700 public tasks, long-context conditions, scorer handoff, holdout, or
+  hidden evaluation.
+- Allow hash-bound independent-local plans only from one-level dedicated directories
+  under configs/local_models.
+- Keep all Qwen runs outside frozen B-class history and stop before 700 tasks, long-context,
+  or scorer handoff.
+- Pause after download verification; do not start vLLM, the gateway, tunnels, JSON
+  probes, smoke, pilot, throughput tests, 700 tasks, or long-context work.
+- Freeze Qwen provider admission at explicit plan-bound RPM/TPM values and record
+  queue wait and transport retry aggregates.
+- Replicate Model A as seven Qwen main rows plus four fixed parity extensions; keep
+  Qwen LC_AGENT_FIRSTPASS out of scope.
+- Keep exactly one canonical model-independent copy of the seven main conditions and
+  four Model-B extensions; compose them with deployment YAMLs in schema-v3 plans.
+- Use API-dialect transport profiles openai_standard, deepseek_openai_chat, and dashscope_openai_chat;
+  only closed adapters may generate provider-specific fields.
+- Bind condition, deployment, and canonical effective-config SHA256 in schema-v3 plans;
+  keep historical DeepSeek schema-v2 configs and execution as a compatibility path.
+- Use one canonical model-independent copy of seven main conditions and four Model-B
+  extensions.
+- Allow provider-specific request fields only through closed API-dialect adapters;
+  arbitrary extra_body remains forbidden.
+- Add an existing-dialect model only by adding a deployment YAML; add code only for
+  a new closed API dialect.
+- Keep historical DeepSeek configs and schema-v2 execution as a compatibility path
+  while new plans bind condition, deployment, and effective-config SHA256 under schema
+  v3.
+- Retain both smoke directories, generated effective config, and all temporary plans
+  until the user explicitly approves cleanup.
+- After explicit user approval, remove the earlier Qwen smoke and temporary planning
+  artifacts while retaining the completed sealed schema-v3 smoke.
+- 'User explicitly authorized all eleven 700-example Qwen3.5-27B public dev_feedback
+  parity rows: seven main conditions plus RAG3_SEEDED, RAG5_SEEDED, BITER2_RAG10,
+  and M2_BUDGET4.'
+- The authorization includes sealed Runtime postprocessing, isolated Private Scorer
+  aggregate evaluation, evidence analysis where applicable, and paired aggregate comparisons
+  against the frozen Model-A results.
+- LC_AGENT_FIRSTPASS, dev_holdout, final_hidden, prompt/parser tuning, per-example
+  feedback, and any condition outside the frozen eleven-row parity set remain unauthorized.
+- Use the schema-v3 paired main plan only to execute its seven model_b Qwen rows;
+  reuse the already frozen Model-A aggregate results rather than rerunning Model A.
+- Use four independent schema-v3 model_b extension plans because retrieval identity
+  is plan-level; execute RAG3, RAG5, BITER2, and M2_BUDGET4 after the seven main rows.
+- The formal plans bind qwen3.5-27b, dashscope_openai_chat, disabled thinking, 100000-token
+  context capacity, concurrency 32, and the frozen public task/retrieval hashes.
+- Retain M2_SELECTIVE_REVIEW as the Qwen primary operating point; retain M2_BUDGET4
+  as the lower-cost point and BITER2_RAG10 as the low-latency iterative option; do
+  not tune from these read development results.
+files_changed:
+- docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -395,9 +456,63 @@ tests_passed:
   commit d665d1f.
 - Agent and Scorer containers were absent after scoring, both repositories were clean,
   and no holdout or hidden input was used.
+- 27 focused local-32K config, planner, executor, and frozen B-class tests passed.
+- 253 full Agent tests passed with one existing Starlette deprecation warning.
+- Python compileall, launcher shell syntax, planner CLI help, plan-generation smoke,
+  and git diff checks passed.
+- Two RTX 3090 replicas, 32K vLLM backends, load-balancing gateway, WSL tunnel path,
+  and project Model Gateway path returned HTTP 200 with the expected model name.
+- One-example Runtime run completed file output with 8 stop responses, zero length
+  finishes, zero protocol drift, zero local truncations, zero provider context errors,
+  and zero 5xx or timeouts.
+- The smoke run was summarized, sealed, and verified; Agent containers, networks,
+  SSH tunnel, remote gateway, and remote model replicas were stopped.
+- 6 focused local-model configuration and planner tests passed.
+- 255 full Agent tests passed with one existing Starlette deprecation warning.
+- 23 focused local-plan executor and configuration tests passed.
+- Qwen2.5-7B-Instruct revision a09a35458c702b33eeacc393d103063234e8bc28 has config,
+  index, four present shards, and zero broken links.
+- Qwen2.5-14B-Instruct revision cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8 has config,
+  index, eight present shards, and zero broken links.
+- Both download containers exited 0; no Qwen service container or ports 8000, 8001,
+  or 18080 are active.
+- 'Pre-change recovery suite: 255 tests passed with one existing Starlette deprecation
+  warning.'
+- 'Qwen transport, gateway, rate-limit, retry, config, and summary suite: 50 tests
+  passed.'
+- 'Full post-transport Agent suite: 268 tests passed with the same warning; compileall
+  and diff checks passed.'
+- 'Qwen B-class configuration, matrix, extension, executor, config, and runner suite:
+  77 tests passed.'
+- Offline frozen-artifact generation validated 14 main rows and four separate Qwen
+  Model-B extension plans.
+- 'Full post-planner Agent suite: 281 tests passed with one existing Starlette deprecation
+  warning; compileall, CLI help, and diff checks passed.'
+- 'Full Agent suite: 270 tests passed with one existing Starlette deprecation warning.'
+- 'Offline schema-v3 composition: 14 paired main rows plus four Qwen extension rows;
+  all condition, deployment, and effective-config SHA256 bindings recomposed successfully.'
+- compileall, CLI help, and git diff checks passed.
+- 'Committed-plan executor binding: qwen3.5-27b, dashscope_openai_chat, disabled thinking,
+  and effective config SHA256 2e381d29092d62d21997a3651af6e9e481a79e43637d31f5d8e036635091f210.'
+- 'Gold-free Qwen BLC smoke: 3/3 file completion, 3/3 strict valid, 3 stop responses,
+  zero retries, zero protocol drift, and sealed archive SHA256 4d4dcff4b922029281c8071ca6b1261e72c7fd412b05233e7ec64f13c86dea0c.'
+- Cleanup verification confirmed the early smoke and effective-config cache are absent,
+  the sealed composable smoke remains complete, the tracked worktree is clean, and
+  no Docker service is running.
+- 'Pre-authorization recovery suite: 270 tests passed with one existing Starlette
+  deprecation warning; worktree was clean and no Docker service was running.'
+- 270 pytest tests, compileall, launcher shell syntax, 700-record public-data validation,
+  exact task and Top-3/Top-5/Top-10 hashes, API Compose expansion, credential mode/model
+  identity, and empty Docker service state passed.
+- 270 Agent tests, compileall, launcher shell syntax, git diff checks, 30 Private
+  Scorer tests, all three networkless Scorer Compose profiles, 11 sealed-submission
+  verifications, byte-for-byte private archive checks, empty scorer inbox, and empty
+  Agent/Scorer container state passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
+- 'Single-example valid_output_rate was 0: all 6 Exploration and 2 Finalization responses
+  failed the unchanged strict JSON action parser, terminating with finalization_budget_exhausted.'
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -409,10 +524,15 @@ known_issues:
 - Top3 Runtime completed 700 examples under commit 0233a48, but the prior executor
   omitted documented postprocessing; it was recovered with the existing standard tools
   and sealed as affc8d7bea57a853deb8ac3dc078a315945bde27a6283e480a627bcf2cffab26.
+- DeepSeek-R1-Distill-Llama-8B under the current vLLM service emits visible reasoning
+  markers before JSON in every smoke response; the service was not configured to separate
+  reasoning from content.
+- Qwen BLC and BRAG10 one-call rows had 305 and 205 failed model responses respectively;
+  their immutable formal results are transport-degraded and require separate authorization
+  before reliability investigation.
 next_actions:
-- Keep M2 as the frozen primary candidate and stop. LC_AGENT_FIRSTPASS does not enter
-  holdout because its +0.857 percentage-point accuracy difference versus M2 is below
-  the frozen +1.0-point promotion threshold; await separate authorization for any
-  later work.
+- Keep dev_holdout and final_hidden unopened; require a new frozen plan and explicit
+  authorization for either, and treat any Qwen one-call transport investigation as
+  a separate experiment.
 blocked_items: []
-last_updated: '2026-08-17T23:01:42+08:00'
+last_updated: '2026-08-18T19:42:23+08:00'

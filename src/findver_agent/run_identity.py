@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from findver_agent.model_backends.transport_adapters import (
+    TransportProfile,
+    validate_transport_thinking,
+)
+
 
 SHA256_PATTERN = r"^[a-f0-9]{64}$"
 COMMIT_PATTERN = r"^[a-f0-9]{40,64}$"
@@ -33,28 +38,27 @@ class RunIdentity(BaseModel):
         pattern=SHA256_PATTERN,
     )
     model_context_window_tokens: int = Field(ge=8192, le=1_000_000)
-    request_profile: Literal[
-        "generic_openai", "deepseek_v4_openai"
-    ] = "generic_openai"
+    request_profile: TransportProfile = "openai_standard"
     thinking_mode: Literal["disabled", "unsupported"] = "unsupported"
+    rate_limit_requests_per_minute: int | None = Field(
+        default=None, ge=1, le=1_000_000
+    )
+    rate_limit_tokens_per_minute: int | None = Field(
+        default=None, ge=1, le=100_000_000
+    )
     configured_concurrency: int = Field(default=1, ge=1, le=32)
 
     @model_validator(mode="after")
     def run_name_is_matrix_scoped(self) -> "RunIdentity":
         if not self.plan_run_id.startswith(f"{self.matrix_id}-"):
             raise ValueError("plan_run_id must be scoped by matrix_id")
-        if (
-            self.request_profile == "deepseek_v4_openai"
-            and self.thinking_mode != "disabled"
+        validate_transport_thinking(self.request_profile, self.thinking_mode)
+        rate_limit_group = (
+            self.rate_limit_requests_per_minute,
+            self.rate_limit_tokens_per_minute,
+        )
+        if any(value is not None for value in rate_limit_group) and not all(
+            value is not None for value in rate_limit_group
         ):
-            raise ValueError(
-                "deepseek_v4_openai run identity requires disabled thinking"
-            )
-        if (
-            self.request_profile == "generic_openai"
-            and self.thinking_mode != "unsupported"
-        ):
-            raise ValueError(
-                "generic_openai run identity cannot declare DeepSeek thinking"
-            )
+            raise ValueError("run identity RPM and TPM limits must be paired")
         return self

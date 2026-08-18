@@ -174,3 +174,4 @@ runs/
 submissions/
 runtime_data/public/*.jsonl
 runtime_data/reports/
+runtime_data/effective_configs/

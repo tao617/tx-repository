@@ -47,7 +47,9 @@ sudo env FINDVER_UID="$(id -u)" FINDVER_GID="$(id -g)" \
 
 ## Configuration map
 
-The seven main conditions are paired under `configs/bclass/api/` and `configs/bclass/local/`:
+The seven main conditions have one model-independent copy under
+`configs/conditions/bclass/main/`. Historical paired files under `configs/bclass/api/`
+and `configs/bclass/local/` remain available only for schema-v2 compatibility:
 
 | Condition | Command | Maximum calls | Purpose |
 |---|---|---:|---|
@@ -59,21 +61,26 @@ The seven main conditions are paired under `configs/bclass/api/` and `configs/bc
 | `M1_BUDGET_AWARE` | `run` | 8 | seeded v2 6/2/0, no review |
 | `M2_SELECTIVE_REVIEW` | `run` | 9 | seeded v2 6/2/1 with selective review |
 
-All paired configs use temperature 0, top-p 1, seed 7, 1024 maximum output tokens, a 32768-token prompt-construction budget, a 100000-token model context capacity, and question concurrency 32. API configs use the closed `deepseek_v4_openai` profile with `thinking.type=disabled`; Local configs use `generic_openai` and do not transmit the DeepSeek field. Runtime and Gateway each expose a bounded 32-connection shared client. The API/local method sections remain paired; transport profile, backend kind, gateway alias, timeout, and retries are backend-specific provenance.
+All conditions use temperature 0, top-p 1, seed 7, 1024 maximum output tokens, a
+32768-token prompt-construction budget, and question concurrency 32. Context capacity,
+transport profile, thinking mode, gateway alias, timeout/retries, and optional RPM/TPM
+belong to deployment YAMLs. Runtime and Gateway each expose a bounded 32-connection
+shared client.
 
 Top-k development ablations are under `configs/bclass/ablations/` and remain scoped to one primary model on `dev_feedback`. The workspace contains the independent official `text-embedding-3-large` top-3, top-5, and top-10 outputs from frozen FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`. The gold-free Runtime artifacts preserve those upstream cutoffs rather than truncating the paragraph-ID-sorted top-10 file; top-3 SHA256 is `4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7` and top-5 SHA256 is `78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d`.
 
 The single permitted BITER calibration is `configs/bclass/ablations/BITER2_RAG10.yaml`. It changes only the fixed retrieval-round count from three to two; retrieval, finalization, generation, transport, and concurrency remain frozen. The telemetry-authorized lower-budget sensitivity row is `configs/bclass/ablations/M2_BUDGET4.yaml`; relative to M2 it changes only Exploration steps from six to four. Budget 8 is not authorized.
 
-Prepare each development extension as its own schema-v2 plan because retrieval identity is plan-level. The planner accepts only the enumerated Model-A API extensions and never overwrites an existing plan:
+Prepare each development extension as its own schema-v3 plan because retrieval identity
+is plan-level. The planner accepts exactly the four canonical Model-B extensions and
+never overwrites an existing plan:
 
 ```bash
 .venv/bin/python scripts/prepare_bclass_extension.py \
-  --manifest experiments/bclass_dev_feedback_template.yaml \
+  --manifest experiments/bclass_composable_template.yaml \
   --condition RAG3_SEEDED \
   --matrix-id findver-bclass-a-devfb-top3-v1 \
-  --model-a deepseek-v4-flash \
-  --model-a-context-window 100000 \
+  --deployment configs/deployments/deepseek_v4_flash_api.yaml \
   --output /secure/findver-bclass-a-devfb-top3-v1.plan.json
 ```
 
@@ -81,42 +88,49 @@ Use the same command shape with `RAG5_SEEDED`, `BITER2_RAG10`, or `M2_BUDGET4` a
 
 ## Prepare a one- or two-model plan
 
-Model A ID, backend, and context capacity are mandatory. The following preparation-only command validates seven Model A rows and freezes the current commit, task/retrieval/config hashes, prompt profile, generation settings, DeepSeek non-thinking transport, concurrency, independent run IDs, and maximum call budgets. It does not call a model. The single-model matrix ID receives a `-single-model-a` suffix.
+One deployment YAML is mandatory. The following preparation-only command validates
+seven rows and freezes the current commit, task/retrieval hashes, condition hash,
+deployment hash, final effective-config hash, prompt profile, concurrency, independent
+run IDs, and maximum call budgets. It does not call a model. The single-model matrix ID
+receives a `-single-model-a` suffix.
 
 ```bash
 .venv/bin/python scripts/prepare_bclass_matrix.py \
   --manifest /secure/untracked-dev-feedback-canary-manifest.yaml \
-  --model-a 'deepseek-v4-flash' \
-  --backend-a api \
-  --model-a-context-window 100000 \
+  --deployment-a configs/deployments/deepseek_v4_flash_api.yaml \
   --output /tmp/findver-bclass-model-a-plan.json
 ```
 
 The Canary manifest may be untracked, but it must remain `dev_feedback`, contain only an approved Gold-free public task path, and bind that task file by SHA256. Preparation does not authorize execution.
 
-For the later paired plan, supply the complete Model B group. Partial groups, placeholders, and an ID equal to Model A fail closed. Omitting the entire group is the only single-model form.
+For a paired plan, supply a second deployment. Duplicate deployment or model IDs fail
+closed. Omitting `--deployment-b` is the only single-model form.
 
 Before running it, require a clean tracked worktree and confirm that `runtime_data/public/tasks.jsonl` exists, contains only the public task fields, and matches the tracked manifest hash. The public release does not supply this ignored host input automatically.
 
 ```bash
 .venv/bin/python scripts/prepare_bclass_matrix.py \
-  --manifest experiments/bclass_dev_feedback_template.yaml \
-  --model-a 'provider/model-a' \
-  --model-b 'provider/model-b' \
-  --backend-a api \
-  --backend-b local \
-  --model-a-context-window 100000 \
-  --model-b-context-window 100000 \
+  --manifest experiments/bclass_composable_template.yaml \
+  --deployment-a configs/deployments/deepseek_v4_flash_api.yaml \
+  --deployment-b configs/deployments/qwen3_5_27b_dashscope.yaml \
   --output /tmp/findver-bclass-dev-feedback-plan.json
 ```
 
-The output path must be new; the planner never overwrites a prior plan. Verify that the schema-v2 plan has `status: prepared_not_executed`, either 7 or 14 unique run IDs, the intended commit, declared context capacity and request profile for each model, frozen concurrency 32, and the expected task/retrieval hashes. Never resume a single-model row under the paired matrix ID or copy results between their run directories.
+The output path must be new; the planner never overwrites a prior plan. Verify that the
+schema-v3 plan has `status: prepared_not_executed`, either 7 or 14 unique run IDs, the
+intended commit, declared capacity/transport for each deployment, frozen concurrency 32,
+expected task/retrieval hashes, and condition/deployment/effective-config SHA256 for every
+row. Never resume a single-model row under the paired matrix ID or copy results between
+their run directories.
 
 For a later explicitly authorized 12-task Model A Canary across all seven conditions, the hard method-budget ceiling is `12 × (1+1+5+9+8+8+9) = 492` requests. Using the 100000-token context bound, the 1024-token output reserve, and the DeepSeek V4 Flash prices published on 2026-08-17 (cache-miss input USD 0.14/M, output USD 0.28/M), the absolute configured-token estimate is USD 6.96 before operational buffer. Set both a 492-call limit and a USD 8 (or CNY 60) billing limit, and re-check the [official pricing page](https://api-docs.deepseek.com/quick_start/pricing) immediately before any newly authorized run. This calculation is a guardrail, not execution authorization.
 
 ## Context capacity enforcement
 
-`prompt_budget_tokens: 32768` bounds deterministic prompt/evidence construction; it is not the model's context window. `backend.model_context_window_tokens: 100000` is the real local capacity constraint, and the formal plan argument must exactly match the selected config. A model that cannot guarantee at least this capacity must not be placed in this matrix without a new config, focused commit, and regenerated plan.
+`prompt_budget_tokens: 32768` bounds deterministic prompt/evidence construction; it is
+not the model's context window. Deployment `model_context_window_tokens: 100000` is the
+real local capacity constraint. A model that cannot guarantee at least this capacity
+must not be placed in this matrix without a reviewed deployment and regenerated plan.
 
 Before transport, Runtime computes a deterministic model-independent estimate: the larger of characters divided by 4.2 and whitespace-delimited units multiplied by 1.5, plus fixed chat-message overhead. If estimated input plus the 1024-token output reserve exceeds 100000, Runtime raises an explicit context-window error without sending a request. After a successful response, provider-reported prompt tokens are authoritative and are checked against the same window. No prompt-budget or context-window extension field is sent to the OpenAI-compatible API.
 
@@ -126,7 +140,12 @@ Every new model-request trace records prompt budget, estimated input and total t
 
 ## DeepSeek request and response protocol
 
-DeepSeek V4 thinking is enabled by default upstream, so every B-class API request uses the exact top-level structure `thinking: {type: disabled}`. This applies uniformly to one-call Baseline, every BITER retrieval/finalization call, and every Agent Exploration/Finalization/Review call because transport is centralized in the enumerated backend profile. No general request-extension dictionary exists. Gateway accepts only the disabled structure and forwards it unchanged; generic API and Local profiles omit the field.
+DeepSeek V4 thinking is enabled by default upstream, so the closed
+`deepseek_openai_chat` adapter adds the exact top-level structure
+`thinking: {type: disabled}`. The `dashscope_openai_chat` adapter instead adds only
+`enable_thinking: false`, and `openai_standard` adds neither. This applies uniformly to
+all phases because transport is centralized. Adapter request fields are immutable
+whitelists; no general request-extension dictionary or arbitrary `extra_body` exists.
 
 Runtime validates `finish_reason` as `stop`, `length`, or `content_filter` and records only that value alongside visible response metadata. Unknown values fail as model responses. Non-empty hidden reasoning returned under disabled thinking raises a protocol-drift error without storing the value. Aggregate summaries report all finish-reason counts, a dedicated `length` count, and protocol drift. A length-truncated incomplete JSON action consumes the existing parse/model failure budget; do not raise one condition's output ceiling independently. Keep `max_output_tokens: 1024` until these aggregates are reviewed.
 

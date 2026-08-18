@@ -167,6 +167,8 @@ class AgentOrchestrator:
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
                         "finish_reason": response.finish_reason,
+                        "rate_limit_wait_ms": response.rate_limit_wait_ms,
+                        "transport_retries": response.transport_retries,
                     },
                 )
             except Exception as error:
@@ -395,6 +397,8 @@ class AgentOrchestrator:
                         "latency_ms": response.latency_ms,
                         "response_id": response.response_id,
                         "finish_reason": response.finish_reason,
+                        "rate_limit_wait_ms": response.rate_limit_wait_ms,
+                        "transport_retries": response.transport_retries,
                         "long_context_injected": long_context_injected,
                     },
                 )

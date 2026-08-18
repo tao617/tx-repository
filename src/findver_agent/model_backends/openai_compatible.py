@@ -15,6 +15,11 @@ from findver_agent.model_backends.base import (
     context_window_metadata,
 )
 from findver_agent.model_backends.retry_policy import retry_async
+from findver_agent.model_backends.rate_limiter import SlidingWindowRateLimiter
+from findver_agent.model_backends.transport_adapters import (
+    get_transport_adapter,
+    validate_transport_thinking,
+)
 
 
 class BackendError(RuntimeError):
@@ -23,11 +28,6 @@ class BackendError(RuntimeError):
 
 MAX_SHARED_CONNECTIONS = 32
 SUPPORTED_FINISH_REASONS = frozenset({"stop", "length", "content_filter"})
-SUPPORTED_REQUEST_PROFILES = frozenset(
-    {"generic_openai", "deepseek_v4_openai"}
-)
-
-
 class OpenAICompatibleBackend:
     def __init__(
         self,
@@ -37,27 +37,44 @@ class OpenAICompatibleBackend:
         timeout_seconds: float,
         max_retries: int,
         model_context_window_tokens: int,
-        request_profile: str = "generic_openai",
+        transport_profile: str | None = None,
+        request_profile: str | None = None,
         thinking_type: str | None = None,
+        rate_limit_requests_per_minute: int | None = None,
+        rate_limit_tokens_per_minute: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        if request_profile not in SUPPORTED_REQUEST_PROFILES:
-            raise ValueError("unsupported model request profile")
-        if request_profile == "deepseek_v4_openai":
-            if thinking_type != "disabled":
-                raise ValueError(
-                    "deepseek_v4_openai requires thinking_type=disabled"
-                )
-        elif thinking_type is not None:
-            raise ValueError(
-                "generic_openai cannot send the DeepSeek thinking field"
-            )
+        if transport_profile is not None and request_profile is not None:
+            raise ValueError("configure transport_profile, not both profile names")
+        selected_profile = transport_profile or request_profile or "openai_standard"
+        thinking_mode = thinking_type or "unsupported"
+        validate_transport_thinking(selected_profile, thinking_mode)
+        adapter = get_transport_adapter(selected_profile)
+        rate_limit_group = (
+            rate_limit_requests_per_minute,
+            rate_limit_tokens_per_minute,
+        )
+        if any(value is not None for value in rate_limit_group) and not all(
+            value is not None for value in rate_limit_group
+        ):
+            raise ValueError("RPM and TPM admission limits must be configured together")
         self.model_name = model
         self.model_context_window_tokens = model_context_window_tokens
-        self.request_profile = request_profile
-        self.thinking_mode = thinking_type or "unsupported"
+        self.transport_profile = adapter.profile
+        self.request_profile = adapter.profile
+        self.thinking_mode = thinking_mode
+        self._adapter = adapter
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._max_retries = max_retries
+        self._rate_limiter = (
+            SlidingWindowRateLimiter(
+                requests_per_minute=rate_limit_requests_per_minute,
+                tokens_per_minute=rate_limit_tokens_per_minute,
+            )
+            if rate_limit_requests_per_minute is not None
+            and rate_limit_tokens_per_minute is not None
+            else None
+        )
         self._client = httpx.AsyncClient(
             timeout=timeout_seconds,
             transport=transport,
@@ -74,6 +91,20 @@ class OpenAICompatibleBackend:
         return isinstance(error, httpx.HTTPStatusError) and (
             error.response.status_code == 429 or error.response.status_code >= 500
         )
+
+    @staticmethod
+    def _retry_after_seconds(error: BaseException, attempt: int) -> float:
+        del attempt
+        if not isinstance(error, httpx.HTTPStatusError):
+            return 0.0
+        value = error.response.headers.get("retry-after")
+        if value is None:
+            return 0.0
+        try:
+            seconds = float(value)
+        except ValueError:
+            return 0.0
+        return min(max(seconds, 0.0), 60.0)
 
     async def generate(
         self,
@@ -92,21 +123,26 @@ class OpenAICompatibleBackend:
                 f"max_output_tokens={config.max_output_tokens} "
                 f"model_context_window_tokens={self.model_context_window_tokens}"
             )
-        payload: dict[str, Any] = {
-            "model": self.model_name,
-            "messages": messages,
-            "temperature": config.temperature,
-            "top_p": config.top_p,
-            "max_tokens": config.max_output_tokens,
-        }
-        if config.seed is not None:
-            payload["seed"] = config.seed
-        if self.request_profile == "deepseek_v4_openai":
-            payload["thinking"] = {"type": "disabled"}
+        payload: dict[str, Any] = self._adapter.build_request(
+            model=self.model_name,
+            messages=messages,
+            temperature=config.temperature,
+            top_p=config.top_p,
+            max_tokens=config.max_output_tokens,
+            seed=config.seed,
+        )
 
         started = time.perf_counter()
+        rate_limit_wait_ms = 0.0
+        transport_attempts = 0
 
         async def request() -> httpx.Response:
+            nonlocal rate_limit_wait_ms, transport_attempts
+            transport_attempts += 1
+            if self._rate_limiter is not None:
+                rate_limit_wait_ms += await self._rate_limiter.acquire(
+                    int(context["estimated_total_tokens"])
+                )
             response = await self._client.post(self._url, json=payload)
             response.raise_for_status()
             return response
@@ -115,6 +151,7 @@ class OpenAICompatibleBackend:
             request,
             max_retries=self._max_retries,
             retryable=self._retryable,
+            delay_for=self._retry_after_seconds,
         )
         latency_ms = (time.perf_counter() - started) * 1000
         try:
@@ -132,7 +169,7 @@ class OpenAICompatibleBackend:
             raise BackendError("gateway returned an unsupported finish_reason")
         reasoning_content = message.get("reasoning_content")
         if (
-            self.request_profile == "deepseek_v4_openai"
+            self.thinking_mode == "disabled"
             and reasoning_content is not None
             and reasoning_content != ""
         ):
@@ -158,6 +195,8 @@ class OpenAICompatibleBackend:
             latency_ms=latency_ms,
             response_id=data.get("id"),
             finish_reason=finish_reason,
+            rate_limit_wait_ms=rate_limit_wait_ms,
+            transport_retries=max(transport_attempts - 1, 0),
         )
 
     async def aclose(self) -> None:

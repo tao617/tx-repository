@@ -122,6 +122,8 @@ def summarize(
     review_triggers_from_trace = 0
     max_steps_terminated = 0
     latency_ms = 0.0
+    rate_limit_wait_ms = 0.0
+    transport_retries = 0
     context_records = context_report_paragraphs = context_report_characters = 0
     context_assembled_paragraphs = context_full_report = context_local_truncations = 0
     provider_context_errors = 0
@@ -237,6 +239,8 @@ def summarize(
                     input_tokens += int(payload.get("input_tokens", 0))
                     output_tokens += int(payload.get("output_tokens", 0))
                     latency_ms += float(payload.get("latency_ms", 0))
+                    rate_limit_wait_ms += float(payload.get("rate_limit_wait_ms", 0))
+                    transport_retries += int(payload.get("transport_retries", 0))
                     response_injected = payload.get("long_context_injected", False)
                     if type(response_injected) is not bool:
                         raise ValueError(
@@ -385,6 +389,10 @@ def summarize(
 
     if not math.isfinite(latency_ms) or latency_ms < 0:
         raise ValueError("latency total must be finite and non-negative")
+    if not math.isfinite(rate_limit_wait_ms) or rate_limit_wait_ms < 0:
+        raise ValueError("rate-limit wait total must be finite and non-negative")
+    if transport_retries < 0:
+        raise ValueError("transport retry total must be non-negative")
     invalid = sum(
         1 for prediction in predictions if prediction.get("status") != "completed"
     )
@@ -403,6 +411,8 @@ def summarize(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "latency_ms": round(latency_ms, 3),
+        "rate_limit_wait_ms": round(rate_limit_wait_ms, 3),
+        "transport_retries": transport_retries,
         "exploration_steps": exploration_attempts,
         "finalization_attempts": phase_attempts["finalization"],
         "review_attempts": phase_attempts["review"],

@@ -11,7 +11,9 @@ def test_launcher_supports_iterative_and_nested_configs_with_path_confinement():
     assert '"$command_name" != "iterative-rag"' in text
     assert 'config_path="$(realpath -e -- "$repo_root/configs/$config_name")"' in text
     assert '"$repo_root/configs/"*' in text
-    assert '--config "/app/configs/$config_name"' in text
+    assert '--config "$runtime_config_path"' in text
+    assert '^@effective/([a-f0-9]{64}\\.json)$' in text
+    assert 'config_mount=(--volume "$config_path:$runtime_config_path:ro")' in text
     assert "configuration path cannot contain dot segments" in text
     assert 'planned_run_identity_json="${FINDVER_RUN_IDENTITY_JSON:-}"' in text
     assert 'planned_expected_model_id="${FINDVER_EXPECTED_MODEL_ID:-}"' in text

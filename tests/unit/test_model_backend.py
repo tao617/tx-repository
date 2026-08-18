@@ -106,7 +106,7 @@ async def test_openai_backend_transport_retry_reuses_identical_long_context_payl
         model_context_window_tokens=100_000,
     )
     try:
-        await backend.generate(
+        response = await backend.generate(
             messages,
             GenerationConfig(max_output_tokens=64, prompt_budget_tokens=90_000),
         )
@@ -116,6 +116,7 @@ async def test_openai_backend_transport_retry_reuses_identical_long_context_payl
     assert len(request_bodies) == 2
     assert request_bodies[0] == request_bodies[1]
     assert "<full_report_preview>" in request_bodies[0]["messages"][1]["content"]
+    assert response.transport_retries == 1
 
 
 @pytest.mark.asyncio
@@ -237,6 +238,47 @@ async def test_deepseek_profile_sends_only_explicit_disabled_thinking():
 
 
 @pytest.mark.asyncio
+async def test_dashscope_adapter_sends_only_explicit_disabled_thinking():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["enable_thinking"] is False
+        assert "thinking" not in body
+        assert "extra_body" not in body
+        return httpx.Response(
+            200,
+            json={
+                "id": "qwen-response",
+                "choices": [
+                    {
+                        "message": {"content": "{}", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 2},
+            },
+        )
+
+    backend = OpenAICompatibleBackend(
+        base_url="http://model-gateway:8080/v1",
+        model="fixed-model",
+        timeout_seconds=2,
+        max_retries=0,
+        model_context_window_tokens=100_000,
+        transport_profile="dashscope_openai_chat",
+        thinking_type="disabled",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        response = await backend.generate(
+            [{"role": "user", "content": "claim"}], GenerationConfig()
+        )
+    finally:
+        await backend.aclose()
+    assert response.input_tokens == 12
+    assert response.transport_retries == 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
 async def test_backend_retains_supported_non_stop_finish_reason(finish_reason):
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -339,3 +381,54 @@ async def test_deepseek_profile_rejects_reasoning_content_without_storing_it():
     finally:
         await backend.aclose()
     assert secret_reasoning not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_dashscope_adapter_rejects_reasoning_content_without_storing_it():
+    secret_reasoning = "qwen hidden protocol drift text"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": "{}",
+                            "reasoning_content": secret_reasoning,
+                        },
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
+        )
+
+    backend = OpenAICompatibleBackend(
+        base_url="http://model-gateway:8080/v1",
+        model="fixed-model",
+        timeout_seconds=2,
+        max_retries=0,
+        model_context_window_tokens=100_000,
+        transport_profile="dashscope_openai_chat",
+        thinking_type="disabled",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(ProtocolDriftError) as caught:
+            await backend.generate(
+                [{"role": "user", "content": "claim"}], GenerationConfig()
+            )
+    finally:
+        await backend.aclose()
+    assert secret_reasoning not in str(caught.value)
+
+
+def test_backend_honors_numeric_retry_after_with_a_strict_cap():
+    request = httpx.Request("POST", "https://provider.example/chat/completions")
+    response = httpx.Response(429, request=request, headers={"retry-after": "7.5"})
+    error = httpx.HTTPStatusError("limited", request=request, response=response)
+    assert OpenAICompatibleBackend._retry_after_seconds(error, 0) == 7.5
+
+    response = httpx.Response(429, request=request, headers={"retry-after": "120"})
+    error = httpx.HTTPStatusError("limited", request=request, response=response)
+    assert OpenAICompatibleBackend._retry_after_seconds(error, 0) == 60.0

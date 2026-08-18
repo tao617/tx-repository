@@ -85,6 +85,8 @@ class ModelResponse(BaseModel):
     latency_ms: float = 0
     response_id: str | None = None
     finish_reason: FinishReason = "stop"
+    rate_limit_wait_ms: float = Field(default=0, ge=0)
+    transport_retries: int = Field(default=0, ge=0)
 
 
 class ModelBackend(Protocol):

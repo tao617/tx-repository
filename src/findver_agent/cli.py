@@ -48,9 +48,25 @@ async def execute(args: argparse.Namespace) -> Path:
         if config.backend.thinking is not None
         else "unsupported"
     )
+    configured_rate_limit = (
+        config.backend.rate_limit.model_dump(mode="json")
+        if config.backend.rate_limit is not None
+        else None
+    )
+    identity_rate_limit = (
+        {
+            "requests_per_minute": run_identity.rate_limit_requests_per_minute,
+            "tokens_per_minute": run_identity.rate_limit_tokens_per_minute,
+        }
+        if run_identity is not None
+        and run_identity.rate_limit_requests_per_minute is not None
+        and run_identity.rate_limit_tokens_per_minute is not None
+        else None
+    )
     if run_identity is not None and (
         run_identity.request_profile != config.backend.request_profile
         or run_identity.thinking_mode != configured_thinking_mode
+        or identity_rate_limit != configured_rate_limit
     ):
         raise ValueError(
             "runtime request profile does not match planned run identity"
@@ -61,10 +77,20 @@ async def execute(args: argparse.Namespace) -> Path:
         timeout_seconds=config.backend.timeout_seconds,
         max_retries=config.backend.max_retries,
         model_context_window_tokens=config.backend.model_context_window_tokens,
-        request_profile=config.backend.request_profile,
+        transport_profile=config.backend.transport_profile,
         thinking_type=(
             config.backend.thinking.type
             if config.backend.thinking is not None
+            else None
+        ),
+        rate_limit_requests_per_minute=(
+            config.backend.rate_limit.requests_per_minute
+            if config.backend.rate_limit is not None
+            else None
+        ),
+        rate_limit_tokens_per_minute=(
+            config.backend.rate_limit.tokens_per_minute
+            if config.backend.rate_limit is not None
             else None
         ),
     )

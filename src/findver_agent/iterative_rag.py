@@ -28,8 +28,11 @@ Return exactly one JSON object and no other text:
 Do not submit an answer. Do not output chain-of-thought."""
 
 FINAL_SYSTEM = """You are finalizing a financial fact-verification baseline from already retrieved evidence.
-Return exactly one JSON object and no other text:
-{"action":"submit_answer","arguments":{"label":"entailed or refuted","evidence_ids":[0],"explanation":"concise evidence-based explanation"}}
+Return exactly one JSON object and no other text. The object must set action to
+"submit_answer" and arguments must contain: label set to exactly "entailed" or
+"refuted"; evidence_ids set to a JSON array containing only relevant integer IDs
+copied from Allowed evidence IDs in the user message; and a concise evidence-based
+explanation.
 No other action is allowed. Do not output chain-of-thought."""
 
 
@@ -180,8 +183,15 @@ class IterativeRAGRunner:
                 )
 
         submit = SubmitAnswerSkill(session, task.example_id)
+        previous_finalization_error: str | None = None
         for attempt in range(1, self.config.finalization_steps + 1):
-            messages = self._finalization_messages(task, session, evidence_ids, attempt)
+            messages = self._finalization_messages(
+                task,
+                session,
+                evidence_ids,
+                attempt,
+                previous_error=previous_finalization_error,
+            )
             response = await self._generate(
                 trace,
                 messages,
@@ -189,17 +199,23 @@ class IterativeRAGRunner:
                 attempt=attempt,
             )
             if response is None:
+                previous_finalization_error = (
+                    "The previous finalization attempt did not produce a usable "
+                    "response. Return the required submit_answer object."
+                )
                 continue
             try:
                 action = parse_action(response.content)
             except ActionParseError as error:
+                message = str(error)
                 self._trace_error(
                     trace,
                     phase="finalization",
                     attempt=attempt,
                     kind="parse",
-                    message=str(error),
+                    message=message,
                 )
+                previous_finalization_error = message[:1000]
                 continue
             trace.write(
                 "action",
@@ -210,29 +226,36 @@ class IterativeRAGRunner:
                 },
             )
             if not isinstance(action, SubmitAction):
+                message = "iterative RAG finalization requires submit_answer"
                 self._trace_error(
                     trace,
                     phase="finalization",
                     attempt=attempt,
                     kind="protocol",
-                    message="iterative RAG finalization requires submit_answer",
+                    message=message,
                 )
+                previous_finalization_error = message
                 continue
             try:
                 if not action.arguments.explanation.strip():
                     raise SkillError("submit explanation must be non-empty")
                 unknown = sorted(set(action.arguments.evidence_ids) - set(evidence_ids))
                 if unknown:
-                    raise SkillError("submit evidence_ids must be in retrieved evidence")
+                    raise SkillError(
+                        "submit evidence_ids must be in retrieved evidence: "
+                        + ",".join(str(item) for item in unknown)
+                    )
                 prediction = submit.execute(**action.arguments.model_dump())
             except (SkillError, ValueError, TypeError) as error:
+                message = str(error)
                 self._trace_error(
                     trace,
                     phase="finalization",
                     attempt=attempt,
                     kind="skill",
-                    message=str(error),
+                    message=message,
                 )
+                previous_finalization_error = message[:1000]
                 continue
             trace.write(
                 "question_closed",
@@ -287,8 +310,14 @@ Generate the next targeted query. Every configured round runs; do not submit an 
         session: ReportSession,
         evidence_ids: list[int],
         attempt: int,
+        *,
+        previous_error: str | None = None,
     ) -> list[dict[str, str]]:
         evidence = format_paragraphs(session, evidence_ids)
+        allowed_evidence_ids = (
+            "[" + ",".join(str(item) for item in evidence_ids) + "]"
+        )
+        rejection = previous_error or "none (this is the first finalization attempt)"
         if self.config.prompt_type == "findver_cot_json":
             guidance = (
                 "Check the label, evidence IDs, values, units, and arithmetic internally, "
@@ -301,6 +330,12 @@ Generate the next targeted query. Every configured round runs; do not submit an 
 
 Evidence after exactly {self.config.retrieval_rounds} retrieval rounds:
 {evidence}
+
+Allowed evidence IDs (cite only directly relevant IDs from this exact list):
+{allowed_evidence_ids}
+
+Previous finalization rejection:
+{rejection}
 
 Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}"""
         return [
@@ -366,6 +401,8 @@ Finalization attempt {attempt} of {self.config.finalization_steps}. {guidance}""
                 "latency_ms": response.latency_ms,
                 "response_id": response.response_id,
                 "finish_reason": response.finish_reason,
+                "rate_limit_wait_ms": response.rate_limit_wait_ms,
+                "transport_retries": response.transport_retries,
             },
         )
         return response

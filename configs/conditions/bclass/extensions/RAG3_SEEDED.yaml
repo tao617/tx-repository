@@ -1,0 +1,33 @@
+schema_version: 1
+condition_id: RAG3_SEEDED
+family: extension
+prompt_profile: action_compatible_findver_v2
+run_mode: agent
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+agent:
+  max_steps: 8
+  protocol_version: v2
+  exploration_steps: 6
+  finalization_steps: 2
+  review_steps: 1
+  review_policy: selective
+  max_search_calls: 4
+  max_read_calls: 4
+  max_calculator_calls: 4
+  max_paragraphs_per_read: 12
+  max_total_unique_paragraphs: 30
+  calculator_enabled: true
+  initial_retrieval:
+    enabled: true
+    retrieval_file: /retrieval/findver_embedding3large_top3.json
+    retriever: text-embedding-3-large
+    top_k: 3
+    preload_as_evidence: true
+  cross_question_memory: false
+  scorer_feedback: false
+  concurrency: 32

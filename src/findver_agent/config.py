@@ -7,22 +7,33 @@ from typing import Literal
 from urllib.parse import urlparse
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from findver_agent.model_backends.base import GenerationConfig
+from findver_agent.model_backends.transport_adapters import (
+    TransportProfile,
+    canonical_transport_profile,
+    validate_transport_thinking,
+)
 
 
 RetrieverName = Literal["bm25", "text-embedding-3-large", "contriever-msmarco"]
 RetrievalTopK = Literal[3, 5, 10]
 ProtocolVersion = Literal["v1", "v2"]
 ReviewPolicy = Literal["none", "mandatory", "selective"]
-RequestProfile = Literal["generic_openai", "deepseek_v4_openai"]
-
-
 class ThinkingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["disabled"]
+
+
+class RateLimitConfig(BaseModel):
+    """Plan-bound provider admission limits applied before transport."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    requests_per_minute: int = Field(ge=1, le=1_000_000)
+    tokens_per_minute: int = Field(ge=1, le=100_000_000)
 
 
 class RunConfig(BaseModel):
@@ -33,7 +44,7 @@ class RunConfig(BaseModel):
 
 
 class BackendConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
     type: Literal["openai_compatible"]
     base_url: str
@@ -41,8 +52,12 @@ class BackendConfig(BaseModel):
     timeout_seconds: float = Field(default=120, gt=0, le=600)
     max_retries: int = Field(default=3, ge=0, le=10)
     model_context_window_tokens: int = Field(default=32768, ge=8192, le=1_000_000)
-    request_profile: RequestProfile = "generic_openai"
+    transport_profile: TransportProfile = Field(
+        default="openai_standard",
+        validation_alias=AliasChoices("transport_profile", "request_profile"),
+    )
     thinking: ThinkingConfig | None = None
+    rate_limit: RateLimitConfig | None = None
 
     @model_validator(mode="after")
     def fixed_gateway_only(self) -> "BackendConfig":
@@ -51,16 +66,15 @@ class BackendConfig(BaseModel):
             raise ValueError("runtime backend base_url must target http://model-gateway")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("runtime backend base_url cannot contain credentials or query data")
-        if self.request_profile == "deepseek_v4_openai":
-            if self.thinking is None or self.thinking.type != "disabled":
-                raise ValueError(
-                    "deepseek_v4_openai requires thinking.type=disabled"
-                )
-        elif self.thinking is not None:
-            raise ValueError(
-                "generic_openai does not accept the DeepSeek thinking field"
-            )
+        thinking_mode = self.thinking.type if self.thinking is not None else "unsupported"
+        validate_transport_thinking(self.transport_profile, thinking_mode)
         return self
+
+    @property
+    def request_profile(self) -> TransportProfile:
+        """Compatibility accessor for historical runtime and trace schemas."""
+
+        return self.transport_profile
 
 
 class InitialRetrievalConfig(BaseModel):
@@ -217,10 +231,11 @@ class AppConfig(BaseModel):
                 raise ValueError(f"{name} configuration is not valid in {self.run.mode} mode")
         if (
             self.run.backend_kind in {"local", "mock"}
-            and self.backend.request_profile != "generic_openai"
+            and canonical_transport_profile(self.backend.transport_profile)
+            != "openai_standard"
         ):
             raise ValueError(
-                "local and mock backends must use the generic_openai request profile"
+                "local and mock backends must use the openai_standard transport profile"
             )
         return self
 

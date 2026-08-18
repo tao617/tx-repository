@@ -1,10 +1,19 @@
 from pathlib import Path
 
+import pytest
+
 from findver_agent.config import load_config
+from findver_agent.experiment_config import (
+    compose_effective_config,
+    load_experiment_condition,
+    load_model_deployment,
+)
 
 
 ROOT = Path(__file__).parents[2]
 BCLASS = ROOT / "configs" / "bclass"
+CONDITION_ROOT = ROOT / "configs" / "conditions" / "bclass"
+DEPLOYMENT_ROOT = ROOT / "configs" / "deployments"
 CONDITIONS = {
     "BLC_FINDVER_COT": "baseline",
     "BRAG10_FINDVER_COT": "baseline",
@@ -20,32 +29,49 @@ def method_section(config):
     return config.baseline or config.agent or config.iterative_rag
 
 
-def test_api_and_local_bclass_configs_are_paired_and_loadable():
+def test_canonical_conditions_compose_with_deployments_without_method_copies():
+    deepseek = load_model_deployment(DEPLOYMENT_ROOT / "deepseek_v4_flash_api.yaml")
+    qwen = load_model_deployment(DEPLOYMENT_ROOT / "qwen3_5_27b_dashscope.yaml")
     for condition_id, mode in CONDITIONS.items():
-        api = load_config(BCLASS / "api" / f"{condition_id}.yaml")
-        local = load_config(BCLASS / "local" / f"{condition_id}.yaml")
+        condition = load_experiment_condition(
+            CONDITION_ROOT / "main" / f"{condition_id}.yaml"
+        )
+        deepseek_config = compose_effective_config(condition, deepseek)
+        qwen_config = compose_effective_config(condition, qwen)
 
-        assert api.run.mode == local.run.mode == mode
-        assert api.run.backend_kind == "api"
-        assert local.run.backend_kind == "local"
-        assert api.backend.model == "external-model-name"
-        assert local.backend.model == "local-small-model"
-        assert api.backend.request_profile == "deepseek_v4_openai"
-        assert api.backend.thinking is not None
-        assert api.backend.thinking.type == "disabled"
-        assert local.backend.request_profile == "generic_openai"
-        assert local.backend.thinking is None
-        assert api.backend.model_context_window_tokens == local.backend.model_context_window_tokens == 100_000
-        assert api.generation == local.generation
-        assert api.generation.model_dump() == {
+        assert deepseek_config.run.mode == qwen_config.run.mode == mode
+        assert deepseek_config.run.backend_kind == qwen_config.run.backend_kind == "api"
+        assert deepseek_config.backend.transport_profile == "deepseek_openai_chat"
+        assert qwen_config.backend.transport_profile == "dashscope_openai_chat"
+        assert deepseek_config.backend.thinking is not None
+        assert qwen_config.backend.thinking is not None
+        assert deepseek_config.backend.rate_limit is None
+        assert qwen_config.backend.rate_limit is not None
+        assert qwen_config.backend.rate_limit.model_dump() == {
+            "requests_per_minute": 540,
+            "tokens_per_minute": 850_000,
+        }
+        assert deepseek_config.backend.model_context_window_tokens == 100_000
+        assert qwen_config.backend.model_context_window_tokens == 100_000
+        assert deepseek_config.generation == qwen_config.generation
+        assert deepseek_config.generation.model_dump() == {
             "temperature": 0.0,
             "top_p": 1.0,
             "seed": 7,
             "max_output_tokens": 1024,
             "prompt_budget_tokens": 32768,
         }
-        assert method_section(api) == method_section(local)
-        assert method_section(api).concurrency == 32
+        assert method_section(deepseek_config) == method_section(qwen_config)
+        assert method_section(deepseek_config).concurrency == 32
+
+
+def test_historical_deepseek_and_local_config_paths_remain_loadable():
+    for condition_id, mode in CONDITIONS.items():
+        api = load_config(BCLASS / "api" / f"{condition_id}.yaml")
+        local = load_config(BCLASS / "local" / f"{condition_id}.yaml")
+        assert api.run.mode == local.run.mode == mode
+        assert api.backend.request_profile == "deepseek_v4_openai"
+        assert local.backend.request_profile == "generic_openai"
 
 
 def test_main_bclass_method_settings_match_the_frozen_design():
@@ -147,6 +173,34 @@ def test_budget4_sensitivity_changes_only_exploration_steps():
     main_method.pop("exploration_steps")
     budget4_method.pop("exploration_steps")
     assert main_method == budget4_method
+
+
+@pytest.mark.parametrize(
+    ("condition", "reference"),
+    [
+        ("RAG3_SEEDED", "RAG3_SEEDED"),
+        ("RAG5_SEEDED", "RAG5_SEEDED"),
+        ("BITER2_RAG10", "BITER2_RAG10"),
+        ("M2_BUDGET4", "M2_BUDGET4"),
+    ],
+)
+def test_canonical_extensions_compose_with_both_api_dialects(condition, reference):
+    del reference
+    condition_config = load_experiment_condition(
+        CONDITION_ROOT / "extensions" / f"{condition}.yaml"
+    )
+    deepseek = compose_effective_config(
+        condition_config,
+        load_model_deployment(DEPLOYMENT_ROOT / "deepseek_v4_flash_api.yaml"),
+    )
+    qwen = compose_effective_config(
+        condition_config,
+        load_model_deployment(DEPLOYMENT_ROOT / "qwen3_5_27b_dashscope.yaml"),
+    )
+    assert deepseek.generation == qwen.generation
+    assert method_section(deepseek) == method_section(qwen)
+    assert qwen.backend.transport_profile == "dashscope_openai_chat"
+    assert qwen.backend.rate_limit is not None
 
 
 def test_lc_agent_firstpass_changes_only_the_scratch_initial_context():

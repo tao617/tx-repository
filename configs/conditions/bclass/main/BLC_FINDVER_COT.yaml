@@ -1,0 +1,16 @@
+schema_version: 1
+condition_id: BLC_FINDVER_COT
+family: main
+prompt_profile: findver_cot_json
+run_mode: baseline
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+baseline:
+  prompt_type: findver_cot_json
+  retrieval: none
+  top_k: 10
+  concurrency: 32

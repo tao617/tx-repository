@@ -122,6 +122,80 @@ def test_gateway_generic_request_does_not_invent_deepseek_thinking():
     assert response.status_code == 200
 
 
+def test_gateway_forwards_only_disabled_qwen_thinking():
+    def upstream(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["enable_thinking"] is False
+        assert "thinking" not in payload
+        return httpx.Response(200, json={"choices": []})
+
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="qwen3.5-27b",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(settings, transport=httpx.MockTransport(upstream))
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "claim"}],
+                "enable_thinking": False,
+            },
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("enable_thinking", [None, True, "false", 0])
+def test_gateway_rejects_non_false_qwen_thinking(enable_thinking):
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="qwen3.5-27b",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(
+            settings,
+            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+        )
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "claim"}],
+                "enable_thinking": enable_thinking,
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_gateway_rejects_mixed_provider_thinking_fields():
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="provider-model",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(
+            settings,
+            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+        )
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "claim"}],
+                "thinking": {"type": "disabled"},
+                "enable_thinking": False,
+            },
+        )
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "url",
     ["file:///private/gold.jsonl", "http://user:secret@host/v1", "https://host/v1?target=other"],

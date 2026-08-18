@@ -60,7 +60,13 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
             },
             {
                 "event": "model_response",
-                "payload": {"input_tokens": 100, "output_tokens": 20, "latency_ms": 50.5},
+                "payload": {
+                    "input_tokens": 100,
+                    "output_tokens": 20,
+                    "latency_ms": 50.5,
+                    "rate_limit_wait_ms": 125.0,
+                    "transport_retries": 1,
+                },
             },
             {"event": "action", "payload": {"action": "search_report"}},
             {"event": "model_request", "payload": {}},
@@ -100,6 +106,8 @@ def test_summary_contains_only_aggregate_efficiency_metrics(tmp_path):
     assert summary["totals"]["steps"] == 2
     assert summary["totals"]["model_calls"] == 2
     assert summary["totals"]["input_tokens"] == 180
+    assert summary["totals"]["rate_limit_wait_ms"] == 125.0
+    assert summary["totals"]["transport_retries"] == 1
     assert summary["totals"]["action_attempts"] == {
         "search_report": 1,
         "submit_answer": 1,

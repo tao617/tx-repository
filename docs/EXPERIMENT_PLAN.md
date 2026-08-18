@@ -15,7 +15,9 @@ The existing B0/B1/B2/B3/A0/A1/A2 API results and legacy API/local templates rem
 
 ## B-class main matrix
 
-New configs are isolated under `configs/bclass/api/` and `configs/bclass/local/`.
+Historical DeepSeek and Local configs remain frozen under `configs/bclass/api/` and
+`configs/bclass/local/`. New cross-model plans use the single model-independent set
+under `configs/conditions/bclass/main/`; deployments are composed by the planner.
 
 | ID | Method question | Seed | Controller/budget/review |
 |---|---|---|---|
@@ -27,7 +29,7 @@ New configs are isolated under `configs/bclass/api/` and `configs/bclass/local/`
 | `M1_BUDGET_AWARE` | staged budget/controller contribution | embedding top-10 | v2 6/2/0 no review |
 | `M2_SELECTIVE_REVIEW` | complete proposed method | embedding top-10 | v2 6/2/1 selective |
 
-Top-k ablations `RAG3_SEEDED`, `RAG5_SEEDED`, and `RAG10_SEEDED` are one-primary-model `dev_feedback` studies only. Each uses its independent official `text-embedding-3-large` cutoff artifact from FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`; top-3/top-5 are not derived by truncating the paragraph-ID-sorted top-10 file. The six-step M2 reference used more than four Exploration calls on 107/700 examples (15.29%), so one Model-A `M2_BUDGET4` sensitivity row is authorized. Only 39/700 examples (5.57%) entered Finalization after six Exploration calls and none reached a max-step termination, so budget 8 is not authorized. The budget-4 config changes only `exploration_steps` from 6 to 4.
+Top-k ablations `RAG3_SEEDED`, `RAG5_SEEDED`, and `RAG10_SEEDED` originated as one-primary-model `dev_feedback` studies. Each uses its independent official `text-embedding-3-large` cutoff artifact from FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`; top-3/top-5 are not derived by truncating the paragraph-ID-sorted top-10 file. The six-step M2 reference used more than four Exploration calls on 107/700 examples (15.29%), so one Model-A `M2_BUDGET4` sensitivity row was authorized. Only 39/700 examples (5.57%) entered Finalization after six Exploration calls and none reached a max-step termination, so budget 8 is not authorized. The budget-4 config changes only `exploration_steps` from 6 to 4. ADR 0006 additionally authorizes implementation and bounded smoke verification of Model-B Qwen parity for the four canonical extension conditions `RAG3_SEEDED`, `RAG5_SEEDED`, `BITER2_RAG10`, and `M2_BUDGET4`. This is a fixed cross-model replication, not another tuning search; 700-example execution remains unauthorized.
 
 ### Post-freeze full-report warm-start extension
 
@@ -39,11 +41,44 @@ Before a separately authorized paid run, an exact-prompt offline preflight must 
 
 ## Pairing and frozen inputs
 
-`scripts/prepare_bclass_matrix.py` requires Model A's explicit ID, backend, and context capacity. Model B is an all-or-nothing optional group: omitting all three fields creates seven Model A rows, while supplying all three preserves the 14-row distinct-model matrix. Placeholder Model B values and partial groups fail closed. A single-model plan receives a deterministic matrix ID distinct from the later paired plan, so result directories and resume identities cannot mix. The schema-v2 plan binds task and retrieval SHA256, per-condition prompt profile, generation settings, request profile, thinking mode, concurrency, method settings, and maximum-call budget. A new untracked `dev_feedback` Canary manifest is allowed only when its task path and SHA256 are explicit. The tracked manifest remains non-executing by design.
+### Qwen3.5-27B API Model B
 
-Formal rows use only `scripts/run_bclass_plan.py`. The executor still starts exactly one row and binds it to the effective upstream model ID, Runtime alias, clean frozen commit, config/task/retrieval hashes, backend, run ID, context capacity, request profile, thinking semantics, and configured concurrency. The same immutable identity is required on resume and copied into the sealed manifest. Generic direct launches remain builder smoke or legacy paths, not formal B-class provenance.
+ADR 0006 selects deployment `qwen3_5_27b_dashscope` with exact model ID
+`qwen3.5-27b`, the closed `dashscope_openai_chat` transport profile, disabled
+thinking, a 100000-token capacity, and provider admission at 540 RPM and 850000
+estimated TPM. The adapter maps disabled thinking to top-level
+`enable_thinking=false` and rejects nonempty reasoning content. Qwen native JSON mode,
+function calling, tools, provider retrieval, and per-model prompt/parser changes are
+excluded. `LC_AGENT_FIRSTPASS` remains Model-A-only under ADR 0005.
 
-Initial B-class templates use temperature 0, top-p 1, seed 7, 1024 output tokens, a 32768-token prompt-construction budget, a hash-bound 100000-token model context capacity, and question concurrency 32. API rows explicitly use `deepseek_v4_openai` with `thinking.type=disabled`; Local rows use `generic_openai` without the DeepSeek field. Plan preparation and formal execution reject capacity, concurrency, profile, or thinking drift. The first iterative reference uses three retrieval rounds plus two finalization attempts. Development aggregates may determine whether a different fixed round count is closer to the Agent mean before the configuration freeze; no per-question adaptive budget or online token matching is allowed. The 1024 output limit stays fixed until finish-reason aggregates justify a protocol-wide change.
+`scripts/prepare_bclass_matrix.py` accepts one required deployment YAML and one optional
+second deployment YAML. One deployment creates seven rows; two distinct deployments
+create fourteen rows. The schema-v3 plan binds each condition file and SHA256, each
+deployment file and SHA256, and the canonical serialized final Runtime config and
+SHA256, in addition to task, retrieval, commit, run identity, concurrency, and call
+budget. The same seven condition hashes appear in both model slots. A new model using
+an existing API dialect therefore needs only one deployment YAML. A new untracked
+`dev_feedback` Canary manifest is allowed only when its task path and SHA256 are explicit.
+The tracked manifest remains non-executing by design.
+
+Formal schema-v3 rows use only `scripts/run_bclass_plan.py`. The executor recomposes
+condition plus deployment, checks all three configuration bindings, materializes the
+credential-free effective config, and mounts only that file read-only. It contains no
+model-specific config-directory selection. Historical schema-v2 DeepSeek plans and
+`configs/bclass/api`, `configs/bclass/local`, and `configs/bclass/ablations` remain on a
+compatibility branch; existing results are never rewritten. The immutable identity is
+required on resume and copied into the sealed manifest.
+
+Initial B-class conditions use temperature 0, top-p 1, seed 7, 1024 output tokens, a
+32768-token prompt-construction budget, and question concurrency 32. The DeepSeek
+deployment uses `deepseek_openai_chat`; the Qwen deployment uses
+`dashscope_openai_chat`; both declare disabled thinking while their closed adapters
+generate only their whitelisted provider field. RPM/TPM are deployment data, not API
+dialect behavior. No arbitrary `extra_body` exists. Plan preparation and formal
+execution reject capacity, concurrency, transport, thinking, rate-limit, source-hash,
+or effective-config drift. The first iterative reference remains three retrieval rounds
+plus two finalization attempts; no per-question adaptive budget or online token matching
+is allowed.
 
 ## Metrics and statistical analysis
 
@@ -59,10 +94,10 @@ Iterate only on `dev_feedback`; select using aggregate-only `dev_holdout`; freez
 
 | Split | Model A | Model B | Status |
 |---|---|---|---|
-| `dev_feedback` | seven main conditions, Top-3, Top-5, BITER2, and budget-4 complete; LC Agent implementation authorized but unrun | pending authorization | Existing Model A results frozen; LC extension is post-hoc and execution is unauthorized |
+| `dev_feedback` | seven main conditions, Top-3, Top-5, BITER2, budget-4, and LC Agent complete | composable Qwen API deployment and bounded smoke authorized; 700-example rows unrun | Existing Model A results frozen; Qwen formal execution requires a separately prepared plan and authorization |
 | `dev_holdout` | pending private split/hash | pending private split/hash | not run |
 | `final_hidden` | run once after freeze | run once after freeze | not run |
 
-No paid `LC_AGENT_FIRSTPASS`, other Model-A development extension, second-model formal, holdout, or final-hidden run is authorized by this plan. ADR 0005 authorizes only LC implementation, offline tests, checkpointing, and preparation of a non-executing hash-bound plan.
+No 700-example second-model formal, holdout, or final-hidden run is authorized by this plan. ADR 0006 authorizes only Qwen API implementation, offline tests, a direct contract probe, and a small Gold-free Runtime smoke before a new non-executing hash-bound plan is reviewed. Qwen `LC_AGENT_FIRSTPASS` remains unauthorized.
 
 The completed BITER calibration found 75.86% accuracy at two rounds versus 76.57% at three, a paired difference of -0.71 percentage points with a 95% interval of [-2.57, +1.14]. BITER2 averaged 3.003 calls versus M2 at 3.260 and is the frozen budget-aligned fixed-loop secondary comparator. No further BITER round tuning is permitted. The completed budget-4 sensitivity averaged 3.026 calls and 81.29% accuracy versus M2 at 3.260 calls and 82.29%; it is retained as an exploratory lower-cost point. Budget 8 is not authorized. The complete comparison protocol is frozen before any aggregate-only holdout or hidden evaluation.

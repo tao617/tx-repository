@@ -110,14 +110,32 @@ def test_long_context_rejects_preloading_or_unknown_scope():
 
 def test_deepseek_profile_requires_explicit_disabled_thinking():
     raw = agent_config()
-    raw["backend"]["request_profile"] = "deepseek_v4_openai"
-    with pytest.raises(ValidationError, match="thinking.type=disabled"):
+    raw["backend"]["transport_profile"] = "deepseek_openai_chat"
+    with pytest.raises(ValidationError, match="thinking_mode=disabled"):
         AppConfig.model_validate(raw)
 
     raw["backend"]["thinking"] = {"type": "disabled"}
     config = AppConfig.model_validate(raw)
     assert config.backend.thinking is not None
     assert config.backend.thinking.type == "disabled"
+
+
+def test_dashscope_profile_requires_disabled_thinking_and_accepts_deployment_rate_limit():
+    raw = agent_config()
+    raw["backend"]["transport_profile"] = "dashscope_openai_chat"
+    with pytest.raises(ValidationError, match="thinking_mode=disabled"):
+        AppConfig.model_validate(raw)
+
+    raw["backend"]["thinking"] = {"type": "disabled"}
+    raw["backend"]["rate_limit"] = {
+        "requests_per_minute": 540,
+        "tokens_per_minute": 850_000,
+    }
+    config = AppConfig.model_validate(raw)
+    assert config.backend.transport_profile == "dashscope_openai_chat"
+    assert config.backend.thinking is not None
+    assert config.backend.rate_limit is not None
+    assert config.backend.rate_limit.tokens_per_minute == 850_000
 
 
 @pytest.mark.parametrize(
@@ -140,10 +158,19 @@ def test_deepseek_profile_rejects_enabled_unknown_or_extended_thinking(thinking)
 def test_generic_profile_rejects_deepseek_fields_and_arbitrary_extensions():
     raw = agent_config()
     raw["backend"]["thinking"] = {"type": "disabled"}
-    with pytest.raises(ValidationError, match="generic_openai"):
+    with pytest.raises(ValidationError, match="openai_standard"):
         AppConfig.model_validate(raw)
 
     raw = agent_config()
     raw["backend"]["extra_body"] = {"thinking": {"type": "disabled"}}
     with pytest.raises(ValidationError):
         AppConfig.model_validate(raw)
+
+    raw = agent_config()
+    raw["backend"]["rate_limit"] = {
+        "requests_per_minute": 1,
+        "tokens_per_minute": 1,
+    }
+    config = AppConfig.model_validate(raw)
+    assert config.backend.rate_limit is not None
+    assert config.backend.rate_limit.requests_per_minute == 1

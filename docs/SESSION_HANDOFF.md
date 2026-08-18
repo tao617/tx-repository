@@ -2,10 +2,19 @@
 
 ## Current state
 
-Phase `lc-agent-firstpass-dev-feedback-scored` completed: The sealed LC_AGENT_FIRSTPASS dev_feedback run was handed one-way to the independent networkless Private Scorer, aggregate-scored, compared pairwise with A_SCRATCH, M2, and BLC, and analyzed for final evidence without running holdout or hidden evaluation.
+Phase `qwen3-5-formal-parity-scored` completed: Completed, sealed, verified, and privately scored all seven Qwen main rows plus four frozen extensions on 700 dev_feedback examples each; produced same-condition Model-A comparisons, frozen within-Qwen comparisons, aggregate evidence analyses, and the Qwen Model-B report without using holdout or hidden data.
 
-- Git commit at checkpoint start: `31113a1494b72569e6651d381672302872e7c25f`
-- Changed files: 0
+- Git commit at checkpoint start: `c2d3073ee0ee3de06476ff61869ec9ad08e6fb3c`
+- Changed files: 1
+- Aggregate report: `docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md`
+- Qwen M2 scored 572/700 (81.71%) versus Model A M2 at 576/700
+  (82.29%): -0.57 percentage points, paired 95% CI [-3.43, +2.29], exact
+  p=0.772989.
+- Qwen BLC and BRAG10 are immutable transport-degraded observations with 305
+  and 205 failed model responses. Do not retry or tune them without a separate
+  authorization.
+- Private Scorer commit `6ec34204193dce0e2ed7d8644c40b31d3b5598bc`
+  accepted the composable transport identity; it did not change scoring logic.
 
 ## Diff summary
 
@@ -15,10 +24,7 @@ No tracked-file diff; see files_changed for untracked files.
 
 ## Tests passed
 
-- Private Scorer final-aggregate mode scored 700 examples with 582 correct, 697 valid, and accuracy 0.831429; no per-example feedback artifact was produced.
-- Three 700-example paired comparisons completed with 10,000 bootstrap resamples and exact two-sided McNemar tests.
-- The no-initial-retrieval evidence profile completed aggregate-only analysis after 28 Scorer tests, all Compose profile checks, schema validation, and Private Scorer commit d665d1f.
-- Agent and Scorer containers were absent after scoring, both repositories were clean, and no holdout or hidden input was used.
+- 270 Agent tests, compileall, launcher shell syntax, git diff checks, 30 Private Scorer tests, all three networkless Scorer Compose profiles, 11 sealed-submission verifications, byte-for-byte private archive checks, empty scorer inbox, and empty Agent/Scorer container state passed.
 
 ## Tests failed or unavailable
 
@@ -40,4 +46,4 @@ pytest -q
 
 ## Next action
 
-Keep M2 as the frozen primary candidate and stop. LC_AGENT_FIRSTPASS does not enter holdout because its +0.857 percentage-point accuracy difference versus M2 is below the frozen +1.0-point promotion threshold; await separate authorization for any later work.
+Keep dev_holdout and final_hidden unopened; require a new frozen plan and explicit authorization for either, and treat any Qwen one-call transport investigation as a separate experiment.

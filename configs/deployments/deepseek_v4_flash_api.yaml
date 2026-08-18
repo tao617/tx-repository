@@ -1,0 +1,11 @@
+schema_version: 1
+deployment_id: deepseek_v4_flash_api
+model_id: deepseek-v4-flash
+backend_kind: api
+model_alias: external-model-name
+base_url: http://model-gateway:8080/v1
+timeout_seconds: 120
+max_retries: 3
+model_context_window_tokens: 100000
+transport_profile: deepseek_openai_chat
+thinking_mode: disabled

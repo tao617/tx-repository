@@ -1,0 +1,38 @@
+schema_version: 2
+matrix_id: findver-bclass-dev-feedback-v2
+purpose: composable-bclass-method-development-template
+evaluation_split: dev_feedback
+execution_authorized: false
+code_commit: auto
+task:
+  path: runtime_data/public/tasks.jsonl
+  sha256: f51d29db5200c7166f74c9f7920ad8557d5db46a3b700f49513ef2932d1da0f5
+retrieval_artifacts:
+  top3:
+    path: runtime_data/retrieval/findver_embedding3large_top3.json
+    sha256: 4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7
+    retriever: text-embedding-3-large
+    top_k: 3
+  top5:
+    path: runtime_data/retrieval/findver_embedding3large_top5.json
+    sha256: 78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d
+    retriever: text-embedding-3-large
+    top_k: 5
+  top10:
+    path: runtime_data/retrieval/findver_embedding3large_top10.json
+    sha256: 2c29496e6762b3df2d51b01c246800b0512d396090785199d414703dbbf752e5
+    retriever: text-embedding-3-large
+    top_k: 10
+conditions:
+  - configs/conditions/bclass/main/BLC_FINDVER_COT.yaml
+  - configs/conditions/bclass/main/BRAG10_FINDVER_COT.yaml
+  - configs/conditions/bclass/main/BITER_RAG10.yaml
+  - configs/conditions/bclass/main/A_SCRATCH.yaml
+  - configs/conditions/bclass/main/M0_RAG10_SEEDED.yaml
+  - configs/conditions/bclass/main/M1_BUDGET_AWARE.yaml
+  - configs/conditions/bclass/main/M2_SELECTIVE_REVIEW.yaml
+extensions:
+  - configs/conditions/bclass/extensions/RAG3_SEEDED.yaml
+  - configs/conditions/bclass/extensions/RAG5_SEEDED.yaml
+  - configs/conditions/bclass/extensions/BITER2_RAG10.yaml
+  - configs/conditions/bclass/extensions/M2_BUDGET4.yaml
