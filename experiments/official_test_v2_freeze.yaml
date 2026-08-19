@@ -1,0 +1,128 @@
+schema_version: 1
+freeze_id: findver-official-test-v2
+status: frozen_not_prepared
+execution_authorized: false
+freeze_ref: findver-official-test-v2-freeze
+legacy_plan:
+  path: docs/EXPERIMENT_PLAN.md
+  preserved: true
+contract_changed: false
+data:
+  source_repo: yilunzhao/FinDVer
+  source_commit: e8bb237def4ce555a606a45edba22666e31df248
+  split: official_test
+  expected_examples: 1700
+  public_task_fields:
+    - example_id
+    - statement
+    - report
+  artifact_binding_status: pending_separate_input_authorization
+model:
+  slot: model_a
+  deployment: configs/deployments/deepseek_v4_flash_api.yaml
+  deployment_sha256: 60f89dbb49245261dc310bf41cc911c2e36c3bcad95fe1ad35dfb76c51bf2672
+  model_id: deepseek-v4-flash
+  transport_profile: deepseek_openai_chat
+  thinking_mode: disabled
+  model_context_window_tokens: 100000
+  max_transport_retries: 3
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+  concurrency: 32
+retrieval:
+  embedding:
+    retriever: text-embedding-3-large
+    input_top_k: 10
+  bm25:
+    retriever: bm25
+    input_top_k: 10
+  hybrid:
+    retriever: hybrid-rrf
+    sources:
+      - text-embedding-3-large
+      - bm25
+    input_top_k: 10
+    rrf_k: 60
+    deduplicate_by: paragraph_id
+    output_top_k: 10
+    tie_break:
+      - best_source_rank
+      - worst_source_rank
+      - paragraph_id
+    output_order: document
+conditions:
+  - order: 1
+    condition_id: BRAG10_FINDVER_COT
+    config: configs/conditions/bclass/main/BRAG10_FINDVER_COT.yaml
+    config_sha256: 9b6eb3bb90d93809600146faa3d43c0c62808656495e00fdd1dda1956ffd95b8
+  - order: 2
+    condition_id: BBM25_10
+    config: configs/conditions/bclass/controls/BBM25_10.yaml
+    config_sha256: 9ed227b29526fe6c5dd1ce1fe346b1a5480726d90b5f3c77d63ea4f1d5318dfb
+  - order: 3
+    condition_id: BHYBRID_RRF10
+    config: configs/conditions/bclass/controls/BHYBRID_RRF10.yaml
+    config_sha256: 0b05e62ead4a6e6364e305a37ce336836ef69a562cc243b0f1d1b9d8dbd4fc1f
+  - order: 4
+    condition_id: BLC_FINDVER_COT
+    config: configs/conditions/bclass/main/BLC_FINDVER_COT.yaml
+    config_sha256: d43e53bb3f575f478dccbb8281efdafc3eb9f4eebafe7966f14f20f57c1802a3
+  - order: 5
+    condition_id: M2_SELECTIVE_REVIEW
+    config: configs/conditions/bclass/main/M2_SELECTIVE_REVIEW.yaml
+    config_sha256: 591aa607ba313ed0996323200d198f0675bccc0fcc43d39f6e5a83329b995c94
+scorer:
+  private_commit: 6ec34204193dce0e2ed7d8644c40b31d3b5598bc
+  accuracy_denominator: all_1700_examples
+  invalid_and_missing_are_wrong: true
+  paired_bootstrap:
+    resamples: 10000
+    seed: 20260817
+    confidence_level: 0.95
+  mcnemar:
+    method: two_sided_exact_binomial
+    alpha: 0.05
+hypotheses:
+  primary:
+    candidate: M2_SELECTIVE_REVIEW
+    reference: BRAG10_FINDVER_COT
+    endpoint: accuracy
+  key_secondary:
+    candidate: M2_SELECTIVE_REVIEW
+    reference: BHYBRID_RRF10
+    endpoint: accuracy
+  descriptive:
+    - candidate: M2_SELECTIVE_REVIEW
+      reference: BLC_FINDVER_COT
+      endpoint: accuracy
+    - candidate: M2_SELECTIVE_REVIEW
+      reference: BBM25_10
+      endpoint: accuracy
+supportive_evidence_endpoints:
+  - evidence_precision
+  - evidence_recall
+  - evidence_f1
+  - seed_recall
+  - final_ledger_recall
+  - evidence_recovery_rate
+execution_gates:
+  official_input_access_authorized: false
+  artifact_hashes_bound: false
+  formal_plans_prepared: false
+  api_calls_authorized: false
+  score_only_after_all_rows_sealed: true
+excluded_conditions:
+  - A_SCRATCH
+  - M0_RAG10_SEEDED
+  - M1_BUDGET_AWARE
+  - BITER_RAG10
+  - BITER2_RAG10
+  - RAG3_SEEDED
+  - RAG5_SEEDED
+  - M2_BUDGET4
+  - LC_AGENT_FIRSTPASS
+optional_model_b_official_test: outside_this_freeze

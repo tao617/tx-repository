@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: public-ci-retrieval-control-fixture-fix
-current_goal: Preserve the completed Model-A retrieval controls and Model-B stability
-  evidence; await explicit authorization for one V2 freeze plan/ADR without opening
-  or executing the official test.
-last_completed_phase: public-ci-retrieval-control-fixture-fix
-last_git_commit: ffa92edecf9228f6c4d3842b4fb0d97aac8e0999
+current_phase: official-test-v2-freeze-recorded
+current_goal: Preserve the completed evidence and official-test V2 freeze; await
+  explicit authorization for Gold-free input binding without model calls, then require
+  separate approval before any official-test API execution.
+last_completed_phase: official-test-v2-freeze-recorded
+last_git_commit: 2b4f980e48edc3c2439f3375eed0ea48718f544a
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -306,8 +306,17 @@ decisions:
   access and project-contract changes remain unauthorized.
 - Public retrieval-control plan tests use the tracked Gold-free minimal task fixture
   in an isolated temporary release tree; formal task paths and hashes remain unchanged.
+- Freeze official-test V2 to Model A and exactly BRAG10, BBM25_10, BHYBRID_RRF10,
+  BLC, and M2, with M2 versus BRAG10 as the sole primary accuracy comparison and M2
+  versus Hybrid as the key secondary control.
+- Use immutable ref findver-official-test-v2-freeze, FinDVer data commit e8bb237,
+  deepseek-v4-flash, the frozen generation and RRF settings, and Private Scorer commit
+  6ec342; keep execution unauthorized until separate input-binding and API approvals.
+- Preserve the historical V1 plan and project contract without modification.
 files_changed:
-- tests/unit/test_retrieval_controls.py
+- docs/OFFICIAL_TEST_V2_FREEZE_PLAN.md
+- docs/adr/0009-official-test-v2-confirmation.md
+- experiments/official_test_v2_freeze.yaml
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -580,6 +589,10 @@ tests_passed:
 - 8 focused retrieval-control tests passed.
 - 289 full Agent tests passed with one existing Starlette deprecation warning.
 - Python diff checks passed.
+- The V2 YAML parsed and validated exactly five ordered conditions, frozen deployment/condition
+  hashes, a 1,700-example population, and all execution gates false.
+- Git diff verification confirmed docs/PROJECT_CONTRACT.md and the historical docs/EXPERIMENT_PLAN.md
+  are unchanged.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -610,8 +623,12 @@ known_issues:
 - Model-B BLC required 410 recovered transient retries and produced 11 length-finished
   invalid predictions; it still completed 700/700 with 98.43 percent valid output
   and zero terminal transport failures.
+- Exact official task, report, embedding, BM25, and Hybrid artifact hashes are intentionally
+  unbound; this blocks plan preparation and execution until separately authorized
+  input access.
 next_actions:
-- Publish the focused CI fixture fix to main and confirm all GitHub Actions checks
-  pass.
+- Await explicit authorization for the Gold-free official-input binding preflight;
+  after exact 1,700-task and retrieval hashes plus five non-executing plans are reviewed,
+  request separate approval before any Model-A API call.
 blocked_items: []
-last_updated: '2026-08-19T19:57:59+08:00'
+last_updated: '2026-08-19T20:13:38+08:00'
