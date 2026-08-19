@@ -17,7 +17,8 @@ Do not open `dev_holdout` or official `test` data.
 
 ## Frozen implementation
 
-- Code commit: `f173bcb6f50cabcf3e433958aa680a7319cf9b5b`
+- Stability implementation commit: `f173bcb6f50cabcf3e433958aa680a7319cf9b5b`
+- Execution commit: the exact clean `HEAD` embedded in each regenerated plan
 - Model ID: `qwen3.5-27b`
 - Prompt, method settings, retrieval artifacts, generation settings, strict parser, and
   scorer: unchanged
@@ -31,14 +32,16 @@ Do not open `dev_holdout` or official `test` data.
 
 ## Bound plans
 
-| Selected conditions | Plan | SHA256 |
-|---|---|---|
-| BLC, BRAG10, M2 | `runs/plans/findver-model-b-stability-dev-v1.plan.json` | `2f0a8ab72a6ca818c337df12fc61a4fb611bcba651dbd414be8de85116350cb5` |
-| BBM25_10 | `runs/plans/findver-model-b-dev-bm25-stable-v1.plan.json` | `b2807042131ec4e0578652cb79e633fa0a076dca97ee6193b090f4c1b089f7ae` |
-| BHYBRID_RRF10 | `runs/plans/findver-model-b-dev-hybrid-rrf60-stable-v1.plan.json` | `4e72110cd3e47f4b267950594f7f4bfe1de89189d713c21007702dcf37a1e2f3` |
+| Selected conditions | Plan |
+|---|---|
+| BLC, BRAG10, M2 | `runs/plans/findver-model-b-stability-dev-v1.plan.json` |
+| BBM25_10 | `runs/plans/findver-model-b-dev-bm25-stable-v1.plan.json` |
+| BHYBRID_RRF10 | `runs/plans/findver-model-b-dev-hybrid-rrf60-stable-v1.plan.json` |
 
 The first plan contains additional unselected rows because the canonical main-matrix
 planner validates all seven methods. Their presence does not authorize execution.
+Because execution requires an exact clean-HEAD match, regenerate these ignored plan
+files after the final tracked planning commit and verify their SHA256 values before use.
 
 ## Execution gate
 
