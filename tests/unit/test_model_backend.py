@@ -279,6 +279,60 @@ async def test_dashscope_adapter_sends_only_explicit_disabled_thinking():
 
 
 @pytest.mark.asyncio
+async def test_dashscope_adapter_can_require_one_json_object():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["enable_thinking"] is False
+        assert body["response_format"] == {"type": "json_object"}
+        return httpx.Response(
+            200,
+            json={
+                "id": "qwen-json-response",
+                "choices": [
+                    {
+                        "message": {"content": "{}", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 2},
+            },
+        )
+
+    backend = OpenAICompatibleBackend(
+        base_url="http://model-gateway:8080/v1",
+        model="fixed-model",
+        timeout_seconds=2,
+        max_retries=0,
+        model_context_window_tokens=100_000,
+        transport_profile="dashscope_openai_chat",
+        thinking_type="disabled",
+        response_format="json_object",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        response = await backend.generate(
+            [{"role": "user", "content": "Return JSON for this claim."}],
+            GenerationConfig(),
+        )
+    finally:
+        await backend.aclose()
+    assert response.content == "{}"
+
+
+def test_non_dashscope_adapter_rejects_json_object_response_format():
+    with pytest.raises(ValueError, match="does not support"):
+        OpenAICompatibleBackend(
+            base_url="http://model-gateway:8080/v1",
+            model="fixed-model",
+            timeout_seconds=2,
+            max_retries=0,
+            model_context_window_tokens=100_000,
+            transport_profile="openai_standard",
+            response_format="json_object",
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
 async def test_backend_retains_supported_non_stop_finish_reason(finish_reason):
     async def handler(request: httpx.Request) -> httpx.Response:

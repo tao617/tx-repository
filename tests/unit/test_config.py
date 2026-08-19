@@ -138,6 +138,23 @@ def test_dashscope_profile_requires_disabled_thinking_and_accepts_deployment_rat
     assert config.backend.rate_limit.tokens_per_minute == 850_000
 
 
+def test_dashscope_profile_accepts_json_object_response_format_only():
+    raw = agent_config()
+    raw["backend"].update(
+        {
+            "transport_profile": "dashscope_openai_chat",
+            "thinking": {"type": "disabled"},
+            "response_format": "json_object",
+        }
+    )
+    config = AppConfig.model_validate(raw)
+    assert config.backend.response_format == "json_object"
+
+    raw["backend"]["transport_profile"] = "deepseek_openai_chat"
+    with pytest.raises(ValidationError, match="supported only"):
+        AppConfig.model_validate(raw)
+
+
 @pytest.mark.parametrize(
     "thinking",
     [

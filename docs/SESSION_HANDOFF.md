@@ -2,22 +2,30 @@
 
 ## Current state
 
-Phase `model-a-retrieval-controls-scored` completed: Completed, sealed, verified, and privately aggregate-scored BBM25_10 and BHYBRID_RRF10 on all 700 Model-A dev_feedback examples; M2 exceeded Hybrid by 4.57 points with 95 percent CI 1.43 to 7.71 and exact p=0.005536.
+Phase `model-b-stability-configured` completed: Added an isolated Qwen stability deployment with closed JSON-object response mode, conservative admission limits, and unchanged method/prompt/scorer settings; no model call was made.
 
-- Git commit at checkpoint start: `12e6550a81b8afb7be3d492ef2835c87cb8db19d`
-- Changed files: 1
+- Git commit at checkpoint start: `841dfaed48d1bf4fa994808d6acca58e68f1955e`
+- Changed files: 11
 
 ## Diff summary
 
 ```text
-No tracked-file diff; see files_changed for untracked files.
+src/findver_agent/cli.py                           |  1 +
+ src/findver_agent/config.py                        | 10 ++++
+ src/findver_agent/experiment_config.py             |  4 ++
+ .../model_backends/openai_compatible.py            | 11 +++++
+ .../model_backends/transport_adapters.py           | 10 +++-
+ tests/unit/test_bclass_configs.py                  | 15 ++++++
+ tests/unit/test_config.py                          | 17 +++++++
+ tests/unit/test_model_backend.py                   | 54 ++++++++++++++++++++++
+ 8 files changed, 121 insertions(+), 1 deletion(-)
 ```
 
 ## Tests passed
 
-- Both Model-A retrieval-control runs completed 700/700 with 100 percent valid output, exactly 700 calls each, zero retries, zero length finishes, zero protocol drift, zero provider context errors, and zero local truncations.
-- Both sealed submissions independently verified; networkless Private Scorer produced two aggregate summaries and five 10,000-resample paired comparisons; scorer inbox and all Agent/Scorer containers are empty.
-- 280 Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
+- 284 Agent tests passed with one existing Starlette deprecation warning.
+- The 14-row offline composition smoke bound json_object, max_retries 10, 240 RPM, and 400000 TPM for the selected Model-B BLC, BRAG10, and M2 rows.
+- Python compileall and git diff checks passed.
 
 ## Tests failed or unavailable
 
@@ -39,4 +47,4 @@ pytest -q
 
 ## Next action
 
-Prepare the separately bound Model-B stability plans for BRAG10, BBM25_10, BHYBRID_RRF10, and BLC while reusing the existing stable M2 result unless transport configuration must change; request explicit approval before any new Model-B API call.
+Commit the stability configuration, prepare hash-bound Model-B plans from that commit, and request explicit user approval before a small smoke or any full Model-B API row.

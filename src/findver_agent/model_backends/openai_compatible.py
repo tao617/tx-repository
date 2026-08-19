@@ -17,6 +17,7 @@ from findver_agent.model_backends.base import (
 from findver_agent.model_backends.retry_policy import retry_async
 from findver_agent.model_backends.rate_limiter import SlidingWindowRateLimiter
 from findver_agent.model_backends.transport_adapters import (
+    ResponseFormat,
     get_transport_adapter,
     validate_transport_thinking,
 )
@@ -40,6 +41,7 @@ class OpenAICompatibleBackend:
         transport_profile: str | None = None,
         request_profile: str | None = None,
         thinking_type: str | None = None,
+        response_format: ResponseFormat = "text",
         rate_limit_requests_per_minute: int | None = None,
         rate_limit_tokens_per_minute: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -50,6 +52,13 @@ class OpenAICompatibleBackend:
         thinking_mode = thinking_type or "unsupported"
         validate_transport_thinking(selected_profile, thinking_mode)
         adapter = get_transport_adapter(selected_profile)
+        if (
+            response_format == "json_object"
+            and "response_format" not in adapter.allowed_request_fields
+        ):
+            raise ValueError(
+                f"{adapter.profile} does not support response_format=json_object"
+            )
         rate_limit_group = (
             rate_limit_requests_per_minute,
             rate_limit_tokens_per_minute,
@@ -63,6 +72,7 @@ class OpenAICompatibleBackend:
         self.transport_profile = adapter.profile
         self.request_profile = adapter.profile
         self.thinking_mode = thinking_mode
+        self.response_format = response_format
         self._adapter = adapter
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._max_retries = max_retries
@@ -130,6 +140,7 @@ class OpenAICompatibleBackend:
             top_p=config.top_p,
             max_tokens=config.max_output_tokens,
             seed=config.seed,
+            response_format=self.response_format,
         )
 
         started = time.perf_counter()

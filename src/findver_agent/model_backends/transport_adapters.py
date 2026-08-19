@@ -20,6 +20,7 @@ TransportProfile: TypeAlias = Literal[
     "deepseek_v4_openai",
 ]
 ThinkingMode: TypeAlias = Literal["disabled", "unsupported"]
+ResponseFormat: TypeAlias = Literal["text", "json_object"]
 
 _COMPATIBILITY_ALIASES: dict[str, CanonicalTransportProfile] = {
     "generic_openai": "openai_standard",
@@ -51,6 +52,7 @@ class TransportAdapter:
         top_p: float,
         max_tokens: int,
         seed: int | None,
+        response_format: ResponseFormat = "text",
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": model,
@@ -61,6 +63,12 @@ class TransportAdapter:
         }
         if seed is not None:
             payload["seed"] = seed
+        if response_format == "json_object":
+            if "response_format" not in self.allowed_request_fields:
+                raise ValueError(
+                    f"{self.profile} does not support response_format=json_object"
+                )
+            payload["response_format"] = {"type": "json_object"}
         if self.profile == "deepseek_openai_chat":
             payload["thinking"] = {"type": "disabled"}
         elif self.profile == "dashscope_openai_chat":
@@ -83,7 +91,7 @@ _ADAPTERS: dict[CanonicalTransportProfile, TransportAdapter] = {
     "dashscope_openai_chat": TransportAdapter(
         profile="dashscope_openai_chat",
         thinking_mode="disabled",
-        provider_fields=("enable_thinking",),
+        provider_fields=("enable_thinking", "response_format"),
     ),
 }
 

@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: model-a-retrieval-controls-scored
+current_phase: model-b-stability-configured
 current_goal: Preserve the completed Model-A retrieval-control evidence and prepare
-  the four required Model-B one-call stability rows, reusing stable M2 unless a
-  transport change makes its rerun necessary; require explicit approval before API calls.
-last_completed_phase: model-a-retrieval-controls-scored
-last_git_commit: 12e6550a81b8afb7be3d492ef2835c87cb8db19d
+  the four required Model-B one-call stability rows plus M2 under the shared stable
+  deployment; require explicit approval before API calls.
+last_completed_phase: model-b-stability-configured
+last_git_commit: 841dfaed48d1bf4fa994808d6acca58e68f1955e
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -289,8 +289,22 @@ decisions:
   stage without retrieval or prompt tuning.
 - Keep official test unopened and preserve RRF k=60, Top-10 cutoffs, tie rule, prompt,
   generation settings, scorer, and all completed historical rows.
+- Use a separate qwen3_5_27b_dashscope_stable deployment; retain all historical Qwen
+  deployment files, plans, runs, and scores unchanged.
+- Rerun M2 with BLC, BRAG10, BBM25_10, and BHYBRID_RRF10 because the effective Model-B
+  deployment configuration changed.
 files_changed:
-- docs/RETRIEVAL_CONTROLS_MODEL_A_DEV_REPORT.md
+- configs/deployments/qwen3_5_27b_dashscope_stable.yaml
+- docs/adr/0008-qwen-model-b-stability-profile.md
+- experiments/model_b_stability_dev_template.yaml
+- src/findver_agent/cli.py
+- src/findver_agent/config.py
+- src/findver_agent/experiment_config.py
+- src/findver_agent/model_backends/openai_compatible.py
+- src/findver_agent/model_backends/transport_adapters.py
+- tests/unit/test_bclass_configs.py
+- tests/unit/test_config.py
+- tests/unit/test_model_backend.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -542,6 +556,10 @@ tests_passed:
   and all Agent/Scorer containers are empty.
 - 280 Agent tests passed with one existing Starlette deprecation warning; compileall
   and git diff checks passed.
+- 284 Agent tests passed with one existing Starlette deprecation warning.
+- The 14-row offline composition smoke bound json_object, max_retries 10, 240 RPM,
+  and 400000 TPM for the selected Model-B BLC, BRAG10, and M2 rows.
+- Python compileall and git diff checks passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -564,9 +582,11 @@ known_issues:
 - Qwen BLC and BRAG10 one-call rows had 305 and 205 failed model responses respectively;
   their immutable formal results are transport-degraded and require separate authorization
   before reliability investigation.
+- Historical Qwen BRAG10 had 180 terminal HTTP 429 failures; historical BLC had 276
+  strict JSON extra-data failures and 29 terminal HTTP 429 failures.
 next_actions:
-- Prepare the separately bound Model-B stability plans for BRAG10, BBM25_10, BHYBRID_RRF10,
-  and BLC while reusing the existing stable M2 result unless transport configuration
-  must change; request explicit approval before any new Model-B API call.
+- Commit the stability configuration, prepare hash-bound Model-B plans from that commit,
+  and request explicit user approval before a small smoke or any full Model-B API
+  row.
 blocked_items: []
-last_updated: '2026-08-19T15:11:35+08:00'
+last_updated: '2026-08-19T15:19:53+08:00'

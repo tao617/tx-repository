@@ -1,0 +1,15 @@
+schema_version: 1
+deployment_id: qwen3_5_27b_dashscope_stable
+model_id: qwen3.5-27b
+backend_kind: api
+model_alias: external-model-name
+base_url: http://model-gateway:8080/v1
+timeout_seconds: 120
+max_retries: 10
+model_context_window_tokens: 100000
+transport_profile: dashscope_openai_chat
+thinking_mode: disabled
+response_format: json_object
+rate_limit:
+  requests_per_minute: 240
+  tokens_per_minute: 400000

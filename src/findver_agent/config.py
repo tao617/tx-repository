@@ -11,6 +11,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from findver_agent.model_backends.base import GenerationConfig
 from findver_agent.model_backends.transport_adapters import (
+    ResponseFormat,
     TransportProfile,
     canonical_transport_profile,
     validate_transport_thinking,
@@ -62,6 +63,7 @@ class BackendConfig(BaseModel):
         validation_alias=AliasChoices("transport_profile", "request_profile"),
     )
     thinking: ThinkingConfig | None = None
+    response_format: ResponseFormat = "text"
     rate_limit: RateLimitConfig | None = None
 
     @model_validator(mode="after")
@@ -73,6 +75,14 @@ class BackendConfig(BaseModel):
             raise ValueError("runtime backend base_url cannot contain credentials or query data")
         thinking_mode = self.thinking.type if self.thinking is not None else "unsupported"
         validate_transport_thinking(self.transport_profile, thinking_mode)
+        if (
+            self.response_format == "json_object"
+            and canonical_transport_profile(self.transport_profile)
+            != "dashscope_openai_chat"
+        ):
+            raise ValueError(
+                "response_format=json_object is supported only by dashscope_openai_chat"
+            )
         return self
 
     @property

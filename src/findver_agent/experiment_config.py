@@ -23,6 +23,7 @@ from findver_agent.config import (
 from findver_agent.model_backends.base import GenerationConfig
 from findver_agent.model_backends.transport_adapters import (
     CanonicalTransportProfile,
+    ResponseFormat,
     ThinkingMode,
     validate_transport_thinking,
 )
@@ -106,6 +107,7 @@ class ModelDeployment(BaseModel):
     model_context_window_tokens: int = Field(ge=8192, le=1_000_000)
     transport_profile: CanonicalTransportProfile
     thinking_mode: ThinkingMode
+    response_format: ResponseFormat = "text"
     rate_limit: RateLimitConfig | None = None
 
     @model_validator(mode="after")
@@ -127,6 +129,7 @@ class ModelDeployment(BaseModel):
                 if self.thinking_mode == "disabled"
                 else None
             ),
+            response_format=self.response_format,
             rate_limit=self.rate_limit,
         )
         return self
@@ -166,6 +169,7 @@ def compose_effective_config(
             if deployment.thinking_mode == "disabled"
             else None
         ),
+        response_format=deployment.response_format,
         rate_limit=deployment.rate_limit,
     )
     return AppConfig(

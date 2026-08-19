@@ -83,6 +83,7 @@ async def execute(args: argparse.Namespace) -> Path:
             if config.backend.thinking is not None
             else None
         ),
+        response_format=config.backend.response_format,
         rate_limit_requests_per_minute=(
             config.backend.rate_limit.requests_per_minute
             if config.backend.rate_limit is not None

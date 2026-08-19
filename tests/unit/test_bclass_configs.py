@@ -65,6 +65,21 @@ def test_canonical_conditions_compose_with_deployments_without_method_copies():
         assert method_section(deepseek_config).concurrency == 32
 
 
+def test_stable_qwen_deployment_binds_json_and_conservative_admission_limits():
+    deployment = load_model_deployment(
+        DEPLOYMENT_ROOT / "qwen3_5_27b_dashscope_stable.yaml"
+    )
+    condition = load_experiment_condition(
+        CONDITION_ROOT / "main" / "BRAG10_FINDVER_COT.yaml"
+    )
+    config = compose_effective_config(condition, deployment)
+    assert config.backend.response_format == "json_object"
+    assert config.backend.max_retries == 10
+    assert config.backend.rate_limit is not None
+    assert config.backend.rate_limit.requests_per_minute == 240
+    assert config.backend.rate_limit.tokens_per_minute == 400_000
+
+
 def test_historical_deepseek_and_local_config_paths_remain_loadable():
     for condition_id, mode in CONDITIONS.items():
         api = load_config(BCLASS / "api" / f"{condition_id}.yaml")
