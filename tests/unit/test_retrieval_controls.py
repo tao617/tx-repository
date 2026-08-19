@@ -1,15 +1,18 @@
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
+import findver_agent.retrieval_control_planner as retrieval_control_planner
 from findver_agent.experiment_config import (
     compose_effective_config,
     load_experiment_condition,
     load_model_deployment,
 )
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
-from findver_agent.retrieval_control_planner import prepare_control_plan
+from findver_agent.runner import sha256_file
 from scripts.prepare_retrieval_control_artifact import RRF_K, _fuse, build
 
 
@@ -17,6 +20,44 @@ ROOT = Path(__file__).parents[2]
 CONDITION_ROOT = ROOT / "configs" / "conditions" / "bclass"
 DEPLOYMENT_ROOT = ROOT / "configs" / "deployments"
 MANIFEST = ROOT / "experiments" / "retrieval_controls_dev_template.yaml"
+TASK_FIXTURE = ROOT / "tests" / "fixtures" / "bclass_public_tasks.jsonl"
+
+
+def _copy_release_file(release_root: Path, relative_path: str) -> Path:
+    destination = release_root / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / relative_path, destination)
+    return destination
+
+
+def _public_release_plan_inputs(tmp_path, monkeypatch):
+    release_root = tmp_path / "release"
+    for relative_path in (
+        "configs/conditions/bclass/main/BRAG10_FINDVER_COT.yaml",
+        "configs/conditions/bclass/controls/BBM25_10.yaml",
+        "configs/conditions/bclass/controls/BHYBRID_RRF10.yaml",
+        "configs/deployments/deepseek_v4_flash_api.yaml",
+        "runtime_data/retrieval/findver_bm25_top10_dev.json",
+        "runtime_data/retrieval/findver_hybrid_rrf60_top10_dev.json",
+    ):
+        _copy_release_file(release_root, relative_path)
+
+    task_path = release_root / "runtime_data" / "public" / "tasks.jsonl"
+    task_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(TASK_FIXTURE, task_path)
+    manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
+    manifest["task"] = {
+        "path": "runtime_data/public/tasks.jsonl",
+        "sha256": sha256_file(task_path),
+    }
+    manifest_path = release_root / "experiments" / MANIFEST.name
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(retrieval_control_planner, "REPO_ROOT", release_root)
+    monkeypatch.setattr(retrieval_control_planner, "_git_commit", lambda: "a" * 40)
+    return release_root, manifest_path
 
 
 def _write_report(root: Path, count: int = 20) -> Path:
@@ -177,17 +218,23 @@ def test_controls_match_brag_prompt_generation_and_load_artifacts(
         ("BHYBRID_RRF10", "findver_hybrid_rrf60_top10_dev.json"),
     ],
 )
-def test_control_plans_bind_one_model_a_row(condition_id, artifact_name):
-    plan = prepare_control_plan(
-        MANIFEST,
+def test_control_plans_bind_one_model_a_row(
+    condition_id, artifact_name, tmp_path, monkeypatch
+):
+    release_root, manifest_path = _public_release_plan_inputs(tmp_path, monkeypatch)
+    plan = retrieval_control_planner.prepare_control_plan(
+        manifest_path,
         condition_id=condition_id,
-        deployment_path=DEPLOYMENT_ROOT / "deepseek_v4_flash_api.yaml",
+        deployment_path=(
+            release_root / "configs" / "deployments" / "deepseek_v4_flash_api.yaml"
+        ),
         slot="model_a",
     )
 
     assert plan["schema_version"] == 3
     assert plan["status"] == "prepared_not_executed"
     assert plan["evaluation_split"] == "dev_feedback"
+    assert plan["task"]["path"] == "runtime_data/public/tasks.jsonl"
     assert plan["retrieval"]["path"].endswith(artifact_name)
     assert len(plan["runs"]) == 1
     run = plan["runs"][0]

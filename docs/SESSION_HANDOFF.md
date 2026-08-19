@@ -2,23 +2,23 @@
 
 ## Current state
 
-Phase `model-b-stability-dev-completed` completed: Completed and aggregate-scored the approved five-condition Model-B dev round; M2 reached 81.71 percent versus 71.29 BRAG10 and 74.29 Hybrid, with stable effective-response rates and no terminal transport failures.
+Phase `public-ci-retrieval-control-fixture-fix` completed: Made retrieval-control plan tests self-contained in clean public clones by staging the tracked Gold-free minimal task fixture inside a temporary release-shaped repository; formal plan inputs and runtime behavior remain unchanged.
 
-- Git commit at checkpoint start: `acaad7b81ecf6a520d736cfcc3c487de364c8c55`
+- Git commit at checkpoint start: `ffa92edecf9228f6c4d3842b4fb0d97aac8e0999`
 - Changed files: 1
 
 ## Diff summary
 
 ```text
-No tracked-file diff; see files_changed for untracked files.
+tests/unit/test_retrieval_controls.py | 57 ++++++++++++++++++++++++++++++++---
+ 1 file changed, 52 insertions(+), 5 deletions(-)
 ```
 
 ## Tests passed
 
-- All five Model-B conditions completed and sealed 700/700; archive hashes verified byte-for-byte at the scorer boundary.
-- Networkless Private Scorer produced five final-aggregate summaries and four 10,000-resample paired comparisons; inbox and Agent/Scorer container state are empty.
-- 289 full Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
-- 30 independent Private Scorer tests passed.
+- 8 focused retrieval-control tests passed.
+- 289 full Agent tests passed with one existing Starlette deprecation warning.
+- Python diff checks passed.
 
 ## Tests failed or unavailable
 
@@ -40,4 +40,4 @@ pytest -q
 
 ## Next action
 
-Await explicit user authorization to add the V2 freeze plan/ADR; preserve the current contract and do not open or execute the official test.
+Publish the focused CI fixture fix to main and confirm all GitHub Actions checks pass.
