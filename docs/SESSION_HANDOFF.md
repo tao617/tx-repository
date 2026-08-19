@@ -2,30 +2,21 @@
 
 ## Current state
 
-Phase `model-b-stability-configured` completed: Added an isolated Qwen stability deployment with closed JSON-object response mode, conservative admission limits, and unchanged method/prompt/scorer settings; no model call was made.
+Phase `model-b-stability-planned` completed: Prepared and offline-validated the five hash-bound Model-B dev_feedback runs under commit f173bcb6f50cabcf3e433958aa680a7319cf9b5b; no model call was made.
 
-- Git commit at checkpoint start: `841dfaed48d1bf4fa994808d6acca58e68f1955e`
-- Changed files: 11
+- Git commit at checkpoint start: `f173bcb6f50cabcf3e433958aa680a7319cf9b5b`
+- Changed files: 1
 
 ## Diff summary
 
 ```text
-src/findver_agent/cli.py                           |  1 +
- src/findver_agent/config.py                        | 10 ++++
- src/findver_agent/experiment_config.py             |  4 ++
- .../model_backends/openai_compatible.py            | 11 +++++
- .../model_backends/transport_adapters.py           | 10 +++-
- tests/unit/test_bclass_configs.py                  | 15 ++++++
- tests/unit/test_config.py                          | 17 +++++++
- tests/unit/test_model_backend.py                   | 54 ++++++++++++++++++++++
- 8 files changed, 121 insertions(+), 1 deletion(-)
+No tracked-file diff; see files_changed for untracked files.
 ```
 
 ## Tests passed
 
-- 284 Agent tests passed with one existing Starlette deprecation warning.
-- The 14-row offline composition smoke bound json_object, max_retries 10, 240 RPM, and 400000 TPM for the selected Model-B BLC, BRAG10, and M2 rows.
-- Python compileall and git diff checks passed.
+- All five selected plan rows recomposed successfully against qwen3.5-27b from .env.agent, the clean committed worktree, exact task/retrieval hashes, json_object response mode, max_retries 10, 240 RPM, and 400000 TPM.
+- Plan SHA256 values are 2f0a8ab72a6ca818c337df12fc61a4fb611bcba651dbd414be8de85116350cb5, b2807042131ec4e0578652cb79e633fa0a076dca97ee6193b090f4c1b089f7ae, and 4e72110cd3e47f4b267950594f7f4bfe1de89189d713c21007702dcf37a1e2f3.
 
 ## Tests failed or unavailable
 
@@ -47,4 +38,4 @@ pytest -q
 
 ## Next action
 
-Commit the stability configuration, prepare hash-bound Model-B plans from that commit, and request explicit user approval before a small smoke or any full Model-B API row.
+Request explicit user approval for the five Model-B development runs (expected about 4897 calls), then execute only BRAG10, BBM25_10, BHYBRID_RRF10, M2, and BLC in the recorded order.

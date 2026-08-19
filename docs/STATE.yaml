@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: model-b-stability-configured
+current_phase: model-b-stability-planned
 current_goal: Preserve the completed Model-A retrieval-control evidence and prepare
   the four required Model-B one-call stability rows plus M2 under the shared stable
   deployment; require explicit approval before API calls.
-last_completed_phase: model-b-stability-configured
-last_git_commit: 841dfaed48d1bf4fa994808d6acca58e68f1955e
+last_completed_phase: model-b-stability-planned
+last_git_commit: f173bcb6f50cabcf3e433958aa680a7319cf9b5b
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -293,18 +293,10 @@ decisions:
   deployment files, plans, runs, and scores unchanged.
 - Rerun M2 with BLC, BRAG10, BBM25_10, and BHYBRID_RRF10 because the effective Model-B
   deployment configuration changed.
+- Execute only five Model-B stability conditions in order BRAG10, BBM25_10, BHYBRID_RRF10,
+  M2, then BLC; leave the unselected canonical plan rows unexecuted.
 files_changed:
-- configs/deployments/qwen3_5_27b_dashscope_stable.yaml
-- docs/adr/0008-qwen-model-b-stability-profile.md
-- experiments/model_b_stability_dev_template.yaml
-- src/findver_agent/cli.py
-- src/findver_agent/config.py
-- src/findver_agent/experiment_config.py
-- src/findver_agent/model_backends/openai_compatible.py
-- src/findver_agent/model_backends/transport_adapters.py
-- tests/unit/test_bclass_configs.py
-- tests/unit/test_config.py
-- tests/unit/test_model_backend.py
+- docs/MODEL_B_STABILITY_RUNBOOK.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -560,6 +552,11 @@ tests_passed:
 - The 14-row offline composition smoke bound json_object, max_retries 10, 240 RPM,
   and 400000 TPM for the selected Model-B BLC, BRAG10, and M2 rows.
 - Python compileall and git diff checks passed.
+- All five selected plan rows recomposed successfully against qwen3.5-27b from .env.agent,
+  the clean committed worktree, exact task/retrieval hashes, json_object response
+  mode, max_retries 10, 240 RPM, and 400000 TPM.
+- Plan SHA256 values are 2f0a8ab72a6ca818c337df12fc61a4fb611bcba651dbd414be8de85116350cb5,
+  b2807042131ec4e0578652cb79e633fa0a076dca97ee6193b090f4c1b089f7ae, and 4e72110cd3e47f4b267950594f7f4bfe1de89189d713c21007702dcf37a1e2f3.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -585,8 +582,8 @@ known_issues:
 - Historical Qwen BRAG10 had 180 terminal HTTP 429 failures; historical BLC had 276
   strict JSON extra-data failures and 29 terminal HTTP 429 failures.
 next_actions:
-- Commit the stability configuration, prepare hash-bound Model-B plans from that commit,
-  and request explicit user approval before a small smoke or any full Model-B API
-  row.
+- Request explicit user approval for the five Model-B development runs (expected about
+  4897 calls), then execute only BRAG10, BBM25_10, BHYBRID_RRF10, M2, and BLC in the
+  recorded order.
 blocked_items: []
-last_updated: '2026-08-19T15:19:53+08:00'
+last_updated: '2026-08-19T15:21:37+08:00'
