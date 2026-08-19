@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: model-b-stability-plan-freeze-ready
+current_phase: model-b-gateway-json-pass-through-fixed
 current_goal: Preserve the completed Model-A retrieval-control evidence and prepare
   the four required Model-B one-call stability rows plus M2 under the shared stable
   deployment; require explicit approval before API calls.
-last_completed_phase: model-b-stability-plan-freeze-ready
-last_git_commit: 59e70734658223c41346fad3ad2df1427ae743fd
+last_completed_phase: model-b-gateway-json-pass-through-fixed
+last_git_commit: 7cd20264c45715ec6cabb7a062fd2f4849809599
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -297,8 +297,14 @@ decisions:
   M2, then BLC; leave the unselected canonical plan rows unexecuted.
 - Regenerate ignored execution plans only after the final tracked planning commit,
   because the executor requires plan code_commit to equal clean HEAD exactly.
+- Preserve the aborted matrix-V1 BRAG10 partial output as an unscored local transport
+  diagnostic and use matrix V2 for the corrected BRAG10, M2, and BLC runs.
 files_changed:
 - docs/MODEL_B_STABILITY_RUNBOOK.md
+- docs/adr/0008-qwen-model-b-stability-profile.md
+- experiments/model_b_stability_dev_template.yaml
+- src/findver_gateway/app.py
+- tests/unit/test_gateway.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -559,6 +565,10 @@ tests_passed:
   mode, max_retries 10, 240 RPM, and 400000 TPM.
 - 284 Agent tests, Python compileall, git diff checks, and five selected offline executor
   recompositions passed for the stable Qwen deployment.
+- 62 focused gateway, backend, config, and deployment tests passed with one existing
+  warning.
+- 289 full Agent tests passed with one existing Starlette deprecation warning; compileall
+  and git diff checks passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -583,8 +593,11 @@ known_issues:
   before reliability investigation.
 - Historical Qwen BRAG10 had 180 terminal HTTP 429 failures; historical BLC had 276
   strict JSON extra-data failures and 29 terminal HTTP 429 failures.
+- The first approved V1 BRAG10 launch produced 205 partial invalid rows because the
+  local Model Gateway rejected response_format with HTTP 422; the launch was stopped
+  and none of those requests reached the upstream model.
 next_actions:
-- Use the clean-current-HEAD regenerated five Model-B plans and request explicit user
-  approval for the expected approximately 4897 API calls before launch.
+- Commit this focused gateway fix, regenerate clean-HEAD V2 main and control plans,
+  then resume the already approved five-condition Model-B round from BRAG10.
 blocked_items: []
-last_updated: '2026-08-19T15:22:29+08:00'
+last_updated: '2026-08-19T15:47:03+08:00'

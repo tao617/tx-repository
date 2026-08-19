@@ -71,6 +71,11 @@ class Thinking(BaseModel):
     type: Literal["disabled"]
 
 
+class ResponseFormat(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    type: Literal["json_object"]
+
+
 class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: str
@@ -81,12 +86,19 @@ class ChatCompletionRequest(BaseModel):
     seed: int | None = None
     thinking: Thinking | None = None
     enable_thinking: Literal[False] | None = None
+    response_format: ResponseFormat | None = None
 
     @model_validator(mode="before")
     @classmethod
     def explicit_thinking_cannot_be_null(cls, value: object) -> object:
         if isinstance(value, dict) and "thinking" in value and value["thinking"] is None:
             raise ValueError("thinking must be the explicit disabled structure")
+        if (
+            isinstance(value, dict)
+            and "response_format" in value
+            and value["response_format"] is None
+        ):
+            raise ValueError("response_format must be the explicit json_object structure")
         if (
             isinstance(value, dict)
             and "enable_thinking" in value

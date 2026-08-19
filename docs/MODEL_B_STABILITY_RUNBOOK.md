@@ -34,7 +34,7 @@ Do not open `dev_holdout` or official `test` data.
 
 | Selected conditions | Plan |
 |---|---|
-| BLC, BRAG10, M2 | `runs/plans/findver-model-b-stability-dev-v1.plan.json` |
+| BLC, BRAG10, M2 | `runs/plans/findver-model-b-stability-dev-v2.plan.json` |
 | BBM25_10 | `runs/plans/findver-model-b-dev-bm25-stable-v1.plan.json` |
 | BHYBRID_RRF10 | `runs/plans/findver-model-b-dev-hybrid-rrf60-stable-v1.plan.json` |
 
@@ -48,6 +48,11 @@ files after the final tracked planning commit and verify their SHA256 values bef
 No model call is authorized by a tracked template or prepared plan. Obtain explicit user
 approval for this five-condition development round before launch. Use `.env.agent` only;
 `.env.agent.a` remains the Model-A credential file.
+
+The user approved the five-condition round on 2026-08-19. The initial matrix-V1 BRAG10
+launch was stopped after 205 local HTTP 422 responses caused by a missing gateway schema
+field; none reached the upstream model. Do not resume or score that partial V1 run. Use
+the corrected matrix-V2 plan for BRAG10, M2, and BLC.
 
 ## Reporting gate
 

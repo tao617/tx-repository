@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-19
+- Amended: 2026-08-19 after the first approved launch exposed a local gateway schema omission
 
 ## Context
 
@@ -44,6 +45,9 @@ mode, but the experiment protocol precommits a 1024-token cap for cross-model pa
    comparisons. Failed outputs remain invalid; the parser does not repair or select
    among multiple objects.
 8. Require explicit user approval before any smoke or full Model-B API execution.
+9. The fixed Model Gateway validates and forwards the same closed
+   `response_format={"type":"json_object"}` structure. It rejects null, text mode,
+   schema extensions, strings, and arbitrary request fields.
 
 ## Consequences
 
@@ -56,6 +60,10 @@ mode, but the experiment protocol precommits a 1024-token cap for cross-model pa
 - Plans bind the new deployment file and canonical effective-config hash, so the JSON
   response setting and admission limits are auditable even though the historical run
   identity schema is unchanged.
+- The first approved BRAG10 launch under matrix V1 was stopped after 205 partial rows
+  when every request received local HTTP 422. No request reached the upstream model.
+  The partial run remains an aborted transport diagnostic and is not scored. Matrix V2
+  uniquely identifies the corrected rerun.
 
 ## Rejected alternatives
 

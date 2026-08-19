@@ -2,21 +2,26 @@
 
 ## Current state
 
-Phase `model-b-stability-plan-freeze-ready` completed: Frozen the tracked Model-B stability runbook and offline-validated plan composition; ignored execution plans must be regenerated after this final tracked commit so their exact-HEAD binding remains valid. No model call was made.
+Phase `model-b-gateway-json-pass-through-fixed` completed: Stopped the approved V1 BRAG10 launch after 205 local HTTP 422 responses, added closed Model Gateway validation/pass-through for json_object, and renamed the corrected main matrix V2; no request from the aborted partial run reached the upstream model.
 
-- Git commit at checkpoint start: `59e70734658223c41346fad3ad2df1427ae743fd`
-- Changed files: 1
+- Git commit at checkpoint start: `7cd20264c45715ec6cabb7a062fd2f4849809599`
+- Changed files: 5
 
 ## Diff summary
 
 ```text
-docs/MODEL_B_STABILITY_RUNBOOK.md | 15 +++++++++------
- 1 file changed, 9 insertions(+), 6 deletions(-)
+docs/MODEL_B_STABILITY_RUNBOOK.md               |  7 ++-
+ docs/adr/0008-qwen-model-b-stability-profile.md |  8 ++++
+ experiments/model_b_stability_dev_template.yaml |  2 +-
+ src/findver_gateway/app.py                      | 12 +++++
+ tests/unit/test_gateway.py                      | 60 +++++++++++++++++++++++++
+ 5 files changed, 87 insertions(+), 2 deletions(-)
 ```
 
 ## Tests passed
 
-- 284 Agent tests, Python compileall, git diff checks, and five selected offline executor recompositions passed for the stable Qwen deployment.
+- 62 focused gateway, backend, config, and deployment tests passed with one existing warning.
+- 289 full Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
 
 ## Tests failed or unavailable
 
@@ -38,4 +43,4 @@ pytest -q
 
 ## Next action
 
-Use the clean-current-HEAD regenerated five Model-B plans and request explicit user approval for the expected approximately 4897 API calls before launch.
+Commit this focused gateway fix, regenerate clean-HEAD V2 main and control plans, then resume the already approved five-condition Model-B round from BRAG10.

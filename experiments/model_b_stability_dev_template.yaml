@@ -1,5 +1,5 @@
 schema_version: 2
-matrix_id: findver-model-b-stability-dev-v1
+matrix_id: findver-model-b-stability-dev-v2
 purpose: qwen-model-b-stability-rerun-template
 evaluation_split: dev_feedback
 execution_authorized: false

@@ -148,6 +148,66 @@ def test_gateway_forwards_only_disabled_qwen_thinking():
     assert response.status_code == 200
 
 
+def test_gateway_forwards_only_closed_json_object_response_format():
+    def upstream(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["response_format"] == {"type": "json_object"}
+        assert payload["enable_thinking"] is False
+        return httpx.Response(200, json={"choices": []})
+
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="qwen3.5-27b",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(settings, transport=httpx.MockTransport(upstream))
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "Return JSON."}],
+                "enable_thinking": False,
+                "response_format": {"type": "json_object"},
+            },
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "response_format",
+    [
+        None,
+        {"type": "text"},
+        {"type": "json_object", "schema": {}},
+        "json_object",
+    ],
+)
+def test_gateway_rejects_non_closed_response_format(response_format):
+    settings = Settings(
+        upstream_base_url="http://fixed-upstream:8000/v1",
+        upstream_model="qwen3.5-27b",
+        model_aliases=frozenset({"allowed"}),
+    )
+    with TestClient(
+        create_app(
+            settings,
+            transport=httpx.MockTransport(lambda request: httpx.Response(500)),
+        )
+    ) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "allowed",
+                "messages": [{"role": "user", "content": "Return JSON."}],
+                "enable_thinking": False,
+                "response_format": response_format,
+            },
+        )
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("enable_thinking", [None, True, "false", 0])
 def test_gateway_rejects_non_false_qwen_thinking(enable_thinking):
     settings = Settings(
