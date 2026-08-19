@@ -12,7 +12,7 @@ from findver_agent.schemas import PublicTask
 
 
 SUPPORTED_RETRIEVERS = frozenset(
-    {"bm25", "text-embedding-3-large", "contriever-msmarco"}
+    {"bm25", "text-embedding-3-large", "contriever-msmarco", "hybrid-rrf"}
 )
 SUPPORTED_TOP_K = frozenset({3, 5, 10})
 FORBIDDEN_FIELDS = frozenset(

@@ -65,7 +65,12 @@ class InitialRetrievalState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     retrieval_file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    retriever: Literal["bm25", "text-embedding-3-large", "contriever-msmarco"]
+    retriever: Literal[
+        "bm25",
+        "text-embedding-3-large",
+        "contriever-msmarco",
+        "hybrid-rrf",
+    ]
     top_k: Literal[3, 5, 10]
     report: str
     paragraph_ids: list[int]

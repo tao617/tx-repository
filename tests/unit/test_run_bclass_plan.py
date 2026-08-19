@@ -363,6 +363,27 @@ def test_executor_rejects_ablation_directory_for_local_backend(tmp_path, monkeyp
         )
 
 
+def test_executor_accepts_canonical_control_condition_directory(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    target = (
+        repo
+        / "configs"
+        / "conditions"
+        / "bclass"
+        / "controls"
+        / "BBM25_10.yaml"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_text("condition", encoding="utf-8")
+    monkeypatch.setattr(MODULE, "REPO_ROOT", repo)
+
+    assert MODULE._composable_source_path(
+        "configs/conditions/bclass/controls/BBM25_10.yaml",
+        kind="condition",
+        family="control",
+    ) == target
+
+
 def test_executor_allows_dedicated_32k_directories_for_local_model_plan(
     tmp_path, monkeypatch
 ):

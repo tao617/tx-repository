@@ -95,8 +95,12 @@ def _composable_source_path(value: object, *, kind: str, family: object = None) 
     path = (REPO_ROOT / value).resolve()
     if kind == "deployment":
         allowed_parent = (REPO_ROOT / "configs" / "deployments").resolve()
-    elif kind == "condition" and family in {"main", "extension"}:
-        directory = "main" if family == "main" else "extensions"
+    elif kind == "condition" and family in {"main", "extension", "control"}:
+        directory = {
+            "main": "main",
+            "extension": "extensions",
+            "control": "controls",
+        }[family]
         allowed_parent = (
             REPO_ROOT / "configs" / "conditions" / "bclass" / directory
         ).resolve()

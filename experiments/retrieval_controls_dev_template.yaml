@@ -1,0 +1,24 @@
+schema_version: 1
+matrix_id: findver-retrieval-controls-dev-v1
+purpose: prespecified-bm25-and-hybrid-retrieval-controls
+evaluation_split: dev_feedback
+execution_authorized: false
+code_commit: auto
+task:
+  path: runtime_data/public/tasks.jsonl
+  sha256: f51d29db5200c7166f74c9f7920ad8557d5db46a3b700f49513ef2932d1da0f5
+retrieval_artifacts:
+  BBM25_10:
+    path: runtime_data/retrieval/findver_bm25_top10_dev.json
+    sha256: a34a46867967ab2d213669b1d3b4d1bad6bfd5bf634864be05a075ef56a0d45c
+    retriever: bm25
+    top_k: 10
+  BHYBRID_RRF10:
+    path: runtime_data/retrieval/findver_hybrid_rrf60_top10_dev.json
+    sha256: 6b32ed0fda3eb0ddc11da83932bee06c0dd4fb62001bbafbcc764bd48986b365
+    retriever: hybrid-rrf
+    top_k: 10
+    rrf_k: 60
+controls:
+  - configs/conditions/bclass/controls/BBM25_10.yaml
+  - configs/conditions/bclass/controls/BHYBRID_RRF10.yaml

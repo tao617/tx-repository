@@ -17,7 +17,12 @@ from findver_agent.model_backends.transport_adapters import (
 )
 
 
-RetrieverName = Literal["bm25", "text-embedding-3-large", "contriever-msmarco"]
+RetrieverName = Literal[
+    "bm25",
+    "text-embedding-3-large",
+    "contriever-msmarco",
+    "hybrid-rrf",
+]
 RetrievalTopK = Literal[3, 5, 10]
 ProtocolVersion = Literal["v1", "v2"]
 ReviewPolicy = Literal["none", "mandatory", "selective"]

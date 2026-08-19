@@ -69,6 +69,25 @@ shared client.
 
 Top-k development ablations are under `configs/bclass/ablations/` and remain scoped to one primary model on `dev_feedback`. The workspace contains the independent official `text-embedding-3-large` top-3, top-5, and top-10 outputs from frozen FinDVer commit `e8bb237def4ce555a606a45edba22666e31df248`. The gold-free Runtime artifacts preserve those upstream cutoffs rather than truncating the paragraph-ID-sorted top-10 file; top-3 SHA256 is `4c85f4cc3ea07c45ae6320032f0bad34b6f095aa8751a84f3ca0fe423e5ac8d7` and top-5 SHA256 is `78bce403b92d96858df689c15fb9afc3dd6b19a139d57b953e391ccb2f7d358d`.
 
+The prespecified retrieval controls are isolated under
+`configs/conditions/bclass/controls/`. `BBM25_10` uses official BM25 Top-10;
+`BHYBRID_RRF10` fuses official embedding Top-10 and BM25 Top-10 with fixed RRF
+`k=60`, deduplicates, retains Top-10, and restores document order. Both use the
+unchanged BRAG10 prompt, generation, parser, concurrency, and one-call budget.
+Prepare one hash-bound plan per condition because retrieval identity is plan-level:
+
+```bash
+.venv/bin/python scripts/prepare_retrieval_control_plan.py \
+  --manifest experiments/retrieval_controls_dev_template.yaml \
+  --condition BBM25_10 \
+  --deployment configs/deployments/deepseek_v4_flash_api.yaml \
+  --slot model_a \
+  --output /secure/findver-model-a-bm25-control.plan.json
+```
+
+Use the same command with `BHYBRID_RRF10`. Plan preparation is offline and does
+not authorize execution; each real row still requires explicit approval.
+
 The single permitted BITER calibration is `configs/bclass/ablations/BITER2_RAG10.yaml`. It changes only the fixed retrieval-round count from three to two; retrieval, finalization, generation, transport, and concurrency remain frozen. The telemetry-authorized lower-budget sensitivity row is `configs/bclass/ablations/M2_BUDGET4.yaml`; relative to M2 it changes only Exploration steps from six to four. Budget 8 is not authorized.
 
 Prepare each development extension as its own schema-v3 plan because retrieval identity

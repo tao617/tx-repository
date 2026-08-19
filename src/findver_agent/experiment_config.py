@@ -38,7 +38,7 @@ class ExperimentCondition(BaseModel):
 
     schema_version: Literal[1] = 1
     condition_id: str = Field(pattern=PLAIN_NAME_PATTERN, min_length=1, max_length=256)
-    family: Literal["main", "extension"]
+    family: Literal["main", "extension", "control"]
     prompt_profile: str = Field(min_length=1, max_length=256)
     run_mode: Literal["agent", "baseline", "iterative_rag"]
     generation: GenerationConfig

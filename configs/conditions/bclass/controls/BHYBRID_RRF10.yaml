@@ -1,0 +1,18 @@
+schema_version: 1
+condition_id: BHYBRID_RRF10
+family: control
+prompt_profile: findver_cot_json
+run_mode: baseline
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+baseline:
+  prompt_type: findver_cot_json
+  retrieval: fixed_retrieval
+  retrieval_file: /retrieval/findver_hybrid_rrf60_top10_dev.json
+  retriever: hybrid-rrf
+  top_k: 10
+  concurrency: 32

@@ -74,6 +74,7 @@ def test_original_findver_list_requires_and_uses_explicit_metadata(tmp_path):
         ("bm25", 3),
         ("contriever-msmarco", 5),
         ("text-embedding-3-large", 10),
+        ("hybrid-rrf", 10),
     ],
 )
 def test_wrapped_top_k_and_retriever_variants_load(tmp_path, retriever, top_k):
