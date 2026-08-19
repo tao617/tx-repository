@@ -2,30 +2,22 @@
 
 ## Current state
 
-Phase `retrieval-controls-implementation-prepared` completed: Implemented and offline-verified the prespecified 700-example Model-A BBM25_10 and BHYBRID_RRF10 controls without any model or scorer call; preserved all historical conditions and results.
+Phase `model-a-retrieval-controls-scored` completed: Completed, sealed, verified, and privately aggregate-scored BBM25_10 and BHYBRID_RRF10 on all 700 Model-A dev_feedback examples; M2 exceeded Hybrid by 4.57 points with 95 percent CI 1.43 to 7.71 and exact p=0.005536.
 
-- Git commit at checkpoint start: `92945af07ff764d3baa8ca1bb53d3db22a16e909`
-- Changed files: 17
+- Git commit at checkpoint start: `12e6550a81b8afb7be3d492ef2835c87cb8db19d`
+- Changed files: 1
 
 ## Diff summary
 
 ```text
-docs/B_CLASS_RUNBOOK.md                | 19 +++++++++++++++++++
- scripts/run_bclass_plan.py             |  8 ++++++--
- src/findver_agent/config.py            |  7 ++++++-
- src/findver_agent/experiment_config.py |  2 +-
- src/findver_agent/fixed_retrieval.py   |  2 +-
- src/findver_agent/state.py             |  7 ++++++-
- tests/unit/test_fixed_retrieval_v2.py  |  1 +
- tests/unit/test_run_bclass_plan.py     | 21 +++++++++++++++++++++
- 8 files changed, 61 insertions(+), 6 deletions(-)
+No tracked-file diff; see files_changed for untracked files.
 ```
 
 ## Tests passed
 
-- 280 Agent tests passed with one existing Starlette deprecation warning.
-- BM25 artifact matched official e8bb237 testmini Top-10 for all 700 tasks; Hybrid RRF artifact validated k=60, Top-10 inputs, deduplication, Top-10 output, and document order.
-- Python compileall, launcher shell syntax, and git diff checks passed.
+- Both Model-A retrieval-control runs completed 700/700 with 100 percent valid output, exactly 700 calls each, zero retries, zero length finishes, zero protocol drift, zero provider context errors, and zero local truncations.
+- Both sealed submissions independently verified; networkless Private Scorer produced two aggregate summaries and five 10,000-resample paired comparisons; scorer inbox and all Agent/Scorer containers are empty.
+- 280 Agent tests passed with one existing Starlette deprecation warning; compileall and git diff checks passed.
 
 ## Tests failed or unavailable
 
@@ -47,4 +39,4 @@ pytest -q
 
 ## Next action
 
-Commit this prepared phase, generate commit-bound Model-A control plans, then request explicit approval before launching the two 700-example API rows.
+Prepare the separately bound Model-B stability plans for BRAG10, BBM25_10, BHYBRID_RRF10, and BLC while reusing the existing stable M2 result unless transport configuration must change; request explicit approval before any new Model-B API call.

@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: retrieval-controls-implementation-prepared
-current_goal: Execute the user-approved staged retrieval-control and cross-model plan
-  while preserving all completed development results; next obtain explicit approval
-  before the two new 700-example Model-A API rows.
-last_completed_phase: retrieval-controls-implementation-prepared
-last_git_commit: 92945af07ff764d3baa8ca1bb53d3db22a16e909
+current_phase: model-a-retrieval-controls-scored
+current_goal: Preserve the completed Model-A retrieval-control evidence and prepare
+  the four required Model-B one-call stability rows, reusing stable M2 unless a
+  transport change makes its rerun necessary; require explicit approval before API calls.
+last_completed_phase: model-a-retrieval-controls-scored
+last_git_commit: 12e6550a81b8afb7be3d492ef2835c87cb8db19d
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -282,24 +282,15 @@ decisions:
   order.
 - Preserve the completed seven-condition and extension matrices; bind each new control
   in its own schema-v3 plan and require explicit approval immediately before API execution.
+- 'M2 clearly outperforms BHYBRID_RRF10 on Model-A development data: 82.29 versus
+  77.71 percent, +4.57 points, paired 95 percent CI +1.43 to +7.71, exact p=0.005536.'
+- BBM25_10 does not outperform embedding BRAG10, while Hybrid improves over both single
+  retrievers but remains clearly below M2; proceed to the planned Model-B stability
+  stage without retrieval or prompt tuning.
+- Keep official test unopened and preserve RRF k=60, Top-10 cutoffs, tie rule, prompt,
+  generation settings, scorer, and all completed historical rows.
 files_changed:
-- configs/conditions/bclass/controls/
-- docs/B_CLASS_RUNBOOK.md
-- docs/adr/0007-prespecified-bm25-hybrid-controls.md
-- experiments/retrieval_controls_dev_template.yaml
-- runtime_data/retrieval/findver_bm25_top10_dev.json
-- runtime_data/retrieval/findver_hybrid_rrf60_top10_dev.json
-- scripts/prepare_retrieval_control_artifact.py
-- scripts/prepare_retrieval_control_plan.py
-- scripts/run_bclass_plan.py
-- src/findver_agent/config.py
-- src/findver_agent/experiment_config.py
-- src/findver_agent/fixed_retrieval.py
-- src/findver_agent/retrieval_control_planner.py
-- src/findver_agent/state.py
-- tests/unit/test_fixed_retrieval_v2.py
-- tests/unit/test_retrieval_controls.py
-- tests/unit/test_run_bclass_plan.py
+- docs/RETRIEVAL_CONTROLS_MODEL_A_DEV_REPORT.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -543,6 +534,14 @@ tests_passed:
   RRF artifact validated k=60, Top-10 inputs, deduplication, Top-10 output, and document
   order.
 - Python compileall, launcher shell syntax, and git diff checks passed.
+- Both Model-A retrieval-control runs completed 700/700 with 100 percent valid output,
+  exactly 700 calls each, zero retries, zero length finishes, zero protocol drift,
+  zero provider context errors, and zero local truncations.
+- Both sealed submissions independently verified; networkless Private Scorer produced
+  two aggregate summaries and five 10,000-resample paired comparisons; scorer inbox
+  and all Agent/Scorer containers are empty.
+- 280 Agent tests passed with one existing Starlette deprecation warning; compileall
+  and git diff checks passed.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -566,7 +565,8 @@ known_issues:
   their immutable formal results are transport-degraded and require separate authorization
   before reliability investigation.
 next_actions:
-- Commit this prepared phase, generate commit-bound Model-A control plans, then request
-  explicit approval before launching the two 700-example API rows.
+- Prepare the separately bound Model-B stability plans for BRAG10, BBM25_10, BHYBRID_RRF10,
+  and BLC while reusing the existing stable M2 result unless transport configuration
+  must change; request explicit approval before any new Model-B API call.
 blocked_items: []
-last_updated: '2026-08-19T14:57:27+08:00'
+last_updated: '2026-08-19T15:11:35+08:00'
