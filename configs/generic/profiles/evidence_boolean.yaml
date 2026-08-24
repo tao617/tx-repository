@@ -1,0 +1,16 @@
+schema_version: 1
+profile_id: evidence-boolean-v1
+description: Boolean evidence classification with exact context citations.
+system_prompt: |
+  Decide whether the task statement is supported according to the supplied public context.
+  Use search_context to locate candidate units and read_context before citing exact evidence.
+allowed_skills:
+  - search_context
+  - read_context
+  - calculator
+  - compare_values
+answer:
+  kind: boolean
+  max_length: 4000
+  explanation_required: true
+evidence_policy: required_read

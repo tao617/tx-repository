@@ -1,0 +1,18 @@
+schema_version: 1
+profile_id: multiple-choice-abcd-v1
+description: Four-option multiple-choice evaluation with optional local tools.
+system_prompt: |
+  Return exactly one option label: A, B, C, or D. The options are supplied in task inputs.
+  Use only skills that materially reduce uncertainty.
+allowed_skills:
+  - search_context
+  - read_context
+  - calculator
+  - lookup_data
+  - compare_values
+answer:
+  kind: enum
+  choices: [A, B, C, D]
+  max_length: 16
+  explanation_required: false
+evidence_policy: optional

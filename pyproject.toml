@@ -28,6 +28,7 @@ gateway = [
 
 [project.scripts]
 findver-agent = "findver_agent.cli:main"
+generic-eval-agent = "findver_agent.generic.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

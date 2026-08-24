@@ -12,7 +12,7 @@ The independent Private Scorer is intentionally kept outside this repository. It
 
 ## Security boundary
 
-The Agent exposes only `search_report`, `read_paragraphs`, `calculator`, and `submit_answer`. It has no browser, shell, Python execution tool, arbitrary file access, Docker socket, gold labels, scorer feedback, or scorer access. The Agent container has only an internal Docker network; only the Gateway has outbound network access, with no host port published.
+The FinDVer execution mode exposes only `search_report`, `read_paragraphs`, `calculator`, and `submit_answer`. The additive generic execution mode exposes only a task-profile-selected subset of reviewed, code-owned bounded skills. Neither mode has a browser, shell, Python execution tool, arbitrary file access, Docker socket, gold labels, scorer feedback, or scorer access. The Agent container has only an internal Docker network; only the Gateway has outbound network access, with no host port published.
 
 Credentials are never committed or copied into images. A mode-`0600` `.env.agent` file is sourced by the controlled launcher and injected only into the Gateway. Gateway egress is direct by default; host proxy variables are deliberately not inherited.
 
@@ -22,6 +22,7 @@ Credentials are never committed or copied into images. A mode-`0600` `.env.agent
 - [B-class upgrade plan](docs/B_CLASS_UPGRADE_PLAN.md)
 - [B-class experiment runbook](docs/B_CLASS_RUNBOOK.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Generic evaluation Agent](docs/GENERIC_AGENT.md)
 - [WSL dual-Docker runbook](docs/RUNBOOK_WSL.md)
 - [Scorer protocol](docs/SCORER_PROTOCOL.md)
 - [Private evidence metric contract](docs/PRIVATE_EVIDENCE_METRICS.md)
@@ -30,6 +31,14 @@ Credentials are never committed or copied into images. A mode-`0600` `.env.agent
 - [Model A B-class development results](docs/B_CLASS_MODEL_A_DEV_FEEDBACK_REPORT.md)
 - [Qwen Model-B development results](docs/B_CLASS_QWEN_MODEL_B_DEV_FEEDBACK_REPORT.md)
 - [Session recovery](docs/SESSION_HANDOFF.md)
+
+## Generic task runtime
+
+`generic-eval-agent` is an additive task-profile-driven Runtime. It keeps the bounded
+Exploration, Finalization, and Review framework while allowing each task profile to
+select a static skill allowlist and a strict answer contract. The existing FinDVer
+entry point, prompts, actions, prediction schema, plans, and scorer handoff remain
+unchanged. See the [generic Agent guide](docs/GENERIC_AGENT.md).
 
 ## Latest Qwen Model-B results
 
