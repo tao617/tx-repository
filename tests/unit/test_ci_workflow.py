@@ -37,6 +37,10 @@ def test_public_ci_covers_supported_python_and_stateful_docker_without_secrets()
     pytest_job = workflow["jobs"]["pytest"]
     assert pytest_job["strategy"]["matrix"]["python-version"] == ["3.11", "3.12"]
     assert any("pytest -q" in step.get("run", "") for step in pytest_job["steps"])
+    assert any(
+        "generic-eval-agent --help" in step.get("run", "")
+        for step in pytest_job["steps"]
+    )
 
     docker_job = workflow["jobs"]["stateful-docker-smoke"]
     assert docker_job["needs"] == "pytest"

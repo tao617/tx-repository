@@ -1,0 +1,1 @@
+{"task_id":"generic-evidence-1","instruction":"Is the statement 'Revenue was 42' supported by the context?","inputs":{"statement":"Revenue was 42"},"context":[{"unit_id":"p0","text":"The audited report states that revenue was 42."}],"data":null}

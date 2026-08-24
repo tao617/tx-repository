@@ -39,6 +39,7 @@ jobs:
           bash -n scripts/run_concurrent_mock_smoke.sh
           python scripts/prepare_bclass_matrix.py --help >/dev/null
           python scripts/run_bclass_plan.py --help >/dev/null
+          generic-eval-agent --help >/dev/null
 
   stateful-docker-smoke:
     name: Stateful Docker M2 smoke

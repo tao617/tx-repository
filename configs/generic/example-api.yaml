@@ -1,0 +1,26 @@
+backend_kind: api
+backend:
+  type: openai_compatible
+  base_url: http://model-gateway:8080/v1
+  model: generic-eval-model
+  timeout_seconds: 120
+  max_retries: 3
+  model_context_window_tokens: 100000
+  transport_profile: openai_standard
+  response_format: text
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 32768
+agent:
+  exploration_steps: 6
+  finalization_steps: 2
+  review_steps: 1
+  review_policy: selective
+  default_skill_call_limit: 4
+  max_total_evidence_units: 30
+  max_history_records: 12
+  max_observation_characters: 4000
+  concurrency: 1
