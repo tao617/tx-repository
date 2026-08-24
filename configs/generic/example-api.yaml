@@ -20,12 +20,6 @@ agent:
   review_steps: 1
   review_policy: selective
   default_skill_call_limit: 4
-  skill_call_limits:
-    read_context: 4
-    search_context: 4
-    calculator: 4
-    lookup_data: 4
-    compare_values: 4
   max_total_evidence_units: 30
   max_history_records: 12
   max_observation_characters: 4000
