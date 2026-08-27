@@ -120,7 +120,15 @@ async def test_dynamic_router_rejects_hidden_skill_without_ledger_mutation(tmp_p
         [
             _action(
                 "execute_financial_program",
-                {"operator": "equals", "operand_refs": ["value-1"]},
+                {
+                    "program": {
+                        "op": "equals",
+                        "args": [
+                            {"kind": "value_ref", "ref": "value-1"},
+                            {"kind": "constant_ref", "ref": "constant:one"},
+                        ],
+                    }
+                },
             ),
             _action("search_report", {"query": "revenue 128.4 2024", "top_k": 2}),
             _action("read_paragraphs", {"paragraph_ids": [1]}),

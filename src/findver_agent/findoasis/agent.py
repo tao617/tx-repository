@@ -7,6 +7,12 @@ import re
 from pathlib import Path
 
 from findver_agent.config import AgentConfig
+from findver_agent.financial_dsl.claim_parser import parse_claim_values
+from findver_agent.financial_dsl.executor import (
+    FinDSLExecutionError,
+    execute_financial_program,
+    numeric_certificate_sha256,
+)
 from findver_agent.model_backends.base import (
     GenerationConfig,
     ModelBackend,
@@ -24,12 +30,15 @@ from .actions import (
     ActionParseError,
     BindFinancialValueArguments,
     BindFinancialValueAction,
+    ExecuteFinancialProgramAction,
     ReadParagraphsAction,
     ReadTableRegionAction,
     SearchReportAction,
     parse_action,
 )
 from .contracts import (
+    CertificateEnvelope,
+    CertificateKind,
     FinalCertificateStatus,
     ObligationStatus,
     ObligationType,
@@ -47,6 +56,7 @@ from .state import (
     EvidenceLedgerEntry,
     FinOASISQuestionState,
     FinOASISStateStore,
+    FinancialProgramLedgerEntry,
     NumericValueLedgerEntry,
     ReportSearchHit,
     ReportSearchRecord,
@@ -374,6 +384,10 @@ class FinOASISAgent:
         if state.obligations or state.next_obligation_sequence != 1:
             raise ValueError("new protocol-v3 state must have an empty obligation graph")
         state.phase = QuestionPhase.EXPLORATION
+        claim_values = parse_claim_values(state.statement)
+        state.claim_value_ledger = {
+            claim.claim_value_id: claim for claim in claim_values
+        }
         proposals = seed_obligations(state.statement)
         for proposal in proposals:
             state.open_obligation(proposal)
@@ -657,6 +671,102 @@ class FinOASISAgent:
                 ),
                 target_obligation_id=target,
                 references=[value_id],
+            )
+            return
+
+        if isinstance(action, ExecuteFinancialProgramAction):
+            if target_obligation.type is not ObligationType.NUMERIC_OPERATION:
+                raise SkillError(
+                    "execute_financial_program requires a numeric-operation target"
+                )
+            program_id = f"program-{state.next_program_sequence:04d}"
+            certificate_id = (
+                f"numeric-certificate-{state.next_program_sequence:04d}"
+            )
+            try:
+                execution = execute_financial_program(
+                    action.arguments.program,
+                    action.arguments.claim_relation,
+                    values=state.numeric_value_ledger,
+                    claims=state.claim_value_ledger,
+                    program_id=program_id,
+                    certificate_id=certificate_id,
+                )
+            except FinDSLExecutionError as error:
+                raise SkillError(str(error)) from error
+            if any(
+                item.program_sha256 == execution.program_sha256
+                for item in state.financial_program_ledger.values()
+            ):
+                raise SkillError("the canonical financial program was already executed")
+
+            certificate = execution.certificate
+            value_refs = [
+                snapshot.ref
+                for snapshot in certificate.normalized_operands
+                if snapshot.kind == "value_ref"
+            ]
+            claim_refs = [
+                snapshot.ref
+                for snapshot in certificate.normalized_operands
+                if snapshot.kind == "claim_value_ref"
+            ]
+            if action.arguments.claim_relation is not None:
+                claim_refs.append(action.arguments.claim_relation.claim_ref)
+                claim_refs = list(dict.fromkeys(claim_refs))
+            constant_refs = [
+                snapshot.ref
+                for snapshot in certificate.normalized_operands
+                if snapshot.kind == "constant_ref"
+            ]
+            state.financial_program_ledger[program_id] = (
+                FinancialProgramLedgerEntry(
+                    program_id=program_id,
+                    program_sha256=execution.program_sha256,
+                    operator=certificate.operator.value,
+                    program=action.arguments.program,
+                    claim_relation=action.arguments.claim_relation,
+                    operand_value_refs=value_refs,
+                    claim_value_refs=claim_refs,
+                    constant_refs=constant_refs,
+                    result_value=certificate.result,
+                    result_type=certificate.result_type,
+                    certificate_ref=certificate_id,
+                )
+            )
+            state.numeric_certificate_ledger[certificate_id] = certificate
+            state.next_program_sequence += 1
+            envelope = CertificateEnvelope(
+                certificate_id=certificate_id,
+                kind=CertificateKind.NUMERIC,
+                payload_sha256=numeric_certificate_sha256(certificate),
+                claim_sha256=state.resume_identity.statement_sha256,
+                evidence_refs=certificate.source_evidence_refs,
+                verified=True,
+                diagnostic=(
+                    "claim relation satisfied"
+                    if certificate.relation_satisfied
+                    else "claim relation not satisfied"
+                ),
+            )
+            state.apply_skill_result(
+                SkillResult(
+                    status=SkillResultStatus.SATISFIED,
+                    target_obligation_id=target,
+                    satisfied_obligation_ids=[target],
+                    evidence_refs=[program_id],
+                    certificate=envelope,
+                    diagnostics=[
+                        "verified deterministic Decimal program; "
+                        f"relation_satisfied={str(certificate.relation_satisfied).lower()}"
+                    ],
+                )
+            )
+            state.last_observation = BoundedObservation(
+                skill=SkillName.EXECUTE_FINANCIAL_PROGRAM,
+                status="satisfied",
+                target_obligation_id=target,
+                references=[program_id, certificate_id],
             )
             return
 

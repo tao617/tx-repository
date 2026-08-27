@@ -13,6 +13,11 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
+from findver_agent.financial_dsl.models import (
+    ClaimRelation,
+    FinancialOperator,
+    FinancialProgram,
+)
 from findver_agent.schemas import Confidence, Label
 
 from .contracts import (
@@ -43,30 +48,6 @@ class V3RiskFlag(str, Enum):
     RULE_APPLICABILITY = "rule_applicability"
     UNRESOLVED_OBLIGATION = "unresolved_obligation"
     CERTIFICATE_FAILURE = "certificate_failure"
-
-
-class FinancialOperator(str, Enum):
-    ADD = "add"
-    SUBTRACT = "subtract"
-    MULTIPLY = "multiply"
-    DIVIDE = "divide"
-    SUM = "sum"
-    AVERAGE = "average"
-    MIN = "min"
-    MAX = "max"
-    ABSOLUTE_DIFFERENCE = "absolute_difference"
-    PCT_CHANGE = "pct_change"
-    RATIO = "ratio"
-    MARGIN = "margin"
-    BASIS_POINT_CHANGE = "basis_point_change"
-    CAGR = "cagr"
-    PER_SHARE = "per_share"
-    SHARE_OF_TOTAL = "share_of_total"
-    EQUALS = "equals"
-    APPROXIMATELY_EQUALS = "approximately_equals"
-    GREATER_THAN = "greater_than"
-    LESS_THAN = "less_than"
-    WITHIN_RANGE = "within_range"
 
 
 class V3ActionControl(BaseModel):
@@ -157,24 +138,12 @@ class BindFinancialValueArguments(BaseModel):
 
 
 class ExecuteFinancialProgramArguments(BaseModel):
-    """A shallow reference-only program request; never a source expression."""
+    """A bounded reference-only AST and optional root-to-claim relation."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    operator: FinancialOperator
-    operand_refs: list[ReferenceId] = Field(min_length=1, max_length=32)
-    claim_value_ref: ReferenceId | None = None
-    rounding_digits: int | None = Field(default=None, ge=0, le=12)
-    rounding_mode: Literal[
-        "half_even", "half_up", "half_down", "down", "up"
-    ] = "half_even"
-
-    @field_validator("operand_refs")
-    @classmethod
-    def operand_refs_are_unique(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)):
-            raise ValueError("operand_refs must be unique")
-        return value
+    program: FinancialProgram
+    claim_relation: ClaimRelation | None = None
 
 
 class SearchFinancialRulesArguments(BaseModel):

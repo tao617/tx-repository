@@ -67,7 +67,19 @@ def test_parser_accepts_only_one_strict_v3_action_and_json_fences():
         ),
         (
             "execute_financial_program",
-            {"operator": "subtract", "operand_refs": ["value-1", "value-2"]},
+            {
+                "program": {
+                    "op": "subtract",
+                    "args": [
+                        {"kind": "value_ref", "ref": "value-1"},
+                        {"kind": "value_ref", "ref": "value-2"},
+                    ],
+                },
+                "claim_relation": {
+                    "op": "equals",
+                    "claim_ref": "claim-value-1",
+                },
+            },
         ),
         (
             "search_financial_rules",

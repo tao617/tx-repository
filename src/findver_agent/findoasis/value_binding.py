@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Iterable, Literal
@@ -46,7 +47,7 @@ class ValueRef(BaseModel):
     row_index: int | None = Field(default=None, ge=0)
     column_index: int | None = Field(default=None, ge=0)
     raw_value: str = Field(min_length=1, max_length=128)
-    normalized_value: str = Field(pattern=DECIMAL_PATTERN, max_length=128)
+    normalized_value: str = Field(min_length=1, max_length=128)
     numeric_type: Literal[
         "money",
         "percentage",
@@ -95,6 +96,16 @@ class ValueRef(BaseModel):
             raise ValueError(
                 "mandatory ValueRef cannot retain unit or period ambiguity"
             )
+        if self.numeric_type == "date":
+            try:
+                date.fromisoformat(self.normalized_value)
+            except ValueError as error:
+                raise ValueError("date ValueRef must use ISO YYYY-MM-DD") from error
+        elif self.numeric_type == "boolean":
+            if self.normalized_value not in {"true", "false"}:
+                raise ValueError("boolean ValueRef must be true or false")
+        elif not re.fullmatch(DECIMAL_PATTERN, self.normalized_value):
+            raise ValueError("numeric ValueRef requires a canonical Decimal string")
         return self
 
     @property
@@ -313,10 +324,6 @@ def _validate_detected_metadata(
 def _canonical_decimal(
     arguments: BindFinancialValueArguments,
 ) -> str:
-    if arguments.numeric_type in {"date", "boolean"}:
-        raise ValueBindingError(
-            f"numeric_type {arguments.numeric_type} is not Decimal-bindable"
-        )
     match = _NUMBER_RE.fullmatch(arguments.raw_value)
     if match is None:
         raise ValueBindingError(
@@ -356,6 +363,26 @@ def _canonical_decimal(
     if len(canonical) > 128:
         raise ValueBindingError("normalized Decimal exceeds the bounded value size")
     return canonical
+
+
+def _canonical_value(arguments: BindFinancialValueArguments) -> str:
+    if arguments.numeric_type == "date":
+        raw = arguments.raw_value.strip()
+        try:
+            return date.fromisoformat(raw).isoformat()
+        except ValueError as error:
+            raise ValueBindingError(
+                "date raw_value must be a valid ISO YYYY-MM-DD literal"
+            ) from error
+    if arguments.numeric_type == "boolean":
+        raw = arguments.raw_value.strip().casefold()
+        aliases = {"true": "true", "yes": "true", "false": "false", "no": "false"}
+        if raw not in aliases:
+            raise ValueBindingError(
+                "boolean raw_value must be true, false, yes, or no"
+            )
+        return aliases[raw]
+    return _canonical_decimal(arguments)
 
 
 def _resolved_ambiguity_flags(
@@ -412,7 +439,7 @@ class FinancialValueBinder:
             )
 
         start, end = _exact_unique_span(evidence.exact_text, arguments.raw_value)
-        normalized = _canonical_decimal(arguments)
+        normalized = _canonical_value(arguments)
         flags = _resolved_ambiguity_flags(arguments, ambiguity_flags)
         if mandatory and {
             ValueAmbiguityFlag.UNIT_AMBIGUOUS,

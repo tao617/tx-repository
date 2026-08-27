@@ -4,18 +4,33 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import tempfile
 from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from findver_agent.financial_dsl.claim_parser import parse_claim_values
+from findver_agent.financial_dsl.executor import (
+    financial_program_leaf_references,
+    financial_program_sha256,
+    numeric_certificate_sha256,
+)
+from findver_agent.financial_dsl.models import (
+    ClaimRelation,
+    ClaimValueRef,
+    FinancialProgram,
+    NumericCertificate,
+)
 from findver_agent.schemas import Confidence, Prediction, PublicTask
 
 from .contracts import (
     AddDependencyDelta,
     AttachEvidenceDelta,
+    CertificateKind,
     CertificateEnvelope,
     Diagnostic,
     FinalCertificateStatus,
@@ -174,7 +189,7 @@ class NumericValueLedgerEntry(BaseModel):
     value_id: ReferenceId
     evidence_ref: ReferenceId
     raw_value: str = Field(min_length=1, max_length=128)
-    normalized_value: str = Field(pattern=DECIMAL_PATTERN, max_length=128)
+    normalized_value: str = Field(min_length=1, max_length=128)
     numeric_type: Literal[
         "money",
         "percentage",
@@ -216,6 +231,16 @@ class NumericValueLedgerEntry(BaseModel):
             raise ValueError("paragraph value cannot contain table coordinates")
         if self.table_id is not None and not all(item is not None for item in coordinates):
             raise ValueError("table value requires row and column coordinates")
+        if self.numeric_type == "date":
+            try:
+                date.fromisoformat(self.normalized_value)
+            except ValueError as error:
+                raise ValueError("date ledger values must use ISO YYYY-MM-DD") from error
+        elif self.numeric_type == "boolean":
+            if self.normalized_value not in {"true", "false"}:
+                raise ValueError("boolean ledger values must be true or false")
+        elif not re.fullmatch(DECIMAL_PATTERN, self.normalized_value):
+            raise ValueError("numeric ledger values require canonical Decimal strings")
         return self
 
 
@@ -224,11 +249,17 @@ class FinancialProgramLedgerEntry(BaseModel):
 
     program_id: ReferenceId
     program_sha256: str = Field(pattern=SHA256_PATTERN)
+    operator: ShortText
+    program: FinancialProgram
+    claim_relation: ClaimRelation | None = None
     operand_value_refs: list[ReferenceId] = Field(min_length=1, max_length=32)
-    result_value: str = Field(pattern=DECIMAL_PATTERN, max_length=128)
-    certificate_ref: ReferenceId | None = None
+    claim_value_refs: list[ReferenceId] = Field(default_factory=list, max_length=16)
+    constant_refs: list[ReferenceId] = Field(default_factory=list, max_length=8)
+    result_value: str = Field(min_length=1, max_length=128)
+    result_type: ShortText
+    certificate_ref: ReferenceId
 
-    @field_validator("operand_value_refs")
+    @field_validator("operand_value_refs", "claim_value_refs", "constant_refs")
     @classmethod
     def operand_refs_are_unique(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
@@ -434,13 +465,20 @@ class FinOASISQuestionState(BaseModel):
     obligations: list[Obligation] = Field(default_factory=list, max_length=256)
     next_obligation_sequence: int = Field(default=1, ge=1, le=1_000_000)
     next_value_sequence: int = Field(default=1, ge=1, le=1_000_000)
+    next_program_sequence: int = Field(default=1, ge=1, le=1_000_000)
     evidence_ledger: dict[ReferenceId, EvidenceLedgerEntry] = Field(
         default_factory=dict, max_length=512
     )
     numeric_value_ledger: dict[ReferenceId, NumericValueLedgerEntry] = Field(
         default_factory=dict, max_length=256
     )
+    claim_value_ledger: dict[ReferenceId, ClaimValueRef] = Field(
+        default_factory=dict, max_length=16
+    )
     financial_program_ledger: dict[ReferenceId, FinancialProgramLedgerEntry] = Field(
+        default_factory=dict, max_length=128
+    )
+    numeric_certificate_ledger: dict[ReferenceId, NumericCertificate] = Field(
         default_factory=dict, max_length=128
     )
     rule_evidence_ledger: dict[ReferenceId, RuleEvidenceLedgerEntry] = Field(
@@ -525,6 +563,28 @@ class FinOASISQuestionState(BaseModel):
                 raise ValueError("ValueRef IDs must be deterministic and contiguous")
         if self.next_value_sequence != len(self.numeric_value_ledger) + 1:
             raise ValueError("next_value_sequence does not follow the value ledger")
+        for sequence, claim in enumerate(self.claim_value_ledger.values(), start=1):
+            if claim.claim_value_id != f"claim-value-{sequence:04d}":
+                raise ValueError("ClaimValueRef IDs must be deterministic and contiguous")
+            if (
+                self.statement[claim.source_span_start : claim.source_span_end]
+                != claim.raw_value
+            ):
+                raise ValueError("claim value raw text does not match its source span")
+        expected_claim_values = {
+            claim.claim_value_id: claim for claim in parse_claim_values(self.statement)
+        }
+        if self.claim_value_ledger != expected_claim_values:
+            raise ValueError(
+                "claim value ledger does not match deterministic claim parsing"
+            )
+        for sequence, program in enumerate(
+            self.financial_program_ledger.values(), start=1
+        ):
+            if program.program_id != f"program-{sequence:04d}":
+                raise ValueError("financial program IDs must be deterministic and contiguous")
+        if self.next_program_sequence != len(self.financial_program_ledger) + 1:
+            raise ValueError("next_program_sequence does not follow the program ledger")
 
         known_ids = set(obligation_by_id)
         for obligation in self.obligations:
@@ -574,13 +634,151 @@ class FinOASISQuestionState(BaseModel):
             ):
                 raise ValueError("numeric value raw text does not match its source span")
         for program in self.financial_program_ledger.values():
+            if program.program_sha256 != financial_program_sha256(
+                program.program, program.claim_relation
+            ):
+                raise ValueError("financial program hash does not match canonical AST")
+            leaves = financial_program_leaf_references(program.program)
+            expected_value_refs = [
+                reference for kind, reference in leaves if kind == "value_ref"
+            ]
+            expected_claim_refs = [
+                reference for kind, reference in leaves if kind == "claim_value_ref"
+            ]
+            if program.claim_relation is not None:
+                expected_claim_refs.append(program.claim_relation.claim_ref)
+                expected_claim_refs = list(dict.fromkeys(expected_claim_refs))
+            expected_constant_refs = [
+                reference for kind, reference in leaves if kind == "constant_ref"
+            ]
+            if (
+                program.operand_value_refs != expected_value_refs
+                or program.claim_value_refs != expected_claim_refs
+                or program.constant_refs != expected_constant_refs
+                or program.operator != program.program.op.value
+            ):
+                raise ValueError("financial program reference index differs from its AST")
             if set(program.operand_value_refs) - set(self.numeric_value_ledger):
                 raise ValueError("financial program contains a dangling value reference")
-            if (
-                program.certificate_ref is not None
-                and program.certificate_ref not in self.certificate_ledger
-            ):
+            if set(program.claim_value_refs) - set(self.claim_value_ledger):
+                raise ValueError("financial program contains a dangling claim value reference")
+            if program.certificate_ref not in self.certificate_ledger:
                 raise ValueError("financial program contains a dangling certificate reference")
+            numeric_certificate = self.numeric_certificate_ledger.get(
+                program.certificate_ref
+            )
+            if numeric_certificate is None:
+                raise ValueError("financial program lacks its numeric certificate payload")
+            if (
+                numeric_certificate.program_id != program.program_id
+                or numeric_certificate.program_sha256 != program.program_sha256
+                or numeric_certificate.operator.value != program.operator
+                or numeric_certificate.result != program.result_value
+                or numeric_certificate.result_type != program.result_type
+            ):
+                raise ValueError("financial program and numeric certificate disagree")
+            certificate_operand_refs = set(numeric_certificate.operand_refs)
+            required_program_refs = set(program.operand_value_refs) | set(
+                program.constant_refs
+            )
+            allowed_program_refs = required_program_refs | set(program.claim_value_refs)
+            if not required_program_refs <= certificate_operand_refs:
+                raise ValueError("numeric certificate omits a program operand")
+            if certificate_operand_refs - allowed_program_refs:
+                raise ValueError("numeric certificate contains an unknown program operand")
+            if [
+                snapshot.ref for snapshot in numeric_certificate.normalized_operands
+            ] != numeric_certificate.operand_refs:
+                raise ValueError("numeric certificate operand snapshots are out of sync")
+            if numeric_certificate.operand_refs != [
+                reference for _, reference in leaves
+            ]:
+                raise ValueError("numeric certificate operands differ from program AST")
+            for snapshot in numeric_certificate.normalized_operands:
+                if snapshot.kind == "value_ref":
+                    value = self.numeric_value_ledger[snapshot.ref]
+                    actual = (
+                        value.normalized_value,
+                        value.numeric_type,
+                        value.currency,
+                        value.unit,
+                        value.scale,
+                        value.period,
+                    )
+                elif snapshot.kind == "claim_value_ref":
+                    claim = self.claim_value_ledger[snapshot.ref]
+                    actual = (
+                        claim.normalized_value,
+                        claim.numeric_type,
+                        claim.currency,
+                        claim.unit,
+                        claim.scale,
+                        "unknown",
+                    )
+                else:
+                    constants = {
+                        "constant:zero": "0",
+                        "constant:one": "1",
+                        "constant:hundred": "100",
+                    }
+                    actual = (
+                        constants[snapshot.ref],
+                        "scalar",
+                        "unknown",
+                        "one",
+                        "one",
+                        "unknown",
+                    )
+                recorded = (
+                    snapshot.normalized_value,
+                    snapshot.numeric_type,
+                    snapshot.currency,
+                    snapshot.unit,
+                    snapshot.scale,
+                    snapshot.period,
+                )
+                if recorded != actual:
+                    raise ValueError("numeric certificate operand snapshot was altered")
+            expected_evidence = list(
+                dict.fromkeys(
+                    self.numeric_value_ledger[reference].evidence_ref
+                    for reference in program.operand_value_refs
+                )
+            )
+            if numeric_certificate.source_evidence_refs != expected_evidence:
+                raise ValueError("numeric certificate source evidence is incomplete")
+            if numeric_certificate.claim_relation != "program_boolean":
+                relation_claim_ref = numeric_certificate.claim_relation.rsplit(
+                    ":", 1
+                )[-1]
+                if relation_claim_ref not in program.claim_value_refs:
+                    raise ValueError("numeric certificate claim relation is dangling")
+        if set(self.numeric_certificate_ledger) - set(self.certificate_ledger):
+            raise ValueError("numeric certificate payload lacks an envelope")
+        for certificate_id, numeric_certificate in self.numeric_certificate_ledger.items():
+            if numeric_certificate.certificate_id != certificate_id:
+                raise ValueError("numeric certificate key does not match its identifier")
+            envelope = self.certificate_ledger[certificate_id]
+            if envelope.kind is not CertificateKind.NUMERIC or not envelope.verified:
+                raise ValueError("numeric certificate envelope must be verified numeric")
+            if envelope.payload_sha256 != numeric_certificate_sha256(
+                numeric_certificate
+            ):
+                raise ValueError("numeric certificate payload hash does not match envelope")
+            if envelope.evidence_refs != numeric_certificate.source_evidence_refs:
+                raise ValueError("numeric certificate evidence differs from envelope")
+            program = self.financial_program_ledger.get(
+                numeric_certificate.program_id
+            )
+            if program is None or program.certificate_ref != certificate_id:
+                raise ValueError("numeric certificate is not linked to its program")
+        numeric_envelopes = {
+            certificate_id
+            for certificate_id, envelope in self.certificate_ledger.items()
+            if envelope.kind is CertificateKind.NUMERIC
+        }
+        if numeric_envelopes - set(self.numeric_certificate_ledger):
+            raise ValueError("numeric certificate envelope lacks its full payload")
         for certificate in self.certificate_ledger.values():
             if set(certificate.evidence_refs) - evidence_refs:
                 raise ValueError("certificate contains a dangling evidence reference")
@@ -670,6 +868,7 @@ class FinOASISQuestionState(BaseModel):
         ledgers = (
             (self.evidence_ledger, "evidence_id"),
             (self.numeric_value_ledger, "value_id"),
+            (self.claim_value_ledger, "claim_value_id"),
             (self.financial_program_ledger, "program_id"),
             (self.rule_evidence_ledger, "rule_evidence_id"),
             (self.certificate_ledger, "certificate_id"),
@@ -699,11 +898,13 @@ class FinOASISQuestionState(BaseModel):
         total_steps = exploration_limit + finalization_steps + review_steps
         if total_steps != max_steps:
             raise ValueError("phase attempt limits must sum to max_steps")
+        claims = parse_claim_values(task.statement)
         return cls(
             resume_identity=resume_identity,
             example_id=task.example_id,
             statement=task.statement,
             report=task.report,
+            claim_value_ledger={claim.claim_value_id: claim for claim in claims},
             remaining_steps=total_steps,
             phase_attempts=PhaseAttemptBudget(
                 exploration_limit=exploration_limit,

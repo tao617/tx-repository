@@ -26,6 +26,7 @@ from findver_agent.findoasis.state import (
     BoundedObservation,
     EvidenceLedgerEntry,
     FinOASISQuestionState,
+    NumericValueLedgerEntry,
     ResumeIdentity,
     TableCandidateRecord,
 )
@@ -329,6 +330,53 @@ def test_prompt_exposes_bounded_table_catalog_without_raw_html():
         phase_budget="attempt 1/6",
     )[1]["content"]
     assert "table:7:0" not in hidden
+
+
+def test_prompt_exposes_value_and_claim_refs_only_when_findsl_is_available():
+    state = make_state("Revenue increased by 20% in 2025.")
+    text = "Revenue was USD 120 million in 2025."
+    state.evidence_ledger["ev-value"] = EvidenceLedgerEntry(
+        evidence_id="ev-value",
+        source="report_paragraph",
+        paragraph_id=3,
+        exact_text=text,
+        exact_text_sha256=hashlib.sha256(text.encode()).hexdigest(),
+    )
+    start = text.index("120")
+    state.numeric_value_ledger["value-0001"] = NumericValueLedgerEntry(
+        value_id="value-0001",
+        evidence_ref="ev-value",
+        raw_value="120",
+        normalized_value="120",
+        numeric_type="money",
+        currency="USD",
+        unit="USD",
+        scale="million",
+        period="2025",
+        entity="issuer",
+        metric="revenue",
+        paragraph_id=3,
+        text_span_start=start,
+        text_span_end=start + 3,
+    )
+    state.next_value_sequence = 2
+
+    visible = PromptBuilder().build(
+        state, (PROGRAM,), phase_budget="attempt 5/6"
+    )
+    user = visible[1]["content"]
+    allowed = allowed_section(visible)
+    assert '"value_ref":"value-0001"' in user
+    assert '"claim_value_ref":"claim-value-0001"' in user
+    assert '"program"' in allowed
+    assert '"constant:hundred"' in allowed
+    assert '"literal"' not in allowed
+
+    hidden = PromptBuilder().build(
+        state, (SEARCH,), phase_budget="attempt 1/6"
+    )[1]["content"]
+    assert '"value_ref":"value-0001"' not in hidden
+    assert '"claim_value_ref":"claim-value-0001"' not in hidden
 
 
 def test_table_cell_prompt_injection_remains_untrusted_data():

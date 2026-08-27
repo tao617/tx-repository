@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 3 — additive table evidence and bound financial values
+- Phase: Phase 4 — evidence-bound FinDSL and numeric certificates
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `542de745a7f3802cd5d3aa5319888953c46dba6f`
+- Current committed HEAD: `56f45ffd7f9770c1a146cd00b14fa79a9b48deef`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 3 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 through 2 pushed
-- Remote branch SHA: `542de745a7f3802cd5d3aa5319888953c46dba6f`
+- Worktree: Phase 4 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 through 3 pushed
+- Remote branch SHA: `56f45ffd7f9770c1a146cd00b14fa79a9b48deef`
 - Draft PR: not yet created
 
 ## Completed work
@@ -110,6 +110,35 @@
   `execute_financial_program` becomes visible only after two distinct evidence-bound
   operands satisfy the numeric and unit-period obligations.
 
+### Phase 4
+
+- Added an independent `financial_dsl` package with a strict recursive AST. Leaves are
+  tagged `ValueRef`, `ClaimValueRef`, or one of three allowlisted `ConstantRef` values;
+  raw literals, arbitrary functions, code, files and network operations have no schema.
+- Enforced maximum AST depth 4, 32 nodes and 32 total leaves in both execution and
+  resume validation. Operand reuse, unknown references and source-less programs fail.
+- Implemented all required base, aggregate, financial and comparison operators with
+  Decimal precision 50, canonical strings, explicit rounding/tolerance, percentage
+  points internally and 100 basis points per percentage point.
+- Defined unit, currency, scale and period semantics per operator. Incompatible types,
+  FY/quarter granularity, currency/unit mismatches and zero denominators fail closed;
+  negative-denominator conventions are explicit and certificate-diagnosed.
+- Added deterministic claim-value parsing with exact source spans, typed units/scales,
+  relation metadata and Runtime IDs. ISO dates and booleans bind exactly for type-safe
+  comparisons only; every arithmetic path remains Decimal-only.
+- Added full `NumericCertificate` payloads containing canonical program hash, ordered
+  leaf/evidence refs, operand snapshots, result metadata, all three check outcomes,
+  rounding/tolerance, claim relation and relation outcome.
+- Persisted canonical AST and claim relation with each program. Resume validation
+  independently recomputes the program hash, leaf index, evidence projection, operand
+  snapshots, certificate payload hash and certificate-envelope link.
+- Integrated execution transactionally into the v3 agent. Only a successfully validated
+  numeric certificate satisfies `numeric_operation`; false claim relations remain
+  explicit verified outcomes rather than execution failures.
+- Added dynamic prompt summaries for bound values and parsed claim values only while
+  FinDSL is available. IE and pre-binding prompts continue to hide the entire contract
+  and all numeric reference metadata.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -144,6 +173,15 @@
 - `git diff --check`: passed.
 - No model, network, scorer, Gold, official test input or paid API was used.
 
+## Phase 4 tests
+
+- Focused action, binding, FinDSL, prompt, state, routing and integration selection:
+  114 passed.
+- Full suite: 499 passed in 3.10s on Python 3.12.
+- `.venv/bin/python -m compileall -q src tests`: passed.
+- `git diff --check`: passed.
+- No model, network, scorer, Gold, official test input or paid API was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -159,13 +197,17 @@
   FinDSL operands.
 - Treat the tracked rule corpus as synthetic experimental fixture, not formal guidance.
 
-## Files changed through Phase 3
+## Files changed through Phase 4
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
 - `docs/STATE.yaml`
 - `docs/SESSION_HANDOFF.md`
 - `src/findver_agent/config.py`
+- `src/findver_agent/financial_dsl/__init__.py`
+- `src/findver_agent/financial_dsl/models.py`
+- `src/findver_agent/financial_dsl/claim_parser.py`
+- `src/findver_agent/financial_dsl/executor.py`
 - `src/findver_agent/findoasis/__init__.py`
 - `src/findver_agent/findoasis/contracts.py`
 - `src/findver_agent/findoasis/actions.py`
@@ -183,6 +225,7 @@
 - `tests/unit/test_actions_v3.py`
 - `tests/unit/test_state_v3.py`
 - `tests/unit/test_finoasis_config.py`
+- `tests/unit/test_financial_dsl_v3.py`
 - `tests/unit/test_compatibility_freeze.py`
 - `tests/unit/test_obligation_seeder_v3.py`
 - `tests/unit/test_skill_registry_v3.py`
@@ -198,8 +241,8 @@
 ## Unresolved issues and risks
 
 - Python 3.11 is unavailable locally; CI must run the 3.11 leg.
-- FinDSL and rule-specific certificate schemas will refine the Phase 1 generic ledgers
-  without weakening their reference and resume invariants.
+- Rule-specific certificate schemas will refine the Phase 1 generic ledgers without
+  weakening their reference and resume invariants.
 - Table context and `html_tables` are order-aligned in all 600 tracked reports but have
   no explicit foreign key; the additive loader validates alignment and fails closed
   rather than guessing.
@@ -210,8 +253,8 @@
 
 ## Exact next step
 
-Implement Phase 4: reference-only FinDSL validation/execution over evidence-bound
-ValueRefs, deterministic Decimal arithmetic, and NumericCertificate generation.
+Implement Phase 5: frozen offline rule-corpus validation, deterministic Knowledge Skill
+search/read, mechanical applicability checks and rule-applicability certificates.
 
 ## Safe recovery commands
 
@@ -239,4 +282,5 @@ git diff --check
 | Phase 0 | `9e896fa0c4a534b5b6d367f4b86b88452d8278f3` | pushed | `docs: record FinOASIS implementation plan` |
 | Phase 1 | `31dab0994339927ed628fc6475f9faf6ec476448` | pushed | `feat: add typed proof obligation contracts` |
 | Phase 2 | `542de745a7f3802cd5d3aa5319888953c46dba6f` | pushed | `feat: gate skills by pending proof obligations` |
-| Phase 3 | pending | pending | `feat: bind financial values to report evidence` |
+| Phase 3 | `56f45ffd7f9770c1a146cd00b14fa79a9b48deef` | pushed | `feat: bind financial values to report evidence` |
+| Phase 4 | pending | pending | `feat: execute evidence-bound financial programs` |

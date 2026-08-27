@@ -343,12 +343,50 @@ def test_duration_and_count_literals_remain_decimal_bound():
     assert count.normalized_value == "1200"
 
 
-@pytest.mark.parametrize("numeric_type", ["date", "boolean"])
-def test_non_decimal_types_fail_closed_in_the_decimal_binder(numeric_type):
-    with pytest.raises(ValueBindingError, match="not Decimal-bindable"):
+@pytest.mark.parametrize(
+    ("raw_value", "numeric_type", "unit", "normalized"),
+    [
+        ("2024-12-31", "date", "date", "2024-12-31"),
+        ("YES", "boolean", "boolean", "true"),
+        ("false", "boolean", "boolean", "false"),
+    ],
+)
+def test_date_and_boolean_values_bind_exactly_without_entering_decimal_arithmetic(
+    raw_value, numeric_type, unit, normalized
+):
+    bound = bind_financial_value(
+        _arguments(
+            raw_value,
+            numeric_type=numeric_type,
+            currency="unknown",
+            unit=unit,
+            scale="one",
+        ),
+        _evidence(f"The exact value was {raw_value} in FY2024."),
+        value_id=f"value-{numeric_type}",
+    )
+    assert bound.normalized_value == normalized
+    assert bound.numeric_type == numeric_type
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "numeric_type", "message"),
+    [
+        ("2024-99-99", "date", "valid ISO"),
+        ("maybe", "boolean", "true, false, yes, or no"),
+    ],
+)
+def test_invalid_date_and_boolean_literals_fail_closed(raw_value, numeric_type, message):
+    with pytest.raises(ValueBindingError, match=message):
         bind_financial_value(
-            _arguments("1", numeric_type=numeric_type),
-            _evidence("The value was 1."),
+            _arguments(
+                raw_value,
+                numeric_type=numeric_type,
+                currency="unknown",
+                unit=numeric_type,
+                scale="one",
+            ),
+            _evidence(f"The exact value was {raw_value} in FY2024."),
             value_id="value-invalid",
         )
 

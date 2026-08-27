@@ -1,10 +1,11 @@
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from findver_agent.config import AgentConfig
 from findver_agent.findoasis.contracts import ObligationStatus, SkillName
-from findver_agent.findoasis.state import FinOASISStateStore
+from findver_agent.findoasis.state import FinOASISQuestionState, FinOASISStateStore
 from findver_agent.model_backends.base import GenerationConfig, ModelResponse
 from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
@@ -171,6 +172,19 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
                 },
                 "obl-0002",
             ),
+            action(
+                "execute_financial_program",
+                {
+                    "program": {
+                        "op": "greater_than",
+                        "args": [
+                            {"kind": "value_ref", "ref": "value-0001"},
+                            {"kind": "value_ref", "ref": "value-0002"},
+                        ],
+                    }
+                },
+                "obl-0004",
+            ),
             AbortRun(),
         ]
     )
@@ -211,14 +225,36 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
     ]
     assert state.obligation("obl-0002").status is ObligationStatus.SATISFIED
     assert state.obligation("obl-0003").status is ObligationStatus.SATISFIED
-    assert state.obligation("obl-0004").status is ObligationStatus.PENDING
+    assert state.obligation("obl-0004").status is ObligationStatus.SATISFIED
     assert state.skill_call_counts[SkillName.READ_TABLE_REGION] == 1
     assert state.skill_call_counts[SkillName.BIND_FINANCIAL_VALUE] == 2
+    assert state.skill_call_counts[SkillName.EXECUTE_FINANCIAL_PROGRAM] == 1
+    assert list(state.financial_program_ledger) == ["program-0001"]
+    assert list(state.numeric_certificate_ledger) == [
+        "numeric-certificate-0001"
+    ]
+    certificate = state.numeric_certificate_ledger["numeric-certificate-0001"]
+    assert certificate.result == "true"
+    assert certificate.relation_satisfied is True
+    assert certificate.source_evidence_refs == [
+        "table-cell:table:0000:1:1",
+        "table-cell:table:0000:1:2",
+    ]
 
     before_values = backend.requests[3][0]["content"]
     assert '"action":"execute_financial_program"' not in before_values
     after_values = backend.requests[5][0]["content"]
     assert '"action":"execute_financial_program"' in after_values
+    after_values_user = backend.requests[5][1]["content"]
+    assert '"value_ref":"value-0001"' in after_values_user
+    assert '"claim_value_ref":"claim-value-0001"' in after_values_user
     assert "<table" not in "\n".join(
         message["content"] for request in backend.requests for message in request
     )
+
+    tampered = state.model_dump(mode="json")
+    tampered["numeric_certificate_ledger"]["numeric-certificate-0001"][
+        "diagnostics"
+    ] = ["tampered certificate"]
+    with pytest.raises(ValidationError, match="payload hash"):
+        FinOASISQuestionState.model_validate(tampered)
