@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase5-frozen-rules
+current_phase: findoasis-phase6-claim-verifier
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase5-frozen-rules
-last_git_commit: ee910afa61c755955a58bbd62423de9878bfae00
+last_completed_phase: findoasis-phase6-claim-verifier
+last_git_commit: b56c0640e4f95682641db19bafa177bb21e18ba4
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -361,19 +361,27 @@ decisions:
   only to check_rule_applicability; full rule text is never copied into prompts.
 - Only mechanically conclusive applicable or not_applicable results satisfy rule applicability;
   undetermined remains partial and cannot be rewritten by model control.
+- Persist each final verification payload beside its envelope and bind verified predictions
+  or Review drafts to its certificate and exact submission hash.
+- Replay FinDSL and frozen rule applicability certificates during final verification;
+  map conclusive true/applicable specialist results to entailed and false/not_applicable
+  to refuted for this experimental protocol.
+- Allow incomplete fallback only during forced finalization with low confidence plus
+  unresolved_obligation risk; tamper, unknown evidence, label contradiction, and invalid
+  certificate failures remain fatal.
+- Selective Review leaves the final obligation pending and may fall back only to a
+  certificate-verified draft after replaying it against current ledgers.
 files_changed:
-- src/findver_agent/financial_rules/
-- src/findver_agent/findoasis/actions.py
+- src/findver_agent/findoasis/__init__.py
 - src/findver_agent/findoasis/agent.py
+- src/findver_agent/findoasis/claim_verifier.py
 - src/findver_agent/findoasis/prompt_builder.py
-- src/findver_agent/findoasis/seeder.py
 - src/findver_agent/findoasis/state.py
-- tests/fixtures/finoasis_rule_corpus/
+- tests/integration/test_finoasis_router.py
 - tests/integration/test_finoasis_rules.py
-- tests/unit/test_obligation_seeder_v3.py
-- tests/unit/test_prompt_v3.py
-- tests/unit/test_rule_corpus_v3.py
-- tests/unit/test_skill_router_v3.py
+- tests/integration/test_finoasis_submission.py
+- tests/integration/test_finoasis_table_value.py
+- tests/unit/test_claim_verifier_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -664,6 +672,7 @@ tests_passed:
   tests passed
 - 61 focused Phase 5 corpus, prompt, seeder, router, and integration tests passed
 - 514 full Agent tests passed on Python 3.12
+- 524 repository tests; 49 focused Phase 6 tests; compileall and diff checks
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -704,8 +713,11 @@ known_issues:
   3.11 leg.
 - Formal production financial rule sources, certificate scorer sidecar, licensing,
   and review remain unauthorized and out of scope.
+- Python 3.11 is unavailable locally; repository CI must exercise 3.11 compatibility.
+- Natural-language selection of a FinDSL program or frozen rule remains model-dependent,
+  and no production rule corpus is authorized.
 next_actions:
-- Implement Phase 6 deterministic ClaimCertificateVerifier, certificate-aware submit
-  gating, bounded fallback, and review repair tests.
+- Implement Phase 7 experimental configurations, aggregate-safe metrics, scripted
+  IE/numeric/knowledge/mixed tasks, CLI verification, and credential-free Docker smoke.
 blocked_items: []
-last_updated: '2026-08-28T02:51:56+08:00'
+last_updated: '2026-08-28T03:08:58+08:00'

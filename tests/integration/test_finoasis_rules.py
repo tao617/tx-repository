@@ -16,15 +16,11 @@ from findver_agent.financial_rules.models import RuleApplicabilityResult
 from findver_agent.model_backends.base import GenerationConfig, ModelResponse
 from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
-from findver_agent.schemas import PublicTask
+from findver_agent.schemas import PredictionStatus, PublicTask
 
 
 MANIFEST_SHA256 = "549461e4b4a2fb1b8357b30f03589f62562db7a4b26ac8d38074b34080a4dc33"
 RECORDS_SHA256 = "4a3085d2b0d32a320fbc8e5b99527221e1abd161a3a277239732804873fe3436"
-
-
-class AbortRun(BaseException):
-    pass
 
 
 class SequenceBackend:
@@ -182,7 +178,15 @@ async def test_rule_search_read_and_applicability_certificate_are_gated(tmp_path
                 },
                 "obl-0003",
             ),
-            AbortRun(),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [0],
+                    "explanation": "The report fact and applicable frozen rule support the claim.",
+                },
+                "obl-0004",
+            ),
         ]
     )
     run_dir = tmp_path / "run"
@@ -196,8 +200,7 @@ async def test_rule_search_read_and_applicability_certificate_are_gated(tmp_path
         run_dir=run_dir,
     )
 
-    with pytest.raises(AbortRun):
-        await orchestrator.run_question(task)
+    prediction = await orchestrator.run_question(task)
 
     state = FinOASISStateStore(run_dir / "state").load_or_create(
         task,
@@ -209,6 +212,12 @@ async def test_rule_search_read_and_applicability_certificate_are_gated(tmp_path
     assert state.obligation("obl-0001").status is ObligationStatus.SATISFIED
     assert state.obligation("obl-0002").status is ObligationStatus.SATISFIED
     assert state.obligation("obl-0003").status is ObligationStatus.SATISFIED
+    assert state.obligation("obl-0004").status is ObligationStatus.SATISFIED
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert state.final_certificate_status.value == "verified"
+    final = state.final_verification_certificate_ledger["final-certificate-0001"]
+    assert final.rule_certificate_refs == ["rule-certificate-0001"]
+    assert final.label_supported is True
     assert len(state.rule_search_history) == 1
     assert list(state.rule_evidence_ledger) == ["rule-evidence-0001"]
     assert list(state.rule_applicability_certificate_ledger) == [

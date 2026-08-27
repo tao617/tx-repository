@@ -1,10 +1,11 @@
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from findver_agent.config import AgentConfig
 from findver_agent.findoasis.contracts import ObligationStatus, SkillName
-from findver_agent.findoasis.state import FinOASISStateStore
+from findver_agent.findoasis.state import FinOASISQuestionState, FinOASISStateStore
 from findver_agent.model_backends.base import GenerationConfig, ModelResponse
 from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
@@ -161,7 +162,13 @@ async def test_dynamic_router_rejects_hidden_skill_without_ledger_mutation(tmp_p
         finalization_steps=1,
     )
 
-    assert prediction.status is PredictionStatus.INVALID
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert prediction.label.value == "entailed"
+    assert state.final_certificate_status.value == "verified"
+    assert list(state.final_verification_certificate_ledger) == [
+        "final-certificate-0001"
+    ]
+    assert state.obligation("obl-0002").status is ObligationStatus.SATISFIED
     assert state.skill_rejection_counts == {SkillName.EXECUTE_FINANCIAL_PROGRAM: 1}
     assert state.financial_program_ledger == {}
     assert state.numeric_value_ledger == {}
@@ -169,6 +176,18 @@ async def test_dynamic_router_rejects_hidden_skill_without_ledger_mutation(tmp_p
     assert list(state.evidence_ledger) == ["report-paragraph:1"]
     assert state.evidence_ledger["report-paragraph:1"].exact_text.startswith("Revenue")
     assert state.report_search_history[0].hits[0].paragraph_id == 1
+
+    tampered = state.model_dump(mode="json")
+    tampered["final_verification_certificate_ledger"][
+        "final-certificate-0001"
+    ]["diagnostics"][0] = "tampered final verifier payload"
+    with pytest.raises(ValidationError, match="payload hash does not match"):
+        FinOASISQuestionState.model_validate(tampered)
+
+    tampered = state.model_dump(mode="json")
+    tampered["prediction"]["explanation"] = "A changed explanation."
+    with pytest.raises(ValidationError, match="explanation differs"):
+        FinOASISQuestionState.model_validate(tampered)
 
     initial_allowed = backend.requests[0][0]["content"].split(
         "Allowed actions (complete current set", 1

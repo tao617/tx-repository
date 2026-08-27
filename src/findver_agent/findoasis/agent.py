@@ -31,7 +31,7 @@ from findver_agent.model_backends.base import (
     context_window_metadata,
 )
 from findver_agent.report_store import ReportSession, ReportStore
-from findver_agent.schemas import Prediction, PredictionStatus, PublicTask
+from findver_agent.schemas import Confidence, Prediction, PredictionStatus, PublicTask
 from findver_agent.skills import ReadParagraphsSkill, SearchReportSkill
 from findver_agent.skills.base import SkillError
 from findver_agent.trace_writer import TraceWriter
@@ -48,7 +48,13 @@ from .actions import (
     ReadTableRegionAction,
     SearchFinancialRulesAction,
     SearchReportAction,
+    SubmitAnswerAction,
     parse_action,
+)
+from .claim_verifier import (
+    ClaimCertificateVerifier,
+    ClaimVerificationResult,
+    claim_verification_certificate_sha256,
 )
 from .contracts import (
     CertificateEnvelope,
@@ -177,6 +183,7 @@ class FinOASISAgent:
             )
         except RuleCorpusError as error:
             raise ValueError(f"configured frozen rule corpus is invalid: {error}") from error
+        self.claim_verifier = ClaimCertificateVerifier(self.rule_corpus)
 
     async def run_question(self, task: PublicTask) -> Prediction:
         session = self.report_store.open_session(task.report)
@@ -230,6 +237,16 @@ class FinOASISAgent:
                         {"phase": "finalization", "reason": "no_available_skill"},
                     )
                     continue
+                if (
+                    state.phase is QuestionPhase.REVIEW
+                    and state.draft_prediction is not None
+                    and state.draft_certificate_ref is not None
+                ):
+                    return self._close_with_review_fallback(
+                        state,
+                        trace,
+                        "no Review Skill remained available",
+                    )
                 return self._close_invalid(
                     state,
                     trace,
@@ -273,6 +290,8 @@ class FinOASISAgent:
                     else "model"
                 )
                 state.record_error(kind, f"{type(error).__name__}: {error}")
+                if state.phase is QuestionPhase.REVIEW and state.draft_prediction:
+                    state.review_failure_reason = f"{kind}: {type(error).__name__}"[:160]
                 self.state_store.save(state)
                 trace.write(
                     "runtime_error",
@@ -298,6 +317,8 @@ class FinOASISAgent:
                 action = parse_action(response.content)
             except ActionParseError as error:
                 state.record_error("parse", str(error))
+                if state.phase is QuestionPhase.REVIEW and state.draft_prediction:
+                    state.review_failure_reason = f"parse: {error}"[:160]
                 self.state_store.save(state)
                 trace.write(
                     "runtime_error",
@@ -354,6 +375,8 @@ class FinOASISAgent:
                 )
             except (SkillError, ValueError, TypeError) as error:
                 state.record_error("skill", str(error))
+                if state.phase is QuestionPhase.REVIEW and state.draft_prediction:
+                    state.review_failure_reason = f"skill: {error}"[:160]
                 state.last_observation = BoundedObservation(
                     skill=skill_name,
                     status="invalid",
@@ -382,6 +405,53 @@ class FinOASISAgent:
                     ),
                 },
             )
+            if skill_name is SkillName.SUBMIT_ANSWER and state.last_observation:
+                references = state.last_observation.references
+                if references:
+                    final_certificate = (
+                        state.final_verification_certificate_ledger.get(
+                            references[0]
+                        )
+                    )
+                    if final_certificate is not None:
+                        trace.write(
+                            "claim_certificate_verification",
+                            {
+                                "certificate_id": final_certificate.certificate_id,
+                                "result": final_certificate.result.value,
+                                "failure_codes": [
+                                    item.value
+                                    for item in final_certificate.failure_codes
+                                ],
+                                "numeric_certificate_count": len(
+                                    final_certificate.numeric_certificate_refs
+                                ),
+                                "rule_certificate_count": len(
+                                    final_certificate.rule_certificate_refs
+                                ),
+                                "unresolved_obligation_count": len(
+                                    final_certificate.unresolved_obligation_ids
+                                ),
+                            },
+                        )
+                        if (
+                            state.phase is QuestionPhase.REVIEW
+                            and state.draft_certificate_ref
+                            == final_certificate.certificate_id
+                        ):
+                            trace.write(
+                                "review_triggered",
+                                {"reasons": state.review_trigger_reasons},
+                            )
+            if state.closed:
+                trace.write(
+                    "question_closed",
+                    {
+                        "status": state.prediction.status.value,
+                        "reason": state.termination_reason,
+                        "final_certificate_status": state.final_certificate_status.value,
+                    },
+                )
 
         assert state.prediction is not None
         return state.prediction
@@ -484,8 +554,11 @@ class FinOASISAgent:
             rule_candidate_ids=rule_candidates,
             read_rule_evidence_refs=tuple(state.rule_evidence_ledger),
             applicability_metadata=applicability_metadata,
-            budget_exhausted=state.phase
-            in {QuestionPhase.FINALIZATION, QuestionPhase.REVIEW},
+            budget_exhausted=(
+                state.forced_finalization
+                and state.phase
+                in {QuestionPhase.FINALIZATION, QuestionPhase.REVIEW}
+            ),
         )
 
     @staticmethod
@@ -1099,7 +1172,206 @@ class FinOASISAgent:
             )
             return
 
+        if isinstance(action, SubmitAnswerAction):
+            if target_obligation.type is not ObligationType.FINAL_VERIFICATION:
+                raise SkillError("submit_answer requires a final-verification target")
+            if action.control.open_obligations or action.control.obligation_deltas:
+                raise SkillError(
+                    "submit_answer cannot mutate the obligation graph through model control"
+                )
+            certificate_id = (
+                f"final-certificate-{state.next_final_certificate_sequence:04d}"
+            )
+            certificate = self.claim_verifier.verify(
+                state=state,
+                label=action.arguments.label,
+                evidence_ids=action.arguments.evidence_ids,
+                explanation=action.arguments.explanation,
+                confidence=action.control.confidence,
+                risk_flags=action.control.risk_flags,
+                allow_fallback=(
+                    state.forced_finalization
+                    and state.phase is QuestionPhase.FINALIZATION
+                ),
+                certificate_id=certificate_id,
+                target_obligation_id=target,
+            )
+            state.final_verification_certificate_ledger[
+                certificate_id
+            ] = certificate
+            state.next_final_certificate_sequence += 1
+            envelope = CertificateEnvelope(
+                certificate_id=certificate_id,
+                kind=CertificateKind.FINAL_VERIFICATION,
+                payload_sha256=claim_verification_certificate_sha256(certificate),
+                claim_sha256=state.resume_identity.statement_sha256,
+                evidence_refs=certificate.document_evidence_refs,
+                verified=(
+                    certificate.result is ClaimVerificationResult.VERIFIED
+                ),
+                diagnostic=(
+                    f"deterministic final result: {certificate.result.value}"
+                ),
+            )
+            prediction = Prediction(
+                example_id=state.example_id,
+                label=action.arguments.label,
+                status=PredictionStatus.COMPLETED,
+                evidence_ids=action.arguments.evidence_ids,
+                explanation=action.arguments.explanation,
+            )
+
+            if certificate.result is ClaimVerificationResult.FAILED:
+                state.certificate_ledger[certificate_id] = envelope
+                if state.phase is QuestionPhase.REVIEW and state.draft_prediction:
+                    state.review_failure_reason = (
+                        "verifier: "
+                        + ",".join(code.value for code in certificate.failure_codes)
+                    )[:160]
+                else:
+                    state.final_certificate_status = FinalCertificateStatus.FAILED
+                state.last_observation = BoundedObservation(
+                    skill=SkillName.SUBMIT_ANSWER,
+                    status="invalid",
+                    target_obligation_id=target,
+                    references=[certificate_id],
+                    diagnostics=[
+                        f"final verifier failed: {code.value}"
+                        for code in certificate.failure_codes[:8]
+                    ],
+                )
+                return
+
+            if certificate.result is ClaimVerificationResult.INCOMPLETE:
+                state.apply_skill_result(
+                    SkillResult(
+                        status=SkillResultStatus.PARTIAL,
+                        target_obligation_id=target,
+                        partial_obligation_ids=[target],
+                        evidence_refs=certificate.document_evidence_refs,
+                        certificate=envelope,
+                        diagnostics=["bounded low-confidence fallback submission"],
+                    )
+                )
+                state.prediction = prediction
+                state.prediction_certificate_ref = certificate_id
+                state.unresolved_obligation_ids = [
+                    obligation.obligation_id
+                    for obligation in state.obligations
+                    if obligation.status is not ObligationStatus.SATISFIED
+                ]
+                state.final_certificate_status = FinalCertificateStatus.INCOMPLETE
+                state.termination_reason = "budget_exhausted_fallback"
+                state.phase = QuestionPhase.CLOSED
+                state.closed = True
+                state.last_observation = BoundedObservation(
+                    skill=SkillName.SUBMIT_ANSWER,
+                    status="partial",
+                    target_obligation_id=target,
+                    references=[certificate_id],
+                    diagnostics=["submission closed with unresolved obligations"],
+                )
+                return
+
+            if state.phase is QuestionPhase.REVIEW:
+                if state.draft_prediction is None or state.draft_certificate_ref is None:
+                    raise SkillError("Review requires a verified draft and certificate")
+                state.apply_skill_result(
+                    SkillResult(
+                        status=SkillResultStatus.SATISFIED,
+                        target_obligation_id=target,
+                        satisfied_obligation_ids=[target],
+                        evidence_refs=certificate.document_evidence_refs,
+                        certificate=envelope,
+                        diagnostics=["certificate-focused Review verification passed"],
+                    )
+                )
+                state.prediction = prediction
+                state.prediction_certificate_ref = certificate_id
+                state.review_changed_label = (
+                    prediction.label != state.draft_prediction.label
+                )
+                state.review_changed_evidence = (
+                    prediction.evidence_ids != state.draft_prediction.evidence_ids
+                )
+                state.review_changed_explanation = (
+                    prediction.explanation != state.draft_prediction.explanation
+                )
+                state.final_certificate_status = FinalCertificateStatus.VERIFIED
+                state.unresolved_obligation_ids = []
+                state.termination_reason = "review_verified"
+                state.phase = QuestionPhase.CLOSED
+                state.closed = True
+            else:
+                review_reasons = self._review_trigger_reasons(
+                    state, action, certificate
+                )
+                if review_reasons:
+                    state.certificate_ledger[certificate_id] = envelope
+                    state.draft_prediction = prediction
+                    state.draft_certificate_ref = certificate_id
+                    state.review_trigger_reasons = review_reasons
+                    state.final_certificate_status = FinalCertificateStatus.PENDING
+                    state.phase = QuestionPhase.REVIEW
+                else:
+                    state.apply_skill_result(
+                        SkillResult(
+                            status=SkillResultStatus.SATISFIED,
+                            target_obligation_id=target,
+                            satisfied_obligation_ids=[target],
+                            evidence_refs=certificate.document_evidence_refs,
+                            certificate=envelope,
+                            diagnostics=[
+                                "deterministic final claim verification passed"
+                            ],
+                        )
+                    )
+                    state.final_certificate_status = FinalCertificateStatus.VERIFIED
+                    state.unresolved_obligation_ids = []
+                    state.prediction = prediction
+                    state.prediction_certificate_ref = certificate_id
+                    state.termination_reason = "certificate_verified"
+                    state.phase = QuestionPhase.CLOSED
+                    state.closed = True
+            state.last_observation = BoundedObservation(
+                skill=SkillName.SUBMIT_ANSWER,
+                status="satisfied",
+                target_obligation_id=target,
+                references=[certificate_id],
+            )
+            return
+
         raise SkillError(f"{action.action} is not implemented by this Runtime phase")
+
+    def _review_trigger_reasons(
+        self,
+        state: FinOASISQuestionState,
+        action: SubmitAnswerAction,
+        certificate,
+    ) -> list[str]:
+        if (
+            self.config.review_policy != "selective"
+            or state.phase_attempts.review_limit <= state.phase_attempts.review_used
+        ):
+            return []
+        reasons: list[str] = []
+        if certificate.numeric_certificate_refs:
+            reasons.append("numeric_certificate_consumed")
+        if certificate.rule_certificate_refs:
+            reasons.append("rule_applicability_certificate_consumed")
+        if state.forced_finalization:
+            reasons.append("forced_finalization")
+        if action.control.confidence is not Confidence.HIGH:
+            reasons.append("non_high_confidence")
+        reasons.extend(
+            f"risk:{flag.value}" for flag in action.control.risk_flags
+        )
+        if any(
+            item.result is ClaimVerificationResult.FAILED
+            for item in state.final_verification_certificate_ledger.values()
+        ):
+            reasons.append("prior_final_verifier_failure")
+        return list(dict.fromkeys(reasons))[:8]
 
     @staticmethod
     def _bounded_unique(values, *, maximum: int) -> list[str]:
@@ -1391,6 +1663,8 @@ class FinOASISAgent:
             state.phase is QuestionPhase.FINALIZATION
             and self.config.review_policy != "none"
             and attempts.review_limit > 0
+            and state.draft_prediction is not None
+            and state.draft_certificate_ref is not None
         ):
             state.phase = QuestionPhase.REVIEW
             self.state_store.save(state)
@@ -1399,8 +1673,94 @@ class FinOASISAgent:
                 {"phase": "review", "reason": "finalization_budget_exhausted"},
             )
             return True
+        if (
+            state.phase is QuestionPhase.REVIEW
+            and state.draft_prediction is not None
+            and state.draft_certificate_ref is not None
+        ):
+            self._close_with_review_fallback(
+                state,
+                trace,
+                state.review_failure_reason or "review budget exhausted",
+            )
+            return True
         self._close_invalid(state, trace, f"{state.phase.value} budget exhausted")
         return True
+
+    def _close_with_review_fallback(
+        self,
+        state: FinOASISQuestionState,
+        trace: TraceWriter,
+        reason: str,
+    ) -> Prediction:
+        if state.draft_prediction is None or state.draft_certificate_ref is None:
+            raise ValueError("review fallback requires a verified draft")
+        certificate = state.final_verification_certificate_ledger.get(
+            state.draft_certificate_ref
+        )
+        if (
+            certificate is None
+            or certificate.result is not ClaimVerificationResult.VERIFIED
+        ):
+            raise ValueError("review fallback draft lacks a verified certificate")
+        final_obligations = [
+            obligation
+            for obligation in state.obligations
+            if obligation.type is ObligationType.FINAL_VERIFICATION
+            and obligation.status is not ObligationStatus.SATISFIED
+        ]
+        if len(final_obligations) != 1:
+            raise ValueError("review fallback requires one active final obligation")
+        replayed = self.claim_verifier.verify(
+            state=state,
+            label=state.draft_prediction.label,
+            evidence_ids=state.draft_prediction.evidence_ids,
+            explanation=state.draft_prediction.explanation,
+            confidence=Confidence.HIGH,
+            risk_flags=(),
+            allow_fallback=False,
+            certificate_id=state.draft_certificate_ref,
+            target_obligation_id=final_obligations[0].obligation_id,
+        )
+        if replayed != certificate:
+            raise ValueError("review fallback draft failed deterministic revalidation")
+        envelope = state.certificate_ledger[state.draft_certificate_ref]
+        state.apply_skill_result(
+            SkillResult(
+                status=SkillResultStatus.SATISFIED,
+                target_obligation_id=final_obligations[0].obligation_id,
+                satisfied_obligation_ids=[final_obligations[0].obligation_id],
+                evidence_refs=certificate.document_evidence_refs,
+                certificate=envelope,
+                diagnostics=["Review failed; retained certificate-verified draft"],
+            )
+        )
+        state.prediction = state.draft_prediction.model_copy(deep=True)
+        state.prediction_certificate_ref = state.draft_certificate_ref
+        state.review_fallback_used = True
+        state.review_failure_reason = " ".join(reason.split())[:160]
+        state.final_certificate_status = FinalCertificateStatus.VERIFIED
+        state.unresolved_obligation_ids = []
+        state.termination_reason = "review_fallback"
+        state.phase = QuestionPhase.CLOSED
+        state.closed = True
+        self.state_store.save(state)
+        trace.write(
+            "review_fallback",
+            {
+                "draft_certificate_ref": state.draft_certificate_ref,
+                "reason": state.review_failure_reason,
+            },
+        )
+        trace.write(
+            "question_closed",
+            {
+                "status": "completed",
+                "reason": "review_fallback",
+                "review_failure_reason": state.review_failure_reason,
+            },
+        )
+        return state.prediction
 
     @staticmethod
     def _phase_budget_summary(state: FinOASISQuestionState) -> str:
@@ -1429,8 +1789,9 @@ class FinOASISAgent:
             for obligation in state.obligations
             if obligation.status is not ObligationStatus.SATISFIED
         ]
-        state.final_certificate_status = FinalCertificateStatus.INCOMPLETE
+        state.final_certificate_status = FinalCertificateStatus.FAILED
         state.prediction = prediction
+        state.prediction_certificate_ref = None
         state.termination_reason = reason[:160]
         state.phase = QuestionPhase.CLOSED
         state.closed = True

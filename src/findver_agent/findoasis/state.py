@@ -33,7 +33,14 @@ from findver_agent.financial_rules.models import (
     RuleApplicabilityCertificate,
     RuleRecord,
 )
-from findver_agent.schemas import Confidence, Prediction, PublicTask
+from findver_agent.schemas import Confidence, Prediction, PredictionStatus, PublicTask
+
+from .claim_verifier import (
+    ClaimVerificationCertificate,
+    ClaimVerificationResult,
+    claim_submission_sha256_from_parts,
+    claim_verification_certificate_sha256,
+)
 
 from .contracts import (
     AddDependencyDelta,
@@ -520,6 +527,7 @@ class FinOASISQuestionState(BaseModel):
     next_program_sequence: int = Field(default=1, ge=1, le=1_000_000)
     next_rule_evidence_sequence: int = Field(default=1, ge=1, le=1_000_000)
     next_rule_certificate_sequence: int = Field(default=1, ge=1, le=1_000_000)
+    next_final_certificate_sequence: int = Field(default=1, ge=1, le=1_000_000)
     evidence_ledger: dict[ReferenceId, EvidenceLedgerEntry] = Field(
         default_factory=dict, max_length=512
     )
@@ -541,6 +549,9 @@ class FinOASISQuestionState(BaseModel):
     rule_applicability_certificate_ledger: dict[
         ReferenceId, RuleApplicabilityCertificate
     ] = Field(default_factory=dict, max_length=128)
+    final_verification_certificate_ledger: dict[
+        ReferenceId, ClaimVerificationCertificate
+    ] = Field(default_factory=dict, max_length=32)
     certificate_ledger: dict[ReferenceId, CertificateEnvelope] = Field(
         default_factory=dict, max_length=128
     )
@@ -565,6 +576,8 @@ class FinOASISQuestionState(BaseModel):
     errors: list[RuntimeErrorRecord] = Field(default_factory=list, max_length=128)
     prediction: Prediction | None = None
     draft_prediction: Prediction | None = None
+    prediction_certificate_ref: ReferenceId | None = None
+    draft_certificate_ref: ReferenceId | None = None
     closed: bool = False
     forced_finalization: bool = False
     termination_reason: ShortText | None = None
@@ -572,6 +585,12 @@ class FinOASISQuestionState(BaseModel):
     unresolved_obligation_ids: list[ObligationId] = Field(
         default_factory=list, max_length=256
     )
+    review_trigger_reasons: list[ShortText] = Field(default_factory=list, max_length=8)
+    review_failure_reason: ShortText | None = None
+    review_fallback_used: bool = False
+    review_changed_label: bool = False
+    review_changed_evidence: bool = False
+    review_changed_explanation: bool = False
 
     @field_validator("report")
     @classmethod
@@ -589,7 +608,7 @@ class FinOASISQuestionState(BaseModel):
             raise ValueError("Skill counts must be non-negative integers")
         return value
 
-    @field_validator("unresolved_obligation_ids")
+    @field_validator("unresolved_obligation_ids", "review_trigger_reasons")
     @classmethod
     def unresolved_ids_are_unique(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
@@ -669,6 +688,22 @@ class FinOASISQuestionState(BaseModel):
         ):
             raise ValueError(
                 "next_rule_certificate_sequence does not follow the rule certificate ledger"
+            )
+        for sequence, final_certificate in enumerate(
+            self.final_verification_certificate_ledger.values(), start=1
+        ):
+            if (
+                final_certificate.certificate_id
+                != f"final-certificate-{sequence:04d}"
+            ):
+                raise ValueError(
+                    "final certificate IDs must be deterministic and contiguous"
+                )
+        if self.next_final_certificate_sequence != (
+            len(self.final_verification_certificate_ledger) + 1
+        ):
+            raise ValueError(
+                "next_final_certificate_sequence does not follow the final certificate ledger"
             )
 
         known_ids = set(obligation_by_id)
@@ -940,6 +975,50 @@ class FinOASISQuestionState(BaseModel):
         }
         if rule_envelopes - set(self.rule_applicability_certificate_ledger):
             raise ValueError("rule applicability envelope lacks its full payload")
+        if set(self.final_verification_certificate_ledger) - set(
+            self.certificate_ledger
+        ):
+            raise ValueError("final verification payload lacks an envelope")
+        for certificate_id, final_certificate in (
+            self.final_verification_certificate_ledger.items()
+        ):
+            if final_certificate.certificate_id != certificate_id:
+                raise ValueError("final certificate key does not match its identifier")
+            envelope = self.certificate_ledger[certificate_id]
+            if envelope.kind is not CertificateKind.FINAL_VERIFICATION:
+                raise ValueError("final certificate envelope has the wrong kind")
+            if envelope.verified != (
+                final_certificate.result is ClaimVerificationResult.VERIFIED
+            ):
+                raise ValueError("final certificate envelope verification disagrees")
+            if envelope.payload_sha256 != claim_verification_certificate_sha256(
+                final_certificate
+            ):
+                raise ValueError("final certificate payload hash does not match envelope")
+            if envelope.claim_sha256 != final_certificate.claim_sha256:
+                raise ValueError("final certificate claim differs from its envelope")
+            if envelope.evidence_refs != final_certificate.document_evidence_refs:
+                raise ValueError("final certificate evidence differs from its envelope")
+            if set(final_certificate.numeric_certificate_refs) - set(
+                self.numeric_certificate_ledger
+            ):
+                raise ValueError("final certificate references unknown numeric proof")
+            if set(final_certificate.rule_certificate_refs) - set(
+                self.rule_applicability_certificate_ledger
+            ):
+                raise ValueError("final certificate references unknown rule proof")
+            if set(final_certificate.checked_obligation_ids) - known_ids:
+                raise ValueError("final certificate references an unknown obligation")
+            target = obligation_by_id.get(final_certificate.target_obligation_id)
+            if target is None or target.type is not ObligationType.FINAL_VERIFICATION:
+                raise ValueError("final certificate target is not final verification")
+        final_envelopes = {
+            certificate_id
+            for certificate_id, envelope in self.certificate_ledger.items()
+            if envelope.kind is CertificateKind.FINAL_VERIFICATION
+        }
+        if final_envelopes - set(self.final_verification_certificate_ledger):
+            raise ValueError("final certificate envelope lacks its full payload")
         for certificate in self.certificate_ledger.values():
             if set(certificate.evidence_refs) - evidence_refs:
                 raise ValueError("certificate contains a dangling evidence reference")
@@ -975,11 +1054,34 @@ class FinOASISQuestionState(BaseModel):
                 raise ValueError("closed state must use the closed phase")
             if self.prediction is None:
                 raise ValueError("closed state requires a prediction")
+            if (
+                self.prediction.status is PredictionStatus.COMPLETED
+                and self.final_certificate_status
+                not in {
+                    FinalCertificateStatus.VERIFIED,
+                    FinalCertificateStatus.INCOMPLETE,
+                }
+            ):
+                raise ValueError(
+                    "completed closed state requires verified or incomplete status"
+                )
         elif self.phase is QuestionPhase.CLOSED:
             raise ValueError("closed phase requires closed=true")
         for prediction in (self.prediction, self.draft_prediction):
             if prediction is not None and prediction.example_id != self.example_id:
                 raise ValueError("prediction is not bound to the current example")
+        self._validate_prediction_certificate(
+            self.prediction,
+            self.prediction_certificate_ref,
+            allow_incomplete=True,
+            field="prediction",
+        )
+        self._validate_prediction_certificate(
+            self.draft_prediction,
+            self.draft_certificate_ref,
+            allow_incomplete=False,
+            field="draft prediction",
+        )
 
         active_ids = {
             obligation.obligation_id
@@ -1011,7 +1113,79 @@ class FinOASISQuestionState(BaseModel):
                 raise ValueError(
                     "verified state requires a satisfied final-verification obligation"
                 )
+            current_ref = self.prediction_certificate_ref or self.draft_certificate_ref
+            if current_ref is None:
+                raise ValueError("verified state requires a current final certificate")
+            if (
+                self.final_verification_certificate_ledger[current_ref].result
+                is not ClaimVerificationResult.VERIFIED
+            ):
+                raise ValueError("verified state references a non-verified certificate")
+        if self.final_certificate_status is FinalCertificateStatus.INCOMPLETE:
+            if self.prediction_certificate_ref is None:
+                raise ValueError("incomplete state requires a prediction certificate")
+            if (
+                self.final_verification_certificate_ledger[
+                    self.prediction_certificate_ref
+                ].result
+                is not ClaimVerificationResult.INCOMPLETE
+            ):
+                raise ValueError("incomplete state references the wrong certificate result")
+            if not self.closed:
+                raise ValueError("incomplete final state must be closed")
+            if set(self.unresolved_obligation_ids) != active_ids:
+                raise ValueError(
+                    "incomplete state must record every unresolved obligation exactly"
+                )
+            if any(
+                obligation.type is ObligationType.FINAL_VERIFICATION
+                and obligation.status is ObligationStatus.SATISFIED
+                for obligation in self.obligations
+            ):
+                raise ValueError("incomplete state cannot satisfy final verification")
         return self
+
+    def _validate_prediction_certificate(
+        self,
+        prediction: Prediction | None,
+        certificate_ref: str | None,
+        *,
+        allow_incomplete: bool,
+        field: str,
+    ) -> None:
+        if prediction is None:
+            if certificate_ref is not None:
+                raise ValueError(f"{field} certificate exists without a prediction")
+            return
+        if prediction.status is PredictionStatus.INVALID:
+            if certificate_ref is not None:
+                raise ValueError(f"invalid {field} cannot claim a final certificate")
+            return
+        if certificate_ref is None:
+            raise ValueError(f"completed {field} requires a final certificate")
+        certificate = self.final_verification_certificate_ledger.get(certificate_ref)
+        if certificate is None:
+            raise ValueError(f"{field} references an unknown final certificate")
+        allowed = {ClaimVerificationResult.VERIFIED}
+        if allow_incomplete:
+            allowed.add(ClaimVerificationResult.INCOMPLETE)
+        if certificate.result not in allowed:
+            raise ValueError(f"{field} references an unusable final certificate")
+        if prediction.label is None:
+            raise ValueError(f"completed {field} requires a label")
+        if certificate.label is not prediction.label:
+            raise ValueError(f"{field} label differs from its final certificate")
+        if certificate.submitted_evidence_ids != prediction.evidence_ids:
+            raise ValueError(f"{field} evidence differs from its final certificate")
+        explanation_sha256 = _sha256_text(prediction.explanation)
+        if certificate.explanation_sha256 != explanation_sha256:
+            raise ValueError(f"{field} explanation differs from its final certificate")
+        if certificate.submission_sha256 != claim_submission_sha256_from_parts(
+            prediction.label,
+            prediction.evidence_ids,
+            explanation_sha256,
+        ):
+            raise ValueError(f"{field} submission hash differs from its certificate")
 
     @staticmethod
     def _reject_dependency_cycles(obligations: dict[str, Obligation]) -> None:

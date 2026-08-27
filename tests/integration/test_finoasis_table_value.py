@@ -9,11 +9,7 @@ from findver_agent.findoasis.state import FinOASISQuestionState, FinOASISStateSt
 from findver_agent.model_backends.base import GenerationConfig, ModelResponse
 from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
-from findver_agent.schemas import PublicTask
-
-
-class AbortRun(BaseException):
-    pass
+from findver_agent.schemas import PredictionStatus, PublicTask
 
 
 class SequenceBackend:
@@ -185,7 +181,15 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
                 },
                 "obl-0004",
             ),
-            AbortRun(),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [0],
+                    "explanation": "The bound table values prove the increase.",
+                },
+                "obl-0005",
+            ),
         ]
     )
     run_dir = tmp_path / "run"
@@ -198,8 +202,7 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
         run_dir=run_dir,
     )
 
-    with pytest.raises(AbortRun):
-        await orchestrator.run_question(task)
+    prediction = await orchestrator.run_question(task)
 
     state = FinOASISStateStore(run_dir / "state").load_or_create(
         task,
@@ -226,6 +229,12 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
     assert state.obligation("obl-0002").status is ObligationStatus.SATISFIED
     assert state.obligation("obl-0003").status is ObligationStatus.SATISFIED
     assert state.obligation("obl-0004").status is ObligationStatus.SATISFIED
+    assert state.obligation("obl-0005").status is ObligationStatus.SATISFIED
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert state.final_certificate_status.value == "verified"
+    final = state.final_verification_certificate_ledger["final-certificate-0001"]
+    assert final.numeric_certificate_refs == ["numeric-certificate-0001"]
+    assert final.label_supported is True
     assert state.skill_call_counts[SkillName.READ_TABLE_REGION] == 1
     assert state.skill_call_counts[SkillName.BIND_FINANCIAL_VALUE] == 2
     assert state.skill_call_counts[SkillName.EXECUTE_FINANCIAL_PROGRAM] == 1

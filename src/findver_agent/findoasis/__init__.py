@@ -5,6 +5,11 @@ is dispatched explicitly by experimental configuration.
 """
 
 from .actions import Action, ActionControl, ActionParseError, parse_action, parse_action_v3
+from .claim_verifier import (
+    ClaimCertificateVerifier,
+    ClaimVerificationCertificate,
+    ClaimVerificationResult,
+)
 from .contracts import (
     CertificateEnvelope,
     CertificateKind,
@@ -35,6 +40,9 @@ __all__ = [
     "ActionParseError",
     "CertificateEnvelope",
     "CertificateKind",
+    "ClaimCertificateVerifier",
+    "ClaimVerificationCertificate",
+    "ClaimVerificationResult",
     "FinalCertificateStatus",
     "FinOASISQuestionState",
     "FinOASISStateStore",

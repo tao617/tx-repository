@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 5 — frozen offline rule Skills and applicability certificates
+- Phase: Phase 6 — final claim certificate verification and bounded Review
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `ee910afa61c755955a58bbd62423de9878bfae00`
+- Current committed HEAD: `b56c0640e4f95682641db19bafa177bb21e18ba4`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 5 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 through 4 pushed
-- Remote branch SHA: `ee910afa61c755955a58bbd62423de9878bfae00`
+- Worktree: Phase 6 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 through 5 pushed
+- Remote branch SHA: `b56c0640e4f95682641db19bafa177bb21e18ba4`
 - Draft PR: not yet created
 
 ## Completed work
@@ -171,6 +171,30 @@
   corpus, plus tests for manifest/records/text/certificate tampering, path escape,
   applicability mismatches, conflicts and missing dates.
 
+### Phase 6
+
+- Added a deterministic `ClaimCertificateVerifier` that consumes only the submitted
+  label, explanation, evidence IDs and durable v3 ledgers. It emits a complete bounded
+  final certificate containing claim/submission/explanation hashes, checked obligation
+  IDs, evidence and specialist certificate references, check results and failure codes.
+- Revalidated paragraph evidence against the report-backed ledger and replayed every
+  consumed FinDSL program and frozen rule-applicability certificate from its canonical
+  inputs. Coherently rehashed result, program, rule scope and envelope tampering is
+  rejected rather than trusted.
+- Bound verified predictions and selective-Review drafts to an immutable final
+  certificate and exact submission hash. State resume validation independently checks
+  the full certificate ledger, envelope linkage, obligation coverage, specialist child
+  references and prediction/draft payloads.
+- Kept the final obligation pending while selective Review runs. A repaired submission
+  receives a new verification certificate; a failed Review may use only a previously
+  certificate-verified draft after replay against the current ledgers.
+- Added an explicit forced-finalization incomplete path only for low-confidence answers
+  carrying the `unresolved_obligation` risk. Unknown evidence, tamper, specialist label
+  contradiction and other fatal verification failures cannot become fallback answers.
+- Added unit and integration coverage for entailed/refuted mixed proofs, numeric/rule
+  replay, malformed and unknown evidence, incomplete forced finalization, selective
+  Review repair/fallback, and final-certificate state tampering.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -223,6 +247,14 @@
 - `git diff --check`: passed.
 - No model, network, scorer, Gold, official test input or paid API was used.
 
+## Phase 6 tests
+
+- Focused final verifier, state, prompt, routing and integration selection: 49 passed.
+- Full suite: 524 passed in 3.69s on Python 3.12.
+- `.venv/bin/python -m compileall -q src scripts tests`: passed.
+- `git diff --check`: passed.
+- No model, network, scorer, Gold, official test input or paid API was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -243,8 +275,15 @@
 - Keep complete frozen rule text in the per-question Rule Evidence Ledger only; prompts
   receive bounded candidate or structural metadata according to the next available
   Skill.
+- Persist the complete final verification payload beside its generic certificate
+  envelope and bind every verified prediction or Review draft to both objects.
+- Treat conclusive FinDSL relation results and mechanical frozen-rule applicability as
+  specialist label support only after deterministic replay; natural-language selection
+  of those specialist inputs remains an experimental model responsibility.
+- Permit incomplete fallback only at forced finalization with low confidence and an
+  explicit unresolved-obligation risk; evidence-integrity failures remain fatal.
 
-## Files changed through Phase 5
+## Files changed through Phase 6
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
@@ -268,6 +307,7 @@
 - `src/findver_agent/findoasis/router.py`
 - `src/findver_agent/findoasis/prompt_builder.py`
 - `src/findver_agent/findoasis/agent.py`
+- `src/findver_agent/findoasis/claim_verifier.py`
 - `src/findver_agent/findoasis/table_region.py`
 - `src/findver_agent/findoasis/value_binding.py`
 - `src/findver_agent/report_store.py`
@@ -286,10 +326,12 @@
 - `tests/unit/test_table_region_v3.py`
 - `tests/unit/test_value_binding_v3.py`
 - `tests/unit/test_rule_corpus_v3.py`
+- `tests/unit/test_claim_verifier_v3.py`
 - `tests/integration/test_finoasis_router.py`
 - `tests/integration/test_finoasis_resume.py`
 - `tests/integration/test_finoasis_table_value.py`
 - `tests/integration/test_finoasis_rules.py`
+- `tests/integration/test_finoasis_submission.py`
 - `tests/fixtures/finoasis_rule_corpus/manifest.json`
 - `tests/fixtures/finoasis_rule_corpus/records.json`
 
@@ -309,9 +351,9 @@
 
 ## Exact next step
 
-Implement Phase 6: deterministic `ClaimCertificateVerifier`, certificate-aware v3
-submission, mixed proof verification, budget-exhausted fallback and bounded Review
-repair behavior.
+Implement Phase 7: experimental method configurations, aggregate-safe v3 metrics,
+scripted IE/numeric/knowledge/mixed tasks, CLI verification and credential-free Docker
+smoke coverage.
 
 ## Safe recovery commands
 
@@ -341,4 +383,5 @@ git diff --check
 | Phase 2 | `542de745a7f3802cd5d3aa5319888953c46dba6f` | pushed | `feat: gate skills by pending proof obligations` |
 | Phase 3 | `56f45ffd7f9770c1a146cd00b14fa79a9b48deef` | pushed | `feat: bind financial values to report evidence` |
 | Phase 4 | `ee910afa61c755955a58bbd62423de9878bfae00` | pushed | `feat: execute evidence-bound financial programs` |
-| Phase 5 | pending | pending | `feat: add frozen financial rule skills` |
+| Phase 5 | `b56c0640e4f95682641db19bafa177bb21e18ba4` | pushed | `feat: add frozen financial rule skills` |
+| Phase 6 | pending | pending | `feat: verify proof certificates before submission` |
