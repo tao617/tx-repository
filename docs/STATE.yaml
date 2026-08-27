@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase8-final-audit
+current_phase: findoasis-phase8-draft-pr-created
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase8-final-audit
-last_git_commit: e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d
+last_completed_phase: findoasis-phase8-draft-pr-created
+last_git_commit: bfd75227908dd160c62300e650add46f58e17b4a
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -388,17 +388,10 @@ decisions:
 - Keep protocol v3 experimental and additive; require deterministic certificate replay
   but state explicitly that replay does not prove semantic completeness of model-selected
   evidence, operands, or rules.
+- 'Use Draft PR #2 for FinOASIS review; do not modify, close, merge, or redirect independent
+  Draft PR #1.'
 files_changed:
-- README.md
-- docs/ARCHITECTURE.md
-- docs/DATA_BOUNDARY.md
-- docs/FINOASIS_METHOD.md
-- docs/FINOASIS_RUNBOOK.md
-- docs/FINOASIS_SECURITY_AUDIT.md
-- docs/FINOASIS_TESTING.md
-- docs/TEST_PLAN.md
-- docs/adr/0011-obligation-gated-financial-verification.md
-- tests/unit/test_obligations_v3.py
+- docs/FINOASIS_PROGRESS.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -697,6 +690,9 @@ tests_passed:
   and 530 tests; focused 84-test security gate; Stateful M2, concurrent 40-task, and
   FinOASIS 4-task Docker smokes; diff, frozen-interface, archive, Runtime-bundle,
   secret, and container-cleanup checks.
+- Local Python 3.12.3 and isolated Python 3.11.16 each passed compileall and 530 tests;
+  all three Docker smokes and final audit gates passed. Initial GitHub CI jobs are
+  running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -706,6 +702,7 @@ tests_failed:
   prerequisites; the corrected CI-equivalent harness passed all 530 tests. One discarded
   Python 3.12 invocation lost a sandbox temporary capture file before collection;
   the documented no-capture invocation passed all 530 tests.
+- No product test failure.
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -751,8 +748,9 @@ known_issues:
 - Production financial rule sources, licences, version policy, domain-owner approval,
   real-model evaluation, Official Test V2 use, and scorer handoff remain unauthorized
   and unresolved by design.
+- Production rule sources and licences, real-model evaluation, Official Test V2 access,
+  certificate sidecar, and scorer handoff remain separately unauthorized.
 next_actions:
-- Commit Phase 8 with the prescribed message, push the branch, create the Draft PR,
-  and verify CI status.
+- 'Push this recovery-only closeout commit and verify all Draft PR #2 CI checks.'
 blocked_items: []
-last_updated: '2026-08-28T03:36:29+08:00'
+last_updated: '2026-08-28T03:39:28+08:00'

@@ -2,36 +2,27 @@
 
 ## Current state
 
-Phase `findoasis-phase8-final-audit` completed: Completed ADR 0011, FinOASIS method/runbook/testing/security documentation, architecture and data-boundary updates, and a serialized-state-size regression. Final gates passed on Python 3.12.3 and isolated Python 3.11.16; all three credential-free Docker smokes passed on the unchanged Runtime commit; frozen interfaces and tracked secret scans remained clean.
+Phase `findoasis-phase8-draft-pr-created` completed: FinOASIS protocol v3 implementation and Phase 8 audit are complete. Commit bfd75227908dd160c62300e650add46f58e17b4a is pushed and Draft PR #2 targets main; PR #1 is unchanged.
 
-- Git commit at checkpoint start: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
-- Changed files: 13
+- Git commit at checkpoint start: `bfd75227908dd160c62300e650add46f58e17b4a`
+- Changed files: 3
 
 ## Diff summary
 
 ```text
-README.md                         | 37 +++++++++++++++++++++++++++++++++++--
-docs/ARCHITECTURE.md              | 28 ++++++++++++++++++++++++++++
-docs/DATA_BOUNDARY.md             | 23 ++++++++++++++++++++++-
-docs/FINOASIS_PROGRESS.md         | Phase 8 record and final gates
-docs/FINOASIS_METHOD.md           | complete v3 method reference
-docs/FINOASIS_RUNBOOK.md          | authorized operator and recovery path
-docs/FINOASIS_SECURITY_AUDIT.md   | threat review, evidence and residual risks
-docs/FINOASIS_TESTING.md          | test strategy and final verification record
-docs/TEST_PLAN.md                 | 18 ++++++++++++++++--
-docs/adr/0011-*                   | accepted architectural decision
-tests/unit/test_obligations_v3.py | 24 ++++++++++++++++++++++++
-checkpoint records               | Phase 8 state and handoff
-13 files changed; documentation plus one bounded-state regression
+docs/FINOASIS_PROGRESS.md | Draft PR and final remote ledger
+docs/SESSION_HANDOFF.md   | closeout recovery state
+docs/STATE.yaml           | closeout decision, tests, risks and next action
+3 recovery-only files changed; no implementation or test source changed
 ```
 
 ## Tests passed
 
-- Python 3.12.3 compileall and 530 tests; Python 3.11.16 isolated Docker compileall and 530 tests; focused 84-test security gate; Stateful M2, concurrent 40-task, and FinOASIS 4-task Docker smokes; diff, frozen-interface, archive, Runtime-bundle, secret, and container-cleanup checks.
+- Local Python 3.12.3 and isolated Python 3.11.16 each passed compileall and 530 tests; all three Docker smokes and final audit gates passed. Initial GitHub CI jobs are running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
 
 ## Tests failed or unavailable
 
-- No product tests failed. Two discarded Python 3.11 harness attempts omitted repository-path/Git prerequisites; the corrected CI-equivalent harness passed all 530 tests. One discarded Python 3.12 invocation lost a sandbox temporary capture file before collection; the documented no-capture invocation passed all 530 tests.
+- No product test failure.
 
 ## Recovery protocol
 
@@ -49,4 +40,4 @@ pytest -q
 
 ## Next action
 
-Commit Phase 8 with the prescribed message, push the branch, create the Draft PR, and verify CI status.
+Push this recovery-only closeout commit and verify all Draft PR #2 CI checks.

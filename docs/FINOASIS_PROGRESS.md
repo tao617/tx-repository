@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Phase 8 — final documentation, security audit and Draft PR preparation
+- Phase: Phase 8 complete — Draft PR and CI verification
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
+- Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 8 documentation, final regression and checkpoint records are not yet committed
-- Push status: Phases 0 through 7 pushed
-- Remote branch SHA: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
-- Draft PR: not yet created
+- Worktree: this Draft-PR recovery metadata is not yet committed
+- Push status: Phases 0 through 8 pushed
+- Remote branch SHA: `bfd75227908dd160c62300e650add46f58e17b4a`
+- Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
 
@@ -455,8 +455,9 @@
 
 ## Exact next step
 
-Commit Phase 8 with `docs: finalize FinOASIS implementation record`, push the branch,
-create the Draft PR, and verify its CI status without modifying or merging PR #1.
+Push this final recovery-record commit and verify Draft PR #2 CI status without
+modifying or merging PR #1. Any real-model, Official Test, scorer or production-rule
+follow-up still requires the separate authorizations recorded above.
 
 ## Safe recovery commands
 
@@ -489,4 +490,5 @@ git diff --check
 | Phase 5 | `b56c0640e4f95682641db19bafa177bb21e18ba4` | pushed | `feat: add frozen financial rule skills` |
 | Phase 6 | `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c` | pushed | `feat: verify proof certificates before submission` |
 | Phase 7 | `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d` | pushed | `test: add FinOASIS end-to-end verification` |
-| Phase 8 | this commit | pending | `docs: finalize FinOASIS implementation record` |
+| Phase 8 | `bfd75227908dd160c62300e650add46f58e17b4a` | pushed | `docs: finalize FinOASIS implementation record` |
+| Closeout | this recovery-record commit | pending | records Draft PR #2 and final remote state |
