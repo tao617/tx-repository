@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: official-test-v2-freeze-recorded
-current_goal: Preserve the completed evidence and official-test V2 freeze; await
-  explicit authorization for Gold-free input binding without model calls, then require
-  separate approval before any official-test API execution.
-last_completed_phase: official-test-v2-freeze-recorded
-last_git_commit: 2b4f980e48edc3c2439f3375eed0ea48718f544a
+current_phase: findoasis-phase0-baseline
+current_goal: Preserve the completed evidence and official-test V2 freeze; await explicit
+  authorization for Gold-free input binding without model calls, then require separate
+  approval before any official-test API execution.
+last_completed_phase: findoasis-phase0-baseline
+last_git_commit: 1ff41509fd40834ccca131d5100af580d46dbe9d
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -313,10 +313,14 @@ decisions:
   deepseek-v4-flash, the frozen generation and RRF settings, and Private Scorer commit
   6ec342; keep execution unauthorized until separate input-binding and API approvals.
 - Preserve the historical V1 plan and project contract without modification.
+- Implement protocol v3 in an isolated findver_agent.findoasis package and dispatch
+  before legacy state or prompt logic.
+- Preserve v1/v2 actions, state, prompt, M2, Official Test V2, sealed archive, and
+  evidence sidecar unchanged.
+- Use ADR 0011 because Draft PR 1 occupies ADR 0010.
 files_changed:
-- docs/OFFICIAL_TEST_V2_FREEZE_PLAN.md
-- docs/adr/0009-official-test-v2-confirmation.md
-- experiments/official_test_v2_freeze.yaml
+- docs/FINOASIS_IMPLEMENTATION_PLAN.md
+- docs/FINOASIS_PROGRESS.md
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -593,6 +597,8 @@ tests_passed:
   hashes, a 1,700-example population, and all execution gates false.
 - Git diff verification confirmed docs/PROJECT_CONTRACT.md and the historical docs/EXPERIMENT_PLAN.md
   are unchanged.
+- 289 baseline tests passed on Python 3.12
+- compileall and git diff checks passed
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -626,9 +632,11 @@ known_issues:
 - Exact official task, report, embedding, BM25, and Hybrid artifact hashes are intentionally
   unbound; this blocks plan preparation and execution until separately authorized
   input access.
+- Python 3.11 is unavailable locally; compatibility will be verified by CI.
+- Sandboxed Starlette TestClient threads hang; local pytest must run outside the sandbox
+  with repository-scoped basetemp.
 next_actions:
-- Await explicit authorization for the Gold-free official-input binding preflight;
-  after exact 1,700-task and retrieval hashes plus five non-executing plans are reviewed,
-  request separate approval before any Model-A API call.
+- Implement isolated protocol-v3 obligation, action, state, and strict configuration
+  contracts with compatibility tests.
 blocked_items: []
-last_updated: '2026-08-19T20:13:38+08:00'
+last_updated: '2026-08-28T01:26:57+08:00'
