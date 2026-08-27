@@ -1,10 +1,10 @@
 project: findver-agent
-current_phase: findoasis-phase0-baseline
+current_phase: findoasis-phase1-contracts
 current_goal: Preserve the completed evidence and official-test V2 freeze; await explicit
   authorization for Gold-free input binding without model calls, then require separate
   approval before any official-test API execution.
-last_completed_phase: findoasis-phase0-baseline
-last_git_commit: 1ff41509fd40834ccca131d5100af580d46dbe9d
+last_completed_phase: findoasis-phase1-contracts
+last_git_commit: 9e896fa0c4a534b5b6d367f4b86b88452d8278f3
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -318,9 +318,21 @@ decisions:
 - Preserve v1/v2 actions, state, prompt, M2, Official Test V2, sealed archive, and
   evidence sidecar unchanged.
 - Use ADR 0011 because Draft PR 1 occupies ADR 0010.
+- Only Runtime SkillResult application may satisfy an obligation; model deltas cannot
+  satisfy or waive obligations.
+- Protocol v3 uses an independent schema-v3 state store with config, Registry, policy,
+  report, and optional corpus identity binding.
+- Official Test V2, M2, sealed archive, evidence sidecar, and canonical v1/v2 state
+  and prompt outputs are now hash-frozen by tests.
 files_changed:
-- docs/FINOASIS_IMPLEMENTATION_PLAN.md
 - docs/FINOASIS_PROGRESS.md
+- src/findver_agent/config.py
+- src/findver_agent/findoasis/
+- tests/unit/test_actions_v3.py
+- tests/unit/test_compatibility_freeze.py
+- tests/unit/test_finoasis_config.py
+- tests/unit/test_obligations_v3.py
+- tests/unit/test_state_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -599,6 +611,8 @@ tests_passed:
   are unchanged.
 - 289 baseline tests passed on Python 3.12
 - compileall and git diff checks passed
+- 93 focused v3 and compatibility tests passed
+- 341 full Agent tests passed on Python 3.12
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -635,8 +649,9 @@ known_issues:
 - Python 3.11 is unavailable locally; compatibility will be verified by CI.
 - Sandboxed Starlette TestClient threads hang; local pytest must run outside the sandbox
   with repository-scoped basetemp.
+- Python 3.11 is unavailable locally and remains a CI verification item.
 next_actions:
-- Implement isolated protocol-v3 obligation, action, state, and strict configuration
-  contracts with compatibility tests.
+- Implement the conservative obligation seeder, immutable Skill Registry, dynamic
+  availability resolver, v3 prompt and orchestrator dispatch.
 blocked_items: []
-last_updated: '2026-08-28T01:26:57+08:00'
+last_updated: '2026-08-28T01:39:56+08:00'

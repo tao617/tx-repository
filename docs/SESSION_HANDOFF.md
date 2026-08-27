@@ -2,20 +2,23 @@
 
 ## Current state
 
-Phase `findoasis-phase0-baseline` completed: Verified remote main, read all required contracts and v2 implementation, passed the full credential-free baseline, and recorded the additive protocol-v3 implementation plan.
+Phase `findoasis-phase1-contracts` completed: Added isolated protocol-v3 typed obligations, strict model-safe actions, transactional state and resume contracts, experimental configuration, and frozen v1/v2 compatibility tests.
 
-- Git commit at checkpoint start: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Changed files: 2
+- Git commit at checkpoint start: `9e896fa0c4a534b5b6d367f4b86b88452d8278f3`
+- Changed files: 8
 
 ## Diff summary
 
 ```text
-No tracked-file diff; see files_changed for untracked files.
+docs/FINOASIS_PROGRESS.md   |  71 +++++++++++++----
+ src/findver_agent/config.py | 184 +++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 240 insertions(+), 15 deletions(-)
 ```
 
 ## Tests passed
 
-- 289 baseline tests passed on Python 3.12
+- 93 focused v3 and compatibility tests passed
+- 341 full Agent tests passed on Python 3.12
 - compileall and git diff checks passed
 
 ## Tests failed or unavailable
@@ -38,4 +41,4 @@ pytest -q
 
 ## Next action
 
-Implement isolated protocol-v3 obligation, action, state, and strict configuration contracts with compatibility tests.
+Implement the conservative obligation seeder, immutable Skill Registry, dynamic availability resolver, v3 prompt and orchestrator dispatch.
