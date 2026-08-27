@@ -11,6 +11,7 @@ from findver_agent.findoasis.contracts import (
     MarkPartialDelta,
     ObligationProposal,
     ObligationStatus,
+    QuestionPhase,
     SkillResult,
 )
 from findver_agent.findoasis.state import (
@@ -22,7 +23,8 @@ from findver_agent.findoasis.state import (
 from findver_agent.schemas import PublicTask
 
 
-HASH = "a" * 64
+EVIDENCE_TEXT = "Operating income was 128.4 in 2022."
+HASH = hashlib.sha256(EVIDENCE_TEXT.encode()).hexdigest()
 
 
 def task(statement="Revenue increased."):
@@ -56,6 +58,7 @@ def add_evidence(state, evidence_id="ev-1"):
         evidence_id=evidence_id,
         source="report_paragraph",
         paragraph_id=3,
+        exact_text=EVIDENCE_TEXT,
         exact_text_sha256=HASH,
     )
 
@@ -193,6 +196,25 @@ def test_state_validation_rejects_dangling_ledgers_and_false_verified_status():
     payload = state.model_dump(mode="json")
     payload["next_obligation_sequence"] = 99
     with pytest.raises(ValidationError, match="next_obligation_sequence"):
+        FinOASISQuestionState.model_validate(payload)
+
+
+def test_evidence_text_hash_and_phase_attempt_counters_are_integrity_bound():
+    state, _ = state_with_fact()
+    add_evidence(state)
+    payload = state.model_dump(mode="json")
+    payload["evidence_ledger"]["ev-1"]["exact_text"] = "tampered evidence"
+    with pytest.raises(ValidationError, match="exact_text_sha256"):
+        FinOASISQuestionState.model_validate(payload)
+
+    state.phase = QuestionPhase.EXPLORATION
+    state.charge_attempt()
+    assert state.step == 1
+    assert state.phase_attempts.exploration_used == 1
+    assert state.remaining_steps == 7
+    payload = state.model_dump(mode="json")
+    payload["step"] = 2
+    with pytest.raises(ValidationError, match="charged phase attempts"):
         FinOASISQuestionState.model_validate(payload)
 
 

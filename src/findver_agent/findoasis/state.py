@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from findver_agent.schemas import Confidence, PublicTask
+from findver_agent.schemas import Confidence, Prediction, PublicTask
 
 from .contracts import (
     AddDependencyDelta,
@@ -126,6 +126,7 @@ class EvidenceLedgerEntry(BaseModel):
     evidence_id: ReferenceId
     source: Literal["report_paragraph", "table_cell"]
     paragraph_id: int = Field(ge=0)
+    exact_text: str = Field(min_length=1, max_length=100_000)
     exact_text_sha256: str = Field(pattern=SHA256_PATTERN)
     table_id: ReferenceId | None = None
     row_index: int | None = Field(default=None, ge=0)
@@ -133,6 +134,8 @@ class EvidenceLedgerEntry(BaseModel):
 
     @model_validator(mode="after")
     def table_coordinates_are_consistent(self) -> "EvidenceLedgerEntry":
+        if _sha256_text(self.exact_text) != self.exact_text_sha256:
+            raise ValueError("evidence exact_text does not match exact_text_sha256")
         coordinates = (self.table_id, self.row_index, self.column_index)
         if self.source == "table_cell":
             if not all(item is not None for item in coordinates):
@@ -248,6 +251,110 @@ class BoundedObservation(BaseModel):
         return value
 
 
+class PhaseAttemptBudget(BaseModel):
+    """Durable phase limits and charged attempts for exact resume."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    exploration_limit: int = Field(ge=0, le=32)
+    finalization_limit: int = Field(ge=0, le=8)
+    review_limit: int = Field(ge=0, le=8)
+    exploration_used: int = Field(default=0, ge=0, le=32)
+    finalization_used: int = Field(default=0, ge=0, le=8)
+    review_used: int = Field(default=0, ge=0, le=8)
+
+    @model_validator(mode="after")
+    def usage_does_not_exceed_limits(self) -> "PhaseAttemptBudget":
+        for phase in ("exploration", "finalization", "review"):
+            if getattr(self, f"{phase}_used") > getattr(self, f"{phase}_limit"):
+                raise ValueError(f"{phase} attempts exceed the configured limit")
+        return self
+
+    @property
+    def total_limit(self) -> int:
+        return self.exploration_limit + self.finalization_limit + self.review_limit
+
+    @property
+    def total_used(self) -> int:
+        return self.exploration_used + self.finalization_used + self.review_used
+
+    def limit_for(self, phase: QuestionPhase) -> int:
+        if phase is QuestionPhase.EXPLORATION:
+            return self.exploration_limit
+        if phase is QuestionPhase.FINALIZATION:
+            return self.finalization_limit
+        if phase is QuestionPhase.REVIEW:
+            return self.review_limit
+        raise ValueError(f"phase {phase.value} does not consume model attempts")
+
+    def used_for(self, phase: QuestionPhase) -> int:
+        if phase is QuestionPhase.EXPLORATION:
+            return self.exploration_used
+        if phase is QuestionPhase.FINALIZATION:
+            return self.finalization_used
+        if phase is QuestionPhase.REVIEW:
+            return self.review_used
+        raise ValueError(f"phase {phase.value} does not consume model attempts")
+
+    def charge(self, phase: QuestionPhase) -> None:
+        field = {
+            QuestionPhase.EXPLORATION: "exploration_used",
+            QuestionPhase.FINALIZATION: "finalization_used",
+            QuestionPhase.REVIEW: "review_used",
+        }.get(phase)
+        if field is None:
+            raise ValueError(f"phase {phase.value} does not consume model attempts")
+        limit = self.limit_for(phase)
+        used = self.used_for(phase)
+        if used >= limit:
+            raise ValueError(f"{phase.value} attempt budget is exhausted")
+        setattr(self, field, used + 1)
+
+
+class RuntimeUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_calls: int = Field(default=0, ge=0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    latency_ms: float = Field(default=0, ge=0)
+    local_skill_calls: int = Field(default=0, ge=0)
+
+
+class RuntimeErrorRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    phase: QuestionPhase
+    step: int = Field(ge=0)
+    kind: Literal["parse", "model", "skill", "protocol", "protocol_drift"]
+    message: str = Field(min_length=1, max_length=500)
+
+
+class ReportSearchHit(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    paragraph_id: int = Field(ge=0)
+    score: float = Field(ge=0)
+    snippet: str = Field(min_length=1, max_length=500)
+
+
+class ReportSearchRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    query: str = Field(min_length=1, max_length=500)
+    target_obligation_id: ObligationId
+    step: int = Field(ge=0)
+    hits: list[ReportSearchHit] = Field(default_factory=list, max_length=10)
+
+    @field_validator("hits")
+    @classmethod
+    def hit_ids_are_unique(cls, value: list[ReportSearchHit]) -> list[ReportSearchHit]:
+        ids = [hit.paragraph_id for hit in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("search hit paragraph IDs must be unique")
+        return value
+
+
 class FinOASISQuestionState(BaseModel):
     """Strict protocol-v3 state with graph and ledger integrity validation."""
 
@@ -262,6 +369,7 @@ class FinOASISQuestionState(BaseModel):
     phase: QuestionPhase = QuestionPhase.INITIALIZATION
     step: int = Field(default=0, ge=0)
     remaining_steps: int = Field(ge=0)
+    phase_attempts: PhaseAttemptBudget
     confidence: Confidence = Confidence.LOW
     obligations: list[Obligation] = Field(default_factory=list, max_length=256)
     next_obligation_sequence: int = Field(default=1, ge=1, le=1_000_000)
@@ -287,7 +395,17 @@ class FinOASISQuestionState(BaseModel):
     skill_availability_history: list[SkillAvailabilityRecord] = Field(
         default_factory=list, max_length=512
     )
+    report_search_history: list[ReportSearchRecord] = Field(
+        default_factory=list, max_length=64
+    )
     last_observation: BoundedObservation | None = None
+    usage: RuntimeUsage = Field(default_factory=RuntimeUsage)
+    errors: list[RuntimeErrorRecord] = Field(default_factory=list, max_length=128)
+    prediction: Prediction | None = None
+    draft_prediction: Prediction | None = None
+    closed: bool = False
+    forced_finalization: bool = False
+    termination_reason: ShortText | None = None
     final_certificate_status: FinalCertificateStatus = FinalCertificateStatus.PENDING
     unresolved_obligation_ids: list[ObligationId] = Field(
         default_factory=list, max_length=256
@@ -387,6 +505,24 @@ class FinOASISQuestionState(BaseModel):
                 and record.target_obligation_id not in known_ids
             ):
                 raise ValueError("availability history targets an unknown obligation")
+        for record in self.report_search_history:
+            if record.target_obligation_id not in known_ids:
+                raise ValueError("report search history targets an unknown obligation")
+
+        if self.step != self.phase_attempts.total_used:
+            raise ValueError("step does not match charged phase attempts")
+        if self.remaining_steps != self.phase_attempts.total_limit - self.step:
+            raise ValueError("remaining_steps does not match phase attempt budgets")
+        if self.closed:
+            if self.phase is not QuestionPhase.CLOSED:
+                raise ValueError("closed state must use the closed phase")
+            if self.prediction is None:
+                raise ValueError("closed state requires a prediction")
+        elif self.phase is QuestionPhase.CLOSED:
+            raise ValueError("closed phase requires closed=true")
+        for prediction in (self.prediction, self.draft_prediction):
+            if prediction is not None and prediction.example_id != self.example_id:
+                raise ValueError("prediction is not bound to the current example")
 
         active_ids = {
             obligation.obligation_id
@@ -462,14 +598,52 @@ class FinOASISQuestionState(BaseModel):
         task: PublicTask,
         resume_identity: ResumeIdentity,
         max_steps: int,
+        *,
+        exploration_steps: int | None = None,
+        finalization_steps: int = 0,
+        review_steps: int = 0,
     ) -> "FinOASISQuestionState":
         resume_identity.assert_matches_task(task)
+        exploration_limit = max_steps if exploration_steps is None else exploration_steps
+        total_steps = exploration_limit + finalization_steps + review_steps
+        if total_steps != max_steps:
+            raise ValueError("phase attempt limits must sum to max_steps")
         return cls(
             resume_identity=resume_identity,
             example_id=task.example_id,
             statement=task.statement,
             report=task.report,
-            remaining_steps=max_steps,
+            remaining_steps=total_steps,
+            phase_attempts=PhaseAttemptBudget(
+                exploration_limit=exploration_limit,
+                finalization_limit=finalization_steps,
+                review_limit=review_steps,
+            ),
+        )
+
+    def charge_attempt(self) -> None:
+        """Persistently charge the current phase before invoking a model."""
+
+        candidate = self.model_copy(deep=True)
+        candidate.phase_attempts.charge(candidate.phase)
+        candidate.step += 1
+        candidate.remaining_steps -= 1
+        validated = type(self).model_validate(candidate.model_dump(mode="python"))
+        self._adopt(validated)
+
+    def record_error(self, kind: str, message: str) -> None:
+        bounded = " ".join(str(message).split())[:500]
+        if not bounded:
+            bounded = "unspecified Runtime error"
+        if len(self.errors) >= 128:
+            self.errors.pop(0)
+        self.errors.append(
+            RuntimeErrorRecord(
+                phase=self.phase,
+                step=self.step,
+                kind=kind,
+                message=bounded,
+            )
         )
 
     def obligation(self, obligation_id: str) -> Obligation:
@@ -727,11 +901,22 @@ class FinOASISStateStore:
         task: PublicTask,
         resume_identity: ResumeIdentity,
         max_steps: int,
+        *,
+        exploration_steps: int | None = None,
+        finalization_steps: int = 0,
+        review_steps: int = 0,
     ) -> FinOASISQuestionState:
         resume_identity.assert_matches_task(task)
         path = self.path_for(task.example_id)
         if not path.exists():
-            return FinOASISQuestionState.create(task, resume_identity, max_steps)
+            return FinOASISQuestionState.create(
+                task,
+                resume_identity,
+                max_steps,
+                exploration_steps=exploration_steps,
+                finalization_steps=finalization_steps,
+                review_steps=review_steps,
+            )
         if path.stat().st_size > MAX_STATE_BYTES:
             raise ValueError("saved protocol-v3 state exceeds the size limit")
         state = FinOASISQuestionState.model_validate_json(
@@ -791,10 +976,15 @@ __all__ = [
     "FinOASISQuestionState",
     "FinOASISStateStore",
     "NumericValueLedgerEntry",
+    "PhaseAttemptBudget",
     "QuestionState",
     "QuestionStateV3",
+    "ReportSearchHit",
+    "ReportSearchRecord",
     "ResumeIdentity",
     "RuleEvidenceLedgerEntry",
+    "RuntimeErrorRecord",
+    "RuntimeUsage",
     "SkillAvailabilityRecord",
     "StateStore",
     "V3ResumeIdentity",

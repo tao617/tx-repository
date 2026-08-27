@@ -1,10 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase1-contracts
-current_goal: Preserve the completed evidence and official-test V2 freeze; await explicit
-  authorization for Gold-free input binding without model calls, then require separate
-  approval before any official-test API execution.
-last_completed_phase: findoasis-phase1-contracts
-last_git_commit: 9e896fa0c4a534b5b6d367f4b86b88452d8278f3
+current_phase: findoasis-phase2-dynamic-routing
+current_goal: Implement FinOASIS protocol v3 additively through credential-free local
+  tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
+last_completed_phase: findoasis-phase2-dynamic-routing
+last_git_commit: 31dab0994339927ed628fc6475f9faf6ec476448
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -324,14 +323,35 @@ decisions:
   report, and optional corpus identity binding.
 - Official Test V2, M2, sealed archive, evidence sidecar, and canonical v1/v2 state
   and prompt outputs are now hash-frozen by tests.
+- Seed obligations from claim text only, expose only the Registry subset justified
+  by active obligations and trusted Runtime facts, and charge every model attempt
+  before transport.
+- Store exact read report evidence with a matching SHA256; prompts may show only a
+  bounded untrusted view of ledgered text and search candidates.
+- Dispatch protocol v3 before constructing legacy StateStore, PromptBuilder, or fixed
+  retrieval objects. Unavailable v3 calls record rejection but cannot apply model
+  control metadata or mutate proof ledgers.
+- Protocol v3 dispatches before legacy StateStore, PromptBuilder, or fixed retrieval
+  construction.
+- Only exact hash-checked ledger evidence and bounded search snippets are visible
+  as untrusted prompt data.
 files_changed:
 - docs/FINOASIS_PROGRESS.md
-- src/findver_agent/config.py
-- src/findver_agent/findoasis/
-- tests/unit/test_actions_v3.py
-- tests/unit/test_compatibility_freeze.py
-- tests/unit/test_finoasis_config.py
-- tests/unit/test_obligations_v3.py
+- docs/SESSION_HANDOFF.md
+- docs/STATE.yaml
+- src/findver_agent/findoasis/agent.py
+- src/findver_agent/findoasis/prompt_builder.py
+- src/findver_agent/findoasis/registry.py
+- src/findver_agent/findoasis/router.py
+- src/findver_agent/findoasis/seeder.py
+- src/findver_agent/findoasis/state.py
+- src/findver_agent/orchestrator.py
+- tests/integration/test_finoasis_resume.py
+- tests/integration/test_finoasis_router.py
+- tests/unit/test_obligation_seeder_v3.py
+- tests/unit/test_prompt_v3.py
+- tests/unit/test_skill_registry_v3.py
+- tests/unit/test_skill_router_v3.py
 - tests/unit/test_state_v3.py
 tests_passed:
 - 9 unit tests
@@ -613,6 +633,9 @@ tests_passed:
 - compileall and git diff checks passed
 - 93 focused v3 and compatibility tests passed
 - 341 full Agent tests passed on Python 3.12
+- 391 full Agent tests passed on Python 3.12
+- Focused v3 routing and resume integration tests passed
+- Python compileall and git diff checks passed
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -651,7 +674,7 @@ known_issues:
   with repository-scoped basetemp.
 - Python 3.11 is unavailable locally and remains a CI verification item.
 next_actions:
-- Implement the conservative obligation seeder, immutable Skill Registry, dynamic
-  availability resolver, v3 prompt and orchestrator dispatch.
+- Implement Phase 3 additive table indexing, bounded table-region reads, and evidence-bound
+  ValueRef creation.
 blocked_items: []
-last_updated: '2026-08-28T01:39:56+08:00'
+last_updated: '2026-08-28T02:00:19+08:00'

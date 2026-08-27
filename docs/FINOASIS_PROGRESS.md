@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 1 — protocol and typed proof-obligation contracts
+- Phase: Phase 2 — obligation-aware dynamic Skill routing
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `9e896fa0c4a534b5b6d367f4b86b88452d8278f3`
+- Current committed HEAD: `31dab0994339927ed628fc6475f9faf6ec476448`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 1 source/tests plus checkpoint documents are not yet committed
-- Push status: Phase 0 pushed
-- Remote branch SHA: `9e896fa0c4a534b5b6d367f4b86b88452d8278f3`
+- Worktree: Phase 2 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 and 1 pushed
+- Remote branch SHA: `31dab0994339927ed628fc6475f9faf6ec476448`
 - Draft PR: not yet created
 
 ## Completed work
@@ -59,6 +59,32 @@
   members, sidecar schema v1, legacy parser rejection, and canonical v1/v2 state/prompt
   outputs.
 
+### Phase 2
+
+- Added conservative claim-only obligation seeding. It always creates document and
+  final-verification obligations and adds numeric/rule families only for strong,
+  subset-free lexical signals.
+- Added an immutable, code-owned Registry for all nine v3 Skills plus a canonical
+  Registry hash used by resume identity.
+- Added a pure dynamic availability resolver over typed obligations, satisfied
+  dependencies, configured allowlist and per-Skill budget, Runtime candidates,
+  evidence-bound values, frozen-corpus validity and finalization fallback.
+- Added a bounded v3 prompt builder that exposes only currently available contracts.
+  It includes bounded search snippets and exact text only from already-read ledger
+  entries, labels all report-derived content untrusted, and never dumps hidden Registry
+  contracts or unavailable schemas.
+- Extended v3 state with hash-checked exact evidence text, phase attempt budgets,
+  aggregate usage, bounded errors, report search history, predictions and close state.
+  Attempt charging is persisted before model execution.
+- Added the independent `FinOASISAgent` and dispatched protocol v3 before construction
+  of legacy state, prompt or retrieval objects. Phase 2 executes only report search and
+  paragraph reads; later Skills fail closed until their implementation phases.
+- Added unavailable-call rejection with charged attempt, protocol error and rejection
+  metric but no control, obligation or ledger mutation.
+- Added scripted integration coverage for IE-only dynamic exposure, adversarial hidden
+  Skill calls, exact read evidence visibility and interruption/resume without repeated
+  search or attempt credit.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -76,6 +102,15 @@
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
 - `git diff --check`: passed.
 
+## Phase 2 tests
+
+- Focused Phase 1/2 unit and integration selections: 101 tests passed across the final
+  focused runs.
+- Full suite: 391 passed in 4.18s on Python 3.12.
+- `.venv/bin/python -m compileall -q src tests`: passed.
+- `git diff --check`: passed.
+- No model, network, scorer, Gold, official input or paid API was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -91,7 +126,7 @@
   FinDSL operands.
 - Treat the tracked rule corpus as synthetic experimental fixture, not formal guidance.
 
-## Files changed through Phase 1
+## Files changed through Phase 2
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
@@ -102,17 +137,27 @@
 - `src/findver_agent/findoasis/contracts.py`
 - `src/findver_agent/findoasis/actions.py`
 - `src/findver_agent/findoasis/state.py`
+- `src/findver_agent/findoasis/seeder.py`
+- `src/findver_agent/findoasis/registry.py`
+- `src/findver_agent/findoasis/router.py`
+- `src/findver_agent/findoasis/prompt_builder.py`
+- `src/findver_agent/findoasis/agent.py`
+- `src/findver_agent/orchestrator.py`
 - `tests/unit/test_obligations_v3.py`
 - `tests/unit/test_actions_v3.py`
 - `tests/unit/test_state_v3.py`
 - `tests/unit/test_finoasis_config.py`
 - `tests/unit/test_compatibility_freeze.py`
+- `tests/unit/test_obligation_seeder_v3.py`
+- `tests/unit/test_skill_registry_v3.py`
+- `tests/unit/test_skill_router_v3.py`
+- `tests/unit/test_prompt_v3.py`
+- `tests/integration/test_finoasis_router.py`
+- `tests/integration/test_finoasis_resume.py`
 
 ## Unresolved issues and risks
 
 - Python 3.11 is unavailable locally; CI must run the 3.11 leg.
-- v3 execution dispatch and prompt routing are not implemented until Phase 2; it must
-  dispatch before the current prompt builder's unknown-protocol v1 fallback.
 - ValueRef, FinDSL and rule-specific certificate schemas will refine the Phase 1 generic
   ledgers without weakening their reference and resume invariants.
 - Table context and `html_tables` are order-aligned in all 600 tracked reports but have
@@ -124,9 +169,9 @@
 
 ## Exact next step
 
-Implement Phase 2: conservative subset-free obligation seeding, immutable code-owned
-Skill Registry, dynamic availability resolver, v3 prompt builder, unavailable-call
-rejection, v3 orchestrator dispatch and resume-safe scripted integration tests.
+Implement Phase 3: additive table indexing and bounded table-region reads, then exact
+paragraph/table value binding with typed source coordinates and unit/period ambiguity
+that fails closed.
 
 ## Safe recovery commands
 
@@ -152,4 +197,5 @@ git diff --check
 | Phase | Commit | Push | Notes |
 |---|---|---|---|
 | Phase 0 | `9e896fa0c4a534b5b6d367f4b86b88452d8278f3` | pushed | `docs: record FinOASIS implementation plan` |
-| Phase 1 | pending | pending | `feat: add typed proof obligation contracts` |
+| Phase 1 | `31dab0994339927ed628fc6475f9faf6ec476448` | pushed | `feat: add typed proof obligation contracts` |
+| Phase 2 | pending | pending | `feat: gate skills by pending proof obligations` |

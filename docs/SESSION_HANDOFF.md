@@ -2,24 +2,28 @@
 
 ## Current state
 
-Phase `findoasis-phase1-contracts` completed: Added isolated protocol-v3 typed obligations, strict model-safe actions, transactional state and resume contracts, experimental configuration, and frozen v1/v2 compatibility tests.
+Phase `findoasis-phase2-dynamic-routing` completed: Added conservative obligation seeding, immutable Registry, dynamic availability, masked v3 prompts, early orchestrator dispatch, transactional rejection, and exact resume.
 
-- Git commit at checkpoint start: `9e896fa0c4a534b5b6d367f4b86b88452d8278f3`
-- Changed files: 8
+- Git commit at checkpoint start: `31dab0994339927ed628fc6475f9faf6ec476448`
+- Changed files: 17
 
 ## Diff summary
 
 ```text
-docs/FINOASIS_PROGRESS.md   |  71 +++++++++++++----
- src/findver_agent/config.py | 184 +++++++++++++++++++++++++++++++++++++++++++-
- 2 files changed, 240 insertions(+), 15 deletions(-)
+docs/FINOASIS_PROGRESS.md            |  70 ++++++++++---
+ docs/SESSION_HANDOFF.md              |  76 ++++++++------
+ docs/STATE.yaml                      |  32 ++++--
+ src/findver_agent/findoasis/state.py | 196 ++++++++++++++++++++++++++++++++++-
+ src/findver_agent/orchestrator.py    |  19 ++++
+ tests/unit/test_state_v3.py          |  24 ++++-
+ 6 files changed, 361 insertions(+), 56 deletions(-)
 ```
 
 ## Tests passed
 
-- 93 focused v3 and compatibility tests passed
-- 341 full Agent tests passed on Python 3.12
-- compileall and git diff checks passed
+- 391 full Agent tests passed on Python 3.12
+- Focused v3 routing and resume integration tests passed
+- Python compileall and git diff checks passed
 
 ## Tests failed or unavailable
 
@@ -41,4 +45,4 @@ pytest -q
 
 ## Next action
 
-Implement the conservative obligation seeder, immutable Skill Registry, dynamic availability resolver, v3 prompt and orchestrator dispatch.
+Implement Phase 3 additive table indexing, bounded table-region reads, and evidence-bound ValueRef creation.
