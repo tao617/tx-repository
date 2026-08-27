@@ -23,7 +23,7 @@ from findver_agent.findoasis.state import (
 from findver_agent.schemas import PublicTask
 
 
-EVIDENCE_TEXT = "Revenue was 128.4 in FY2024."
+EVIDENCE_TEXT = "Revenue was 128.4 in FY2024. Operating margin was 12.5%."
 HASH = hashlib.sha256(EVIDENCE_TEXT.encode()).hexdigest()
 ALL_SKILLS = tuple(skill.value for skill in SkillName)
 
@@ -159,8 +159,8 @@ def test_numeric_program_stays_hidden_until_operands_are_evidence_bound():
     assert SkillName.BIND_FINANCIAL_VALUE in before_binding
     assert SkillName.EXECUTE_FINANCIAL_PROGRAM not in before_binding
 
-    state.numeric_value_ledger["value-1"] = NumericValueLedgerEntry(
-        value_id="value-1",
+    state.numeric_value_ledger["value-0001"] = NumericValueLedgerEntry(
+        value_id="value-0001",
         evidence_ref="ev-1",
         raw_value="12.5%",
         normalized_value="12.5",
@@ -171,31 +171,35 @@ def test_numeric_program_stays_hidden_until_operands_are_evidence_bound():
         period="FY2024",
         entity="issuer",
         metric="operating margin",
+        paragraph_id=3,
+        text_span_start=EVIDENCE_TEXT.index("12.5%"),
+        text_span_end=EVIDENCE_TEXT.index("12.5%") + len("12.5%"),
     )
+    state.next_value_sequence = 2
     state.apply_skill_result(
         SkillResult(
             status="satisfied",
             target_obligation_id=operand.obligation_id,
             satisfied_obligation_ids=[operand.obligation_id],
-            evidence_refs=["value-1"],
+            evidence_refs=["value-0001"],
         )
     )
     after_binding = resolve_available_skills(
         state,
         _config(),
-        RuntimeFacts(bound_value_refs=("value-1",)),
+        RuntimeFacts(bound_value_refs=("value-0001",)),
     )
     decision = after_binding.decision_for("execute_financial_program")
     assert decision.available is True
     assert decision.target_obligation_ids == (operation.obligation_id,)
 
-    state.numeric_value_ledger["value-1"] = state.numeric_value_ledger[
-        "value-1"
+    state.numeric_value_ledger["value-0001"] = state.numeric_value_ledger[
+        "value-0001"
     ].model_copy(update={"ambiguity_flags": ["period_conflict"]})
     ambiguous = resolve_available_skills(
         state,
         _config(),
-        RuntimeFacts(bound_value_refs=("value-1",)),
+        RuntimeFacts(bound_value_refs=("value-0001",)),
     )
     assert SkillName.EXECUTE_FINANCIAL_PROGRAM not in ambiguous
 

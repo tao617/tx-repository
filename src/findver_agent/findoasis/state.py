@@ -131,6 +131,19 @@ class EvidenceLedgerEntry(BaseModel):
     table_id: ReferenceId | None = None
     row_index: int | None = Field(default=None, ge=0)
     column_index: int | None = Field(default=None, ge=0)
+    header_path: list[ShortText] = Field(default_factory=list, max_length=8)
+    inferred_unit: ShortText = "unknown"
+    inferred_scale: ShortText = "unknown"
+    raw_source_start: int | None = Field(default=None, ge=0)
+    raw_source_end: int | None = Field(default=None, ge=0)
+    ambiguity_flags: list[ShortText] = Field(default_factory=list, max_length=8)
+
+    @field_validator("header_path", "ambiguity_flags")
+    @classmethod
+    def evidence_lists_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("evidence metadata lists must be unique")
+        return value
 
     @model_validator(mode="after")
     def table_coordinates_are_consistent(self) -> "EvidenceLedgerEntry":
@@ -142,6 +155,16 @@ class EvidenceLedgerEntry(BaseModel):
                 raise ValueError("table_cell evidence requires table coordinates")
         elif any(item is not None for item in coordinates):
             raise ValueError("paragraph evidence cannot contain table coordinates")
+        elif self.header_path:
+            raise ValueError("paragraph evidence cannot contain a table header path")
+        if (self.raw_source_start is None) != (self.raw_source_end is None):
+            raise ValueError("raw source offsets must be supplied together")
+        if (
+            self.raw_source_start is not None
+            and self.raw_source_end is not None
+            and self.raw_source_end <= self.raw_source_start
+        ):
+            raise ValueError("raw source end must follow its start")
         return self
 
 
@@ -169,6 +192,12 @@ class NumericValueLedgerEntry(BaseModel):
     period: ShortText
     entity: ShortText
     metric: ShortText
+    paragraph_id: int = Field(ge=0)
+    table_id: ReferenceId | None = None
+    row_index: int | None = Field(default=None, ge=0)
+    column_index: int | None = Field(default=None, ge=0)
+    text_span_start: int = Field(ge=0)
+    text_span_end: int = Field(ge=1)
     ambiguity_flags: list[ShortText] = Field(default_factory=list, max_length=8)
 
     @field_validator("ambiguity_flags")
@@ -177,6 +206,17 @@ class NumericValueLedgerEntry(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("ambiguity_flags must be unique")
         return value
+
+    @model_validator(mode="after")
+    def source_coordinates_are_complete(self) -> "NumericValueLedgerEntry":
+        if self.text_span_end <= self.text_span_start:
+            raise ValueError("numeric value text span must be non-empty")
+        coordinates = (self.row_index, self.column_index)
+        if self.table_id is None and any(item is not None for item in coordinates):
+            raise ValueError("paragraph value cannot contain table coordinates")
+        if self.table_id is not None and not all(item is not None for item in coordinates):
+            raise ValueError("table value requires row and column coordinates")
+        return self
 
 
 class FinancialProgramLedgerEntry(BaseModel):
@@ -355,6 +395,26 @@ class ReportSearchRecord(BaseModel):
         return value
 
 
+class TableCandidateRecord(BaseModel):
+    """Bounded report-table catalog entry persisted for prompt and resume."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    table_id: ReferenceId
+    paragraph_id: int = Field(ge=0)
+    title: str = Field(min_length=1, max_length=500)
+    row_count: int = Field(ge=0, le=10_000)
+    column_count: int = Field(ge=0, le=1_000)
+    ambiguity_flags: list[ShortText] = Field(default_factory=list, max_length=8)
+
+    @field_validator("ambiguity_flags")
+    @classmethod
+    def candidate_flags_are_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("table candidate ambiguity flags must be unique")
+        return value
+
+
 class FinOASISQuestionState(BaseModel):
     """Strict protocol-v3 state with graph and ledger integrity validation."""
 
@@ -373,6 +433,7 @@ class FinOASISQuestionState(BaseModel):
     confidence: Confidence = Confidence.LOW
     obligations: list[Obligation] = Field(default_factory=list, max_length=256)
     next_obligation_sequence: int = Field(default=1, ge=1, le=1_000_000)
+    next_value_sequence: int = Field(default=1, ge=1, le=1_000_000)
     evidence_ledger: dict[ReferenceId, EvidenceLedgerEntry] = Field(
         default_factory=dict, max_length=512
     )
@@ -397,6 +458,9 @@ class FinOASISQuestionState(BaseModel):
     )
     report_search_history: list[ReportSearchRecord] = Field(
         default_factory=list, max_length=64
+    )
+    table_candidates: list[TableCandidateRecord] = Field(
+        default_factory=list, max_length=512
     )
     last_observation: BoundedObservation | None = None
     usage: RuntimeUsage = Field(default_factory=RuntimeUsage)
@@ -454,6 +518,14 @@ class FinOASISQuestionState(BaseModel):
         if self.next_obligation_sequence != len(self.obligations) + 1:
             raise ValueError("next_obligation_sequence does not follow the obligation ledger")
 
+        for sequence, value in enumerate(
+            self.numeric_value_ledger.values(), start=1
+        ):
+            if value.value_id != f"value-{sequence:04d}":
+                raise ValueError("ValueRef IDs must be deterministic and contiguous")
+        if self.next_value_sequence != len(self.numeric_value_ledger) + 1:
+            raise ValueError("next_value_sequence does not follow the value ledger")
+
         known_ids = set(obligation_by_id)
         for obligation in self.obligations:
             unknown = set(obligation.dependency_ids) - known_ids
@@ -485,6 +557,22 @@ class FinOASISQuestionState(BaseModel):
         for value in self.numeric_value_ledger.values():
             if value.evidence_ref not in self.evidence_ledger:
                 raise ValueError("numeric value contains a dangling evidence reference")
+            source = self.evidence_ledger[value.evidence_ref]
+            if value.paragraph_id != source.paragraph_id:
+                raise ValueError("numeric value paragraph does not match its evidence")
+            if (value.table_id, value.row_index, value.column_index) != (
+                source.table_id,
+                source.row_index,
+                source.column_index,
+            ):
+                raise ValueError("numeric value table coordinates do not match evidence")
+            if value.text_span_end > len(source.exact_text):
+                raise ValueError("numeric value text span exceeds its evidence")
+            if (
+                source.exact_text[value.text_span_start : value.text_span_end]
+                != value.raw_value
+            ):
+                raise ValueError("numeric value raw text does not match its source span")
         for program in self.financial_program_ledger.values():
             if set(program.operand_value_refs) - set(self.numeric_value_ledger):
                 raise ValueError("financial program contains a dangling value reference")
@@ -508,6 +596,9 @@ class FinOASISQuestionState(BaseModel):
         for record in self.report_search_history:
             if record.target_obligation_id not in known_ids:
                 raise ValueError("report search history targets an unknown obligation")
+        table_ids = [candidate.table_id for candidate in self.table_candidates]
+        if len(table_ids) != len(set(table_ids)):
+            raise ValueError("table candidate IDs must be unique")
 
         if self.step != self.phase_attempts.total_used:
             raise ValueError("step does not match charged phase attempts")
@@ -987,6 +1078,7 @@ __all__ = [
     "RuntimeUsage",
     "SkillAvailabilityRecord",
     "StateStore",
+    "TableCandidateRecord",
     "V3ResumeIdentity",
     "V3StateStore",
     "safe_example_filename",

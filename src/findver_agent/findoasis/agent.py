@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from findver_agent.config import AgentConfig
@@ -21,7 +22,10 @@ from findver_agent.trace_writer import TraceWriter
 from .actions import (
     Action,
     ActionParseError,
+    BindFinancialValueArguments,
+    BindFinancialValueAction,
     ReadParagraphsAction,
+    ReadTableRegionAction,
     SearchReportAction,
     parse_action,
 )
@@ -43,11 +47,69 @@ from .state import (
     EvidenceLedgerEntry,
     FinOASISQuestionState,
     FinOASISStateStore,
+    NumericValueLedgerEntry,
     ReportSearchHit,
     ReportSearchRecord,
     ResumeIdentity,
     SkillAvailabilityRecord,
+    TableCandidateRecord,
 )
+from .table_region import TableRegionError, TableRegionReader
+from .value_binding import ValueAmbiguityFlag, bind_financial_value
+
+
+_UNKNOWN_METADATA = {"", "?", "n/a", "na", "none", "unknown", "unspecified"}
+_UNIT_METADATA_ALIASES = {
+    "usd": "USD",
+    "us dollar": "USD",
+    "us dollars": "USD",
+    "dollar": "USD",
+    "dollars": "USD",
+    "eur": "EUR",
+    "euro": "EUR",
+    "euros": "EUR",
+    "gbp": "GBP",
+    "pound": "GBP",
+    "pounds": "GBP",
+    "cny": "CNY",
+    "rmb": "CNY",
+    "jpy": "JPY",
+    "yen": "JPY",
+    "percentage": "percentage",
+    "percentage point": "percentage",
+    "percentage points": "percentage",
+    "percent": "percentage",
+    "%": "percentage",
+    "share": "shares",
+    "shares": "shares",
+}
+_SCALE_METADATA_ALIASES = {
+    "1": "one",
+    "one": "one",
+    "ones": "one",
+    "1000": "thousand",
+    "1e3": "thousand",
+    "k": "thousand",
+    "thousand": "thousand",
+    "thousands": "thousand",
+    "1000000": "million",
+    "1e6": "million",
+    "m": "million",
+    "mn": "million",
+    "million": "million",
+    "millions": "million",
+    "1000000000": "billion",
+    "1e9": "billion",
+    "b": "billion",
+    "bn": "billion",
+    "billion": "billion",
+    "billions": "billion",
+    "1000000000000": "trillion",
+    "1e12": "trillion",
+    "tn": "trillion",
+    "trillion": "trillion",
+    "trillions": "trillion",
+}
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -112,6 +174,7 @@ class FinOASISAgent:
             session,
             max_paragraphs=self.config.max_paragraphs_per_read,
         )
+        table_reader = TableRegionReader(session)
 
         while not state.closed:
             if self._advance_exhausted_phase(state, trace):
@@ -229,7 +292,14 @@ class FinOASISAgent:
 
             candidate = state.model_copy(deep=True)
             try:
-                self._execute_action(candidate, action, search=search, read=read)
+                self._execute_action(
+                    candidate,
+                    action,
+                    session=session,
+                    search=search,
+                    read=read,
+                    table_reader=table_reader,
+                )
                 self._apply_model_control(candidate, action)
                 candidate.skill_call_counts[skill_name] = (
                     candidate.skill_call_counts.get(skill_name, 0) + 1
@@ -330,6 +400,14 @@ class FinOASISAgent:
         return RuntimeFacts(
             search_candidate_paragraph_ids=tuple(candidates),
             read_paragraph_ids=tuple(dict.fromkeys(read_ids)),
+            table_candidate_ids=tuple(
+                candidate.table_id for candidate in state.table_candidates
+            ),
+            read_table_evidence_refs=tuple(
+                reference
+                for reference, entry in state.evidence_ledger.items()
+                if entry.source == "table_cell"
+            ),
             bound_value_refs=tuple(state.numeric_value_ledger),
             read_rule_evidence_refs=tuple(state.rule_evidence_ledger),
             rule_corpus_valid=False,
@@ -342,8 +420,10 @@ class FinOASISAgent:
         state: FinOASISQuestionState,
         action: Action,
         *,
+        session: ReportSession,
         search: SearchReportSkill,
         read: ReadParagraphsSkill,
+        table_reader: TableRegionReader,
     ) -> None:
         target = action.control.target_obligation_id
         target_obligation = state.obligation(target)
@@ -357,6 +437,12 @@ class FinOASISAgent:
                     step=state.step,
                     hits=hits,
                 )
+            )
+            self._add_relevant_table_candidates(
+                state,
+                session=session,
+                table_reader=table_reader,
+                paragraph_ids={hit.paragraph_id for hit in hits},
             )
             state.apply_skill_result(
                 SkillResult(
@@ -426,7 +512,358 @@ class FinOASISAgent:
             )
             return
 
+        if isinstance(action, ReadTableRegionAction):
+            if action.arguments.table_id not in {
+                candidate.table_id for candidate in state.table_candidates
+            }:
+                raise SkillError("read_table_region may read only searched table candidates")
+            try:
+                region = table_reader.read(**action.arguments.model_dump())
+            except TableRegionError as error:
+                raise SkillError(str(error)) from error
+            pending_entries: dict[str, EvidenceLedgerEntry] = {}
+            for cell in region.cells:
+                if not cell.text:
+                    continue
+                evidence_ref = (
+                    f"table-cell:{cell.table_id}:{cell.row_index}:{cell.column_index}"
+                )
+                if evidence_ref in state.evidence_ledger or evidence_ref in pending_entries:
+                    raise SkillError(
+                        "read_table_region cannot reread a ledgered table cell"
+                    )
+                pending_entries[evidence_ref] = EvidenceLedgerEntry(
+                    evidence_id=evidence_ref,
+                    source="table_cell",
+                    paragraph_id=cell.paragraph_id,
+                    exact_text=cell.text,
+                    exact_text_sha256=_sha256_text(cell.text),
+                    table_id=cell.table_id,
+                    row_index=cell.row_index,
+                    column_index=cell.column_index,
+                    header_path=self._bounded_unique(cell.header_path, maximum=8),
+                    inferred_unit=cell.unit,
+                    inferred_scale=cell.scale,
+                    raw_source_start=cell.source_html_start,
+                    raw_source_end=cell.source_html_end,
+                    ambiguity_flags=self._bounded_unique(
+                        cell.ambiguity_flags, maximum=8
+                    ),
+                )
+            if not pending_entries:
+                raise SkillError("selected table region contains no readable cells")
+            state.evidence_ledger.update(pending_entries)
+            structural_flags = {
+                flag
+                for cell in region.cells
+                for flag in cell.ambiguity_flags
+                if flag
+                in {
+                    "merged_cell",
+                    "column_header_unresolved",
+                    "row_header_ambiguous",
+                    "nested_table_structure",
+                }
+            }
+            satisfies = (
+                target_obligation.type is ObligationType.TABLE_CELL
+                and not structural_flags
+            )
+            references = list(pending_entries)
+            state.apply_skill_result(
+                SkillResult(
+                    status=(
+                        SkillResultStatus.SATISFIED
+                        if satisfies
+                        else SkillResultStatus.PARTIAL
+                    ),
+                    target_obligation_id=target,
+                    satisfied_obligation_ids=[target] if satisfies else [],
+                    partial_obligation_ids=[] if satisfies else [target],
+                    evidence_refs=references,
+                    diagnostics=[
+                        f"read {len(references)} exact table cells"
+                        + (
+                            f" with flags {','.join(sorted(structural_flags))}"
+                            if structural_flags
+                            else ""
+                        )
+                    ],
+                )
+            )
+            state.last_observation = BoundedObservation(
+                skill=SkillName.READ_TABLE_REGION,
+                status="satisfied" if satisfies else "partial",
+                target_obligation_id=target,
+                references=references[:20],
+            )
+            return
+
+        if isinstance(action, BindFinancialValueAction):
+            evidence = state.evidence_ledger.get(action.arguments.evidence_ref)
+            if evidence is None:
+                raise SkillError("bind_financial_value requires ledgered exact evidence")
+            if any(
+                item.evidence_ref == evidence.evidence_id
+                and item.raw_value == action.arguments.raw_value
+                for item in state.numeric_value_ledger.values()
+            ):
+                raise SkillError("the exact evidence value is already bound")
+            value_id = f"value-{state.next_value_sequence:04d}"
+            binding_arguments = self._trusted_binding_arguments(
+                action.arguments, evidence
+            )
+            trusted_flags = self._value_ambiguity_flags(
+                binding_arguments, evidence
+            )
+            try:
+                value_ref = bind_financial_value(
+                    binding_arguments,
+                    evidence,
+                    value_id=value_id,
+                    mandatory=False,
+                    ambiguity_flags=trusted_flags,
+                )
+            except ValueError as error:
+                raise SkillError(str(error)) from error
+            state.numeric_value_ledger[value_id] = NumericValueLedgerEntry(
+                value_id=value_ref.value_id,
+                evidence_ref=value_ref.evidence_ref,
+                raw_value=value_ref.raw_value,
+                normalized_value=value_ref.normalized_value,
+                numeric_type=value_ref.numeric_type,
+                currency=value_ref.currency,
+                unit=value_ref.unit,
+                scale=value_ref.scale,
+                period=value_ref.period,
+                entity=value_ref.entity,
+                metric=value_ref.metric,
+                paragraph_id=value_ref.paragraph_id,
+                table_id=value_ref.table_id,
+                row_index=value_ref.row_index,
+                column_index=value_ref.column_index,
+                text_span_start=value_ref.source_span_start,
+                text_span_end=value_ref.source_span_end,
+                ambiguity_flags=[flag.value for flag in value_ref.ambiguity_flags],
+            )
+            state.next_value_sequence += 1
+            self._apply_value_binding_result(state, target, value_id)
+            state.last_observation = BoundedObservation(
+                skill=SkillName.BIND_FINANCIAL_VALUE,
+                status=(
+                    "satisfied"
+                    if state.obligation(target).status is ObligationStatus.SATISFIED
+                    else "partial"
+                ),
+                target_obligation_id=target,
+                references=[value_id],
+            )
+            return
+
         raise SkillError(f"{action.action} is not implemented by this Runtime phase")
+
+    @staticmethod
+    def _bounded_unique(values, *, maximum: int) -> list[str]:
+        bounded = [" ".join(str(value).split())[:160] for value in values]
+        return list(dict.fromkeys(value for value in bounded if value))[:maximum]
+
+    def _add_relevant_table_candidates(
+        self,
+        state: FinOASISQuestionState,
+        *,
+        session: ReportSession,
+        table_reader: TableRegionReader,
+        paragraph_ids: set[int],
+    ) -> None:
+        existing = {candidate.table_id for candidate in state.table_candidates}
+        for table in session.tables:
+            if table.paragraph_id not in paragraph_ids or table.table_id in existing:
+                continue
+            try:
+                structure = table_reader.describe(table.table_id)
+            except TableRegionError:
+                continue
+            title = self._table_title(table.raw_context, table.paragraph_id)
+            state.table_candidates.append(
+                TableCandidateRecord(
+                    table_id=structure.table_id,
+                    paragraph_id=structure.paragraph_id,
+                    title=title,
+                    row_count=structure.row_count,
+                    column_count=structure.column_count,
+                    ambiguity_flags=self._bounded_unique(
+                        structure.ambiguity_flags, maximum=8
+                    ),
+                )
+            )
+            existing.add(table.table_id)
+
+    @staticmethod
+    def _table_title(raw_context: str, paragraph_id: int) -> str:
+        lines = [" ".join(line.split()) for line in raw_context.splitlines()]
+        title_lines = [line for line in lines if line and not line.startswith("|")]
+        if not title_lines:
+            return f"unknown table title at paragraph {paragraph_id}"
+        return " — ".join(title_lines[-3:])[:500]
+
+    @staticmethod
+    def _value_ambiguity_flags(
+        arguments: BindFinancialValueArguments,
+        evidence: EvidenceLedgerEntry,
+    ) -> tuple[ValueAmbiguityFlag, ...]:
+        flags: set[ValueAmbiguityFlag] = set()
+        evidence_flags = set(evidence.ambiguity_flags)
+        if evidence.source == "table_cell" and evidence_flags & {
+            "merged_cell",
+            "column_header_unresolved",
+            "row_header_ambiguous",
+            "nested_table_structure",
+        }:
+            flags.add(ValueAmbiguityFlag.TABLE_HEADER_AMBIGUOUS)
+        if evidence_flags & {
+            "unit_ambiguous",
+            "unit_unknown",
+            "currency_symbol_ambiguous",
+        }:
+            flags.add(ValueAmbiguityFlag.UNIT_AMBIGUOUS)
+        if evidence_flags & {"scale_ambiguous", "scale_unknown"}:
+            flags.add(ValueAmbiguityFlag.SCALE_AMBIGUOUS)
+
+        source_context = " ".join(
+            [evidence.exact_text, *evidence.header_path]
+        ).casefold()
+        period = arguments.period.strip().casefold()
+        years = set(re.findall(r"(?:19|20|21)\d{2}", period))
+        source_years = set(re.findall(r"(?:19|20|21)\d{2}", source_context))
+        period_supported = bool(period and period in source_context) or bool(
+            years and years <= source_years
+        )
+        if period in {"unknown", "unspecified", "n/a"} or not period_supported:
+            flags.add(ValueAmbiguityFlag.PERIOD_AMBIGUOUS)
+        return tuple(flag for flag in ValueAmbiguityFlag if flag in flags)
+
+    @staticmethod
+    def _trusted_binding_arguments(
+        arguments: BindFinancialValueArguments,
+        evidence: EvidenceLedgerEntry,
+    ) -> BindFinancialValueArguments:
+        """Reconcile model metadata with deterministic table inference."""
+
+        updates: dict[str, str] = {}
+        trusted_unit = FinOASISAgent._canonical_metadata(
+            evidence.inferred_unit, aliases=_UNIT_METADATA_ALIASES
+        )
+        if trusted_unit is not None:
+            supplied_unit = FinOASISAgent._canonical_metadata(
+                arguments.unit, aliases=_UNIT_METADATA_ALIASES
+            )
+            if supplied_unit is not None and supplied_unit != trusted_unit:
+                raise SkillError(
+                    "unit metadata conflicts with deterministic table inference"
+                )
+            updates["unit"] = trusted_unit
+            if arguments.numeric_type == "money":
+                supplied_currency = FinOASISAgent._canonical_metadata(
+                    arguments.currency, aliases=_UNIT_METADATA_ALIASES
+                )
+                if (
+                    supplied_currency is not None
+                    and supplied_currency != trusted_unit
+                ):
+                    raise SkillError(
+                        "currency metadata conflicts with deterministic table inference"
+                    )
+                updates["currency"] = trusted_unit
+
+        trusted_scale = FinOASISAgent._canonical_metadata(
+            evidence.inferred_scale, aliases=_SCALE_METADATA_ALIASES
+        )
+        if trusted_scale is not None:
+            supplied_scale = FinOASISAgent._canonical_metadata(
+                arguments.scale, aliases=_SCALE_METADATA_ALIASES
+            )
+            if supplied_scale is not None and supplied_scale != trusted_scale:
+                raise SkillError(
+                    "scale metadata conflicts with deterministic table inference"
+                )
+            updates["scale"] = trusted_scale
+
+        return arguments.model_copy(update=updates) if updates else arguments
+
+    @staticmethod
+    def _canonical_metadata(
+        value: str, *, aliases: dict[str, str]
+    ) -> str | None:
+        normalized = " ".join(value.strip().casefold().replace("_", " ").split())
+        if normalized in _UNKNOWN_METADATA:
+            return None
+        return aliases.get(normalized, value.strip())
+
+    @staticmethod
+    def _apply_value_binding_result(
+        state: FinOASISQuestionState,
+        target: str,
+        value_id: str,
+    ) -> None:
+        obligation = state.obligation(target)
+        value_refs = [
+            reference
+            for reference in obligation.evidence_refs
+            if reference in state.numeric_value_ledger
+        ]
+        value_refs.append(value_id)
+        value_refs = list(dict.fromkeys(value_refs))
+        satisfied: list[str] = []
+        partial: list[str] = []
+
+        if obligation.type is ObligationType.NUMERIC_OPERAND:
+            if len(value_refs) >= 2:
+                satisfied.append(target)
+                unit_obligations = [
+                    item
+                    for item in state.obligations
+                    if item.type is ObligationType.UNIT_PERIOD
+                    and target in item.dependency_ids
+                    and item.status is not ObligationStatus.SATISFIED
+                ]
+                metadata_ready = all(
+                    not state.numeric_value_ledger[reference].ambiguity_flags
+                    and state.numeric_value_ledger[reference].unit.casefold()
+                    not in {"unknown", "unspecified", "n/a"}
+                    and state.numeric_value_ledger[reference].period.casefold()
+                    not in {"unknown", "unspecified", "n/a"}
+                    for reference in value_refs
+                )
+                for unit in unit_obligations:
+                    (satisfied if metadata_ready else partial).append(
+                        unit.obligation_id
+                    )
+            else:
+                partial.append(target)
+        elif obligation.type is ObligationType.UNIT_PERIOD:
+            value = state.numeric_value_ledger[value_id]
+            if not value.ambiguity_flags:
+                satisfied.append(target)
+            else:
+                partial.append(target)
+        else:
+            raise SkillError("bind_financial_value target is not a numeric obligation")
+
+        status = (
+            SkillResultStatus.SATISFIED if satisfied else SkillResultStatus.PARTIAL
+        )
+        state.apply_skill_result(
+            SkillResult(
+                status=status,
+                target_obligation_id=target,
+                satisfied_obligation_ids=satisfied,
+                partial_obligation_ids=partial,
+                evidence_refs=[value_id],
+                diagnostics=[
+                    f"bound exact Decimal value {value_id}; operand_count={len(value_refs)}"
+                ],
+            )
+        )
 
     def _apply_model_control(
         self, state: FinOASISQuestionState, action: Action

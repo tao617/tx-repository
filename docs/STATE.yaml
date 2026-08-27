@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase2-dynamic-routing
+current_phase: findoasis-phase3-table-values
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase2-dynamic-routing
-last_git_commit: 31dab0994339927ed628fc6475f9faf6ec476448
+last_completed_phase: findoasis-phase3-table-values
+last_git_commit: 542de745a7f3802cd5d3aa5319888953c46dba6f
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -335,24 +335,29 @@ decisions:
   construction.
 - Only exact hash-checked ledger evidence and bounded search snippets are visible
   as untrusted prompt data.
+- Index table HTML additively by existing context position without altering legacy
+  paragraph IDs or text.
+- Persist exact selected cell text and coordinates, but never raw HTML, in protocol-v3
+  state and prompts.
+- Use deterministic table unit and scale inference only to fill unknown model metadata
+  or reject conflicts; never infer numeric text.
+- Bind all numeric values as immutable Decimal strings to one unique exact evidence
+  occurrence.
 files_changed:
-- docs/FINOASIS_PROGRESS.md
-- docs/SESSION_HANDOFF.md
-- docs/STATE.yaml
 - src/findver_agent/findoasis/agent.py
 - src/findver_agent/findoasis/prompt_builder.py
 - src/findver_agent/findoasis/registry.py
-- src/findver_agent/findoasis/router.py
-- src/findver_agent/findoasis/seeder.py
 - src/findver_agent/findoasis/state.py
-- src/findver_agent/orchestrator.py
-- tests/integration/test_finoasis_resume.py
-- tests/integration/test_finoasis_router.py
-- tests/unit/test_obligation_seeder_v3.py
+- src/findver_agent/findoasis/table_region.py
+- src/findver_agent/findoasis/value_binding.py
+- src/findver_agent/report_store.py
+- tests/integration/test_finoasis_table_value.py
 - tests/unit/test_prompt_v3.py
-- tests/unit/test_skill_registry_v3.py
+- tests/unit/test_report_tables_v3.py
 - tests/unit/test_skill_router_v3.py
 - tests/unit/test_state_v3.py
+- tests/unit/test_table_region_v3.py
+- tests/unit/test_value_binding_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -636,6 +641,8 @@ tests_passed:
 - 391 full Agent tests passed on Python 3.12
 - Focused v3 routing and resume integration tests passed
 - Python compileall and git diff checks passed
+- 455 full Agent tests passed on Python 3.12
+- 90 focused Phase 3 tests passed
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -673,8 +680,9 @@ known_issues:
 - Sandboxed Starlette TestClient threads hang; local pytest must run outside the sandbox
   with repository-scoped basetemp.
 - Python 3.11 is unavailable locally and remains a CI verification item.
+- Python 3.11 remains unavailable locally; repository CI must exercise that supported
+  version.
 next_actions:
-- Implement Phase 3 additive table indexing, bounded table-region reads, and evidence-bound
-  ValueRef creation.
+- Implement Phase 4 reference-only FinDSL execution and NumericCertificate generation.
 blocked_items: []
-last_updated: '2026-08-28T02:00:19+08:00'
+last_updated: '2026-08-28T02:20:18+08:00'

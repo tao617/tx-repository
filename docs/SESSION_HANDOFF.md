@@ -2,27 +2,29 @@
 
 ## Current state
 
-Phase `findoasis-phase2-dynamic-routing` completed: Added conservative obligation seeding, immutable Registry, dynamic availability, masked v3 prompts, early orchestrator dispatch, transactional rejection, and exact resume.
+Phase `findoasis-phase3-table-values` completed: Added additive table indexing, bounded fail-closed region reads, exact cell evidence, and immutable Decimal ValueRefs reconciled with deterministic table metadata.
 
-- Git commit at checkpoint start: `31dab0994339927ed628fc6475f9faf6ec476448`
-- Changed files: 17
+- Git commit at checkpoint start: `542de745a7f3802cd5d3aa5319888953c46dba6f`
+- Changed files: 14
 
 ## Diff summary
 
 ```text
-docs/FINOASIS_PROGRESS.md            |  70 ++++++++++---
- docs/SESSION_HANDOFF.md              |  76 ++++++++------
- docs/STATE.yaml                      |  32 ++++--
- src/findver_agent/findoasis/state.py | 196 ++++++++++++++++++++++++++++++++++-
- src/findver_agent/orchestrator.py    |  19 ++++
- tests/unit/test_state_v3.py          |  24 ++++-
- 6 files changed, 361 insertions(+), 56 deletions(-)
+src/findver_agent/findoasis/agent.py          | 439 +++++++++++++++++++++++++-
+ src/findver_agent/findoasis/prompt_builder.py |  28 ++
+ src/findver_agent/findoasis/registry.py       |   2 +
+ src/findver_agent/findoasis/state.py          |  92 ++++++
+ src/findver_agent/report_store.py             | 236 +++++++++++++-
+ tests/unit/test_prompt_v3.py                  |  67 ++++
+ tests/unit/test_skill_router_v3.py            |  20 +-
+ tests/unit/test_state_v3.py                   |  45 +++
+ 8 files changed, 918 insertions(+), 11 deletions(-)
 ```
 
 ## Tests passed
 
-- 391 full Agent tests passed on Python 3.12
-- Focused v3 routing and resume integration tests passed
+- 455 full Agent tests passed on Python 3.12
+- 90 focused Phase 3 tests passed
 - Python compileall and git diff checks passed
 
 ## Tests failed or unavailable
@@ -45,4 +47,4 @@ pytest -q
 
 ## Next action
 
-Implement Phase 3 additive table indexing, bounded table-region reads, and evidence-bound ValueRef creation.
+Implement Phase 4 reference-only FinDSL execution and NumericCertificate generation.

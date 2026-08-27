@@ -35,6 +35,7 @@ _CONTRACTS = (
             ObligationType.TABLE_CELL,
             ObligationType.NUMERIC_OPERAND,
             ObligationType.UNIT_PERIOD,
+            ObligationType.DOMAIN_RULE,
             ObligationType.EVIDENCE_CONFLICT,
         ),
         preconditions=("An unresolved report-evidence obligation exists.",),
@@ -51,6 +52,7 @@ _CONTRACTS = (
             ObligationType.DOCUMENT_FACT,
             ObligationType.NUMERIC_OPERAND,
             ObligationType.UNIT_PERIOD,
+            ObligationType.DOMAIN_RULE,
             ObligationType.EVIDENCE_CONFLICT,
         ),
         preconditions=(

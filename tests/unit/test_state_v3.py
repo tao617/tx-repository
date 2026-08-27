@@ -18,7 +18,9 @@ from findver_agent.findoasis.state import (
     EvidenceLedgerEntry,
     FinOASISQuestionState,
     FinOASISStateStore,
+    NumericValueLedgerEntry,
     ResumeIdentity,
+    TableCandidateRecord,
 )
 from findver_agent.schemas import PublicTask
 
@@ -215,6 +217,49 @@ def test_evidence_text_hash_and_phase_attempt_counters_are_integrity_bound():
     payload = state.model_dump(mode="json")
     payload["step"] = 2
     with pytest.raises(ValidationError, match="charged phase attempts"):
+        FinOASISQuestionState.model_validate(payload)
+
+
+def test_value_ref_source_span_and_table_catalog_are_integrity_bound():
+    state, _ = state_with_fact()
+    add_evidence(state)
+    start = EVIDENCE_TEXT.index("128.4")
+    state.numeric_value_ledger["value-0001"] = NumericValueLedgerEntry(
+        value_id="value-0001",
+        evidence_ref="ev-1",
+        raw_value="128.4",
+        normalized_value="128.4",
+        numeric_type="money",
+        currency="USD",
+        unit="million",
+        scale="1000000",
+        period="FY2022",
+        entity="issuer",
+        metric="operating income",
+        paragraph_id=3,
+        text_span_start=start,
+        text_span_end=start + len("128.4"),
+    )
+    state.next_value_sequence = 2
+    state.table_candidates.append(
+        TableCandidateRecord(
+            table_id="table:3:0",
+            paragraph_id=3,
+            title="Operating income",
+            row_count=4,
+            column_count=3,
+        )
+    )
+    FinOASISQuestionState.model_validate(state.model_dump(mode="python"))
+
+    payload = state.model_dump(mode="json")
+    payload["numeric_value_ledger"]["value-0001"]["text_span_start"] = 0
+    with pytest.raises(ValidationError, match="raw text does not match"):
+        FinOASISQuestionState.model_validate(payload)
+
+    payload = state.model_dump(mode="json")
+    payload["table_candidates"].append(payload["table_candidates"][0])
+    with pytest.raises(ValidationError, match="table candidate IDs"):
         FinOASISQuestionState.model_validate(payload)
 
 

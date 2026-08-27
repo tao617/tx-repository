@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 2 — obligation-aware dynamic Skill routing
+- Phase: Phase 3 — additive table evidence and bound financial values
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `31dab0994339927ed628fc6475f9faf6ec476448`
+- Current committed HEAD: `542de745a7f3802cd5d3aa5319888953c46dba6f`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 2 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 and 1 pushed
-- Remote branch SHA: `31dab0994339927ed628fc6475f9faf6ec476448`
+- Worktree: Phase 3 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 through 2 pushed
+- Remote branch SHA: `542de745a7f3802cd5d3aa5319888953c46dba6f`
 - Draft PR: not yet created
 
 ## Completed work
@@ -85,6 +85,31 @@
   Skill calls, exact read evidence visibility and interruption/resume without repeated
   search or attempt credit.
 
+### Phase 3
+
+- Audited all 600 tracked public report files read-only: context IDs remain aligned
+  with list positions, 24,839 table contexts align with `html_tables`, and 3,057 HTML
+  bundles contain multiple sibling roots that require bounded compatibility checks.
+- Extended `ReportSession` additively with stable table IDs derived from existing
+  context positions. Legacy paragraph IDs, text and search/read semantics are unchanged;
+  malformed or misaligned table HTML disables only the new table view.
+- Added a bounded, deterministic HTML table parser and region reader with source
+  paragraph/table identity, selected coordinates, exact raw/text cell spans, header
+  paths, inferred unit/scale and explicit ambiguity flags. It never fills missing cells,
+  guesses merged structure or persists raw HTML.
+- Added exact `EvidenceLedgerEntry` table coordinates and source offsets, relevant-only
+  table candidate discovery, prompt masking, and atomic duplicate/read rejection.
+- Added immutable `ValueRef` and numeric ledger records with Runtime-generated IDs,
+  unique exact evidence spans, canonical Decimal strings, typed metadata and bounded
+  ambiguity flags. No float or expression execution is used.
+- Reconciled deterministic table unit/currency/scale metadata with model arguments:
+  trusted inference fills `unknown`, compatible aliases canonicalize, and conflicts fail
+  before ledger mutation. Unresolved mandatory unit or period metadata cannot unlock
+  program execution.
+- Added integration coverage proving table/value Skills remain dynamically gated and
+  `execute_financial_program` becomes visible only after two distinct evidence-bound
+  operands satisfy the numeric and unit-period obligations.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -111,6 +136,14 @@
 - `git diff --check`: passed.
 - No model, network, scorer, Gold, official input or paid API was used.
 
+## Phase 3 tests
+
+- Focused table, ValueRef, state, prompt, routing and integration selection: 90 passed.
+- Full suite: 455 passed in 3.10s on Python 3.12.
+- `.venv/bin/python -m compileall -q src tests`: passed.
+- `git diff --check`: passed.
+- No model, network, scorer, Gold, official test input or paid API was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -126,7 +159,7 @@
   FinDSL operands.
 - Treat the tracked rule corpus as synthetic experimental fixture, not formal guidance.
 
-## Files changed through Phase 2
+## Files changed through Phase 3
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
@@ -142,6 +175,9 @@
 - `src/findver_agent/findoasis/router.py`
 - `src/findver_agent/findoasis/prompt_builder.py`
 - `src/findver_agent/findoasis/agent.py`
+- `src/findver_agent/findoasis/table_region.py`
+- `src/findver_agent/findoasis/value_binding.py`
+- `src/findver_agent/report_store.py`
 - `src/findver_agent/orchestrator.py`
 - `tests/unit/test_obligations_v3.py`
 - `tests/unit/test_actions_v3.py`
@@ -152,16 +188,21 @@
 - `tests/unit/test_skill_registry_v3.py`
 - `tests/unit/test_skill_router_v3.py`
 - `tests/unit/test_prompt_v3.py`
+- `tests/unit/test_report_tables_v3.py`
+- `tests/unit/test_table_region_v3.py`
+- `tests/unit/test_value_binding_v3.py`
 - `tests/integration/test_finoasis_router.py`
 - `tests/integration/test_finoasis_resume.py`
+- `tests/integration/test_finoasis_table_value.py`
 
 ## Unresolved issues and risks
 
 - Python 3.11 is unavailable locally; CI must run the 3.11 leg.
-- ValueRef, FinDSL and rule-specific certificate schemas will refine the Phase 1 generic
-  ledgers without weakening their reference and resume invariants.
+- FinDSL and rule-specific certificate schemas will refine the Phase 1 generic ledgers
+  without weakening their reference and resume invariants.
 - Table context and `html_tables` are order-aligned in all 600 tracked reports but have
-  no explicit foreign key; loaders must validate and fail closed rather than guess.
+  no explicit foreign key; the additive loader validates alignment and fails closed
+  rather than guessing.
 - Experimental v3 sealing must preserve the existing top-level evidence ledger contract
   or remain explicitly unauthorized for scorer handoff.
 - Formal financial rule sources, licences, versions and review remain unavailable and
@@ -169,9 +210,8 @@
 
 ## Exact next step
 
-Implement Phase 3: additive table indexing and bounded table-region reads, then exact
-paragraph/table value binding with typed source coordinates and unit/period ambiguity
-that fails closed.
+Implement Phase 4: reference-only FinDSL validation/execution over evidence-bound
+ValueRefs, deterministic Decimal arithmetic, and NumericCertificate generation.
 
 ## Safe recovery commands
 
@@ -198,4 +238,5 @@ git diff --check
 |---|---|---|---|
 | Phase 0 | `9e896fa0c4a534b5b6d367f4b86b88452d8278f3` | pushed | `docs: record FinOASIS implementation plan` |
 | Phase 1 | `31dab0994339927ed628fc6475f9faf6ec476448` | pushed | `feat: add typed proof obligation contracts` |
-| Phase 2 | pending | pending | `feat: gate skills by pending proof obligations` |
+| Phase 2 | `542de745a7f3802cd5d3aa5319888953c46dba6f` | pushed | `feat: gate skills by pending proof obligations` |
+| Phase 3 | pending | pending | `feat: bind financial values to report evidence` |
