@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 7 — experimental configurations, aggregate metrics and Docker smoke
+- Phase: Phase 8 — final documentation, security audit and Draft PR preparation
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
+- Current committed HEAD: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 7 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 through 6 pushed
-- Remote branch SHA: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
+- Worktree: Phase 8 documentation, final regression and checkpoint records are not yet committed
+- Push status: Phases 0 through 7 pushed
+- Remote branch SHA: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
 - Draft PR: not yet created
 
 ## Completed work
@@ -221,6 +221,25 @@
 - Extended public CI with the new credential-free v3 Docker smoke while preserving the
   existing Stateful M2 and 40-task concurrent smoke paths.
 
+### Phase 8
+
+- Accepted ADR 0011 and documented the complete obligation lifecycle, dynamic
+  availability rules, exact table/value binding, FinDSL, frozen-rule path, final
+  certificate replay, selective Review, failure semantics and four experimental
+  conditions.
+- Updated the top-level README, architecture, data boundary and test plan without
+  changing the frozen project contract, Official Test V2 plan/config, M2 configuration,
+  public Prediction, evidence sidecar or sealed submission contract.
+- Added an operator runbook for Python, focused, in-process and root-controlled Docker
+  verification plus fail-closed recovery and explicit authorization boundaries.
+- Added a security audit covering Runtime authority, arbitrary-execution absence,
+  filesystem/network confinement, evidence/numeric/rule integrity, persistence/replay,
+  output privacy, secrets, containers, frozen hashes and residual risks.
+- Added a regression proving the complete serialized v3 state remains below its 4 MiB
+  bound even when individually bounded text fields are combined.
+- Verified the full repository on Python 3.12.3 and an isolated CI-equivalent Python
+  3.11.16 container. Both executed 530 passing tests.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -299,6 +318,19 @@
 - `.venv/bin/python -m compileall -q src scripts tests` and `git diff --check`: passed.
 - No real model credential, external model, scorer, Gold or official test input was used.
 
+## Phase 8 tests
+
+- Python 3.12.3: compileall passed; 530 tests passed in 3.78 seconds.
+- Python 3.11.16: isolated editable Docker installation with Git and repository metadata;
+  compileall passed; 530 tests passed in 4.01 seconds. The only warning was the existing
+  Starlette/httpx deprecation notice.
+- Focused final obligation-size, prompt, FinDSL, rule and security selection: 84 passed.
+- Frozen-interface diff, tracked-secret scan, Runtime bundle, sealed archive, aggregate
+  privacy, patch-format and container-cleanup checks passed.
+- The three Phase 7 Docker smokes cover the unchanged Runtime commit; Phase 8 changes
+  only documentation and the serialized-state bound regression.
+- No real model, external API, scorer, Gold or Official Test V2 input was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -332,10 +364,19 @@
 - Keep the all-Skills always-exposed condition as a named ablation only; the primary
   experimental all-Skills condition retains dynamic obligation gating.
 
-## Files changed through Phase 7
+## Files changed through Phase 8
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
+- `docs/FINOASIS_METHOD.md`
+- `docs/FINOASIS_RUNBOOK.md`
+- `docs/FINOASIS_SECURITY_AUDIT.md`
+- `docs/FINOASIS_TESTING.md`
+- `docs/adr/0011-obligation-gated-financial-verification.md`
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DATA_BOUNDARY.md`
+- `docs/TEST_PLAN.md`
 - `docs/STATE.yaml`
 - `docs/SESSION_HANDOFF.md`
 - `.github/workflows/ci.yml`
@@ -401,7 +442,6 @@
 
 ## Unresolved issues and risks
 
-- Python 3.11 is unavailable locally; CI must run the 3.11 leg.
 - Formal production rule corpus sources, licences, versions, reviewer sign-off and
   contract authorization are unavailable; only the explicitly synthetic fixture is
   implemented and tested.
@@ -415,8 +455,8 @@
 
 ## Exact next step
 
-Complete Phase 8: ADR 0011, method/architecture/security/data-boundary documentation,
-final recovery records and audit, then push and create the Draft PR.
+Commit Phase 8 with `docs: finalize FinOASIS implementation record`, push the branch,
+create the Draft PR, and verify its CI status without modifying or merging PR #1.
 
 ## Safe recovery commands
 
@@ -448,4 +488,5 @@ git diff --check
 | Phase 4 | `ee910afa61c755955a58bbd62423de9878bfae00` | pushed | `feat: execute evidence-bound financial programs` |
 | Phase 5 | `b56c0640e4f95682641db19bafa177bb21e18ba4` | pushed | `feat: add frozen financial rule skills` |
 | Phase 6 | `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c` | pushed | `feat: verify proof certificates before submission` |
-| Phase 7 | pending | pending | `test: add FinOASIS end-to-end verification` |
+| Phase 7 | `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d` | pushed | `test: add FinOASIS end-to-end verification` |
+| Phase 8 | this commit | pending | `docs: finalize FinOASIS implementation record` |

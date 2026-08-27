@@ -2,37 +2,36 @@
 
 ## Current state
 
-Phase `findoasis-phase7-e2e-verification` completed: Added four strict experimental v3 configs, container-bundled hash-bound synthetic rules, aggregate-safe obligation/Skill/numeric/rule/cost metrics, a deterministic four-task CLI mock path, and CI/Docker verification without real credentials.
+Phase `findoasis-phase8-final-audit` completed: Completed ADR 0011, FinOASIS method/runbook/testing/security documentation, architecture and data-boundary updates, and a serialized-state-size regression. Final gates passed on Python 3.12.3 and isolated Python 3.11.16; all three credential-free Docker smokes passed on the unchanged Runtime commit; frozen interfaces and tracked secret scans remained clean.
 
-- Git commit at checkpoint start: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
-- Changed files: 25
+- Git commit at checkpoint start: `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d`
+- Changed files: 13
 
 ## Diff summary
 
 ```text
-.github/workflows/ci.yml             |   5 +
- deploy/wsl/docker-compose.agent.yaml |   3 +-
- scripts/summarize_run.py             | 289 ++++++++++++++++++++++++++++++++++-
- src/findver_agent/findoasis/agent.py |  82 +++++++++-
- tests/fixtures/mock_openai_server.py | 289 ++++++++++++++++++++++++++++++++++-
- tests/security/test_agent_compose.py |   3 +-
-tests/unit/test_ci_workflow.py       |  25 +++
-configs/experimental/findoasis/      | four strict configs plus frozen corpus
-scripts/run_finoasis_mock_smoke.sh   | credential-free container driver
-scripts/verify_finoasis_mock_smoke.py| certificate/gating/privacy verifier
-tests/fixtures/finoasis_smoke_*      | four synthetic tasks and reports
-tests/integration/test_finoasis_e2e.py
-tests/unit/test_finoasis_configs_v3.py
-25 files changed; tracked diff plus new files and checkpoint documents
+README.md                         | 37 +++++++++++++++++++++++++++++++++++--
+docs/ARCHITECTURE.md              | 28 ++++++++++++++++++++++++++++
+docs/DATA_BOUNDARY.md             | 23 ++++++++++++++++++++++-
+docs/FINOASIS_PROGRESS.md         | Phase 8 record and final gates
+docs/FINOASIS_METHOD.md           | complete v3 method reference
+docs/FINOASIS_RUNBOOK.md          | authorized operator and recovery path
+docs/FINOASIS_SECURITY_AUDIT.md   | threat review, evidence and residual risks
+docs/FINOASIS_TESTING.md          | test strategy and final verification record
+docs/TEST_PLAN.md                 | 18 ++++++++++++++++--
+docs/adr/0011-*                   | accepted architectural decision
+tests/unit/test_obligations_v3.py | 24 ++++++++++++++++++++++++
+checkpoint records               | Phase 8 state and handoff
+13 files changed; documentation plus one bounded-state regression
 ```
 
 ## Tests passed
 
-- 529 repository tests; 11 focused config/summary/e2e tests; compileall and diff checks; existing Stateful M2 Docker smoke; existing 40-task concurrent Docker smoke; new four-task FinOASIS v3 Docker smoke
+- Python 3.12.3 compileall and 530 tests; Python 3.11.16 isolated Docker compileall and 530 tests; focused 84-test security gate; Stateful M2, concurrent 40-task, and FinOASIS 4-task Docker smokes; diff, frozen-interface, archive, Runtime-bundle, secret, and container-cleanup checks.
 
 ## Tests failed or unavailable
 
-- None
+- No product tests failed. Two discarded Python 3.11 harness attempts omitted repository-path/Git prerequisites; the corrected CI-equivalent harness passed all 530 tests. One discarded Python 3.12 invocation lost a sandbox temporary capture file before collection; the documented no-capture invocation passed all 530 tests.
 
 ## Recovery protocol
 
@@ -50,4 +49,4 @@ pytest -q
 
 ## Next action
 
-Complete Phase 8 ADR 0011, method/architecture/security/data-boundary documentation, final recovery records, full audit, and Draft PR.
+Commit Phase 8 with the prescribed message, push the branch, create the Draft PR, and verify CI status.

@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase7-e2e-verification
+current_phase: findoasis-phase8-final-audit
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase7-e2e-verification
-last_git_commit: a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c
+last_completed_phase: findoasis-phase8-final-audit
+last_git_commit: e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -385,21 +385,20 @@ decisions:
 - 'Preserve root-controlled Docker: the user remains outside the Docker group; this
   no-new-privileges task used the WSL host root path because interactive sudo elevation
   is unavailable.'
+- Keep protocol v3 experimental and additive; require deterministic certificate replay
+  but state explicitly that replay does not prove semantic completeness of model-selected
+  evidence, operands, or rules.
 files_changed:
-- .github/workflows/ci.yml
-- configs/experimental/
-- deploy/wsl/docker-compose.agent.yaml
-- scripts/run_finoasis_mock_smoke.sh
-- scripts/summarize_run.py
-- scripts/verify_finoasis_mock_smoke.py
-- src/findver_agent/findoasis/agent.py
-- tests/fixtures/finoasis_smoke_reports/
-- tests/fixtures/finoasis_smoke_tasks.jsonl
-- tests/fixtures/mock_openai_server.py
-- tests/integration/test_finoasis_e2e.py
-- tests/security/test_agent_compose.py
-- tests/unit/test_ci_workflow.py
-- tests/unit/test_finoasis_configs_v3.py
+- README.md
+- docs/ARCHITECTURE.md
+- docs/DATA_BOUNDARY.md
+- docs/FINOASIS_METHOD.md
+- docs/FINOASIS_RUNBOOK.md
+- docs/FINOASIS_SECURITY_AUDIT.md
+- docs/FINOASIS_TESTING.md
+- docs/TEST_PLAN.md
+- docs/adr/0011-obligation-gated-financial-verification.md
+- tests/unit/test_obligations_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -694,11 +693,19 @@ tests_passed:
 - 529 repository tests; 11 focused config/summary/e2e tests; compileall and diff checks;
   existing Stateful M2 Docker smoke; existing 40-task concurrent Docker smoke; new
   four-task FinOASIS v3 Docker smoke
+- Python 3.12.3 compileall and 530 tests; Python 3.11.16 isolated Docker compileall
+  and 530 tests; focused 84-test security gate; Stateful M2, concurrent 40-task, and
+  FinOASIS 4-task Docker smokes; diff, frozen-interface, archive, Runtime-bundle,
+  secret, and container-cleanup checks.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
 - 'Single-example valid_output_rate was 0: all 6 Exploration and 2 Finalization responses
   failed the unchanged strict JSON action parser, terminating with finalization_budget_exhausted.'
+- No product tests failed. Two discarded Python 3.11 harness attempts omitted repository-path/Git
+  prerequisites; the corrected CI-equivalent harness passed all 530 tests. One discarded
+  Python 3.12 invocation lost a sandbox temporary capture file before collection;
+  the documented no-capture invocation passed all 530 tests.
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -741,8 +748,11 @@ known_issues:
 - Docker image builds resolve declared public dependencies, while all smoke Runtime
   model traffic is confined to the local deterministic host mock through the unchanged
   Gateway boundary.
+- Production financial rule sources, licences, version policy, domain-owner approval,
+  real-model evaluation, Official Test V2 use, and scorer handoff remain unauthorized
+  and unresolved by design.
 next_actions:
-- Complete Phase 8 ADR 0011, method/architecture/security/data-boundary documentation,
-  final recovery records, full audit, and Draft PR.
+- Commit Phase 8 with the prescribed message, push the branch, create the Draft PR,
+  and verify CI status.
 blocked_items: []
-last_updated: '2026-08-28T03:22:45+08:00'
+last_updated: '2026-08-28T03:36:29+08:00'

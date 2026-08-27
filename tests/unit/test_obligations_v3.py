@@ -130,6 +130,30 @@ def test_skill_result_is_strict_disjoint_and_requires_target_effect():
         )
 
 
+def test_oversized_skill_result_fails_the_complete_serialized_bound():
+    proposals = []
+    for proposal_index in range(8):
+        diagnostics = [
+            f"{proposal_index}-{diagnostic_index}-".ljust(500, "x")
+            for diagnostic_index in range(8)
+        ]
+        proposals.append(
+            {
+                "type": "document_fact",
+                "description": f"bounded proposal {proposal_index}".ljust(600, "x"),
+                "diagnostics": diagnostics,
+            }
+        )
+
+    with pytest.raises(ValidationError, match="serialized size limit"):
+        SkillResult(
+            status="partial",
+            target_obligation_id="obl-0001",
+            partial_obligation_ids=["obl-0001"],
+            spawned_obligations=proposals,
+        )
+
+
 def test_skill_contract_binds_a_strict_argument_model_and_is_immutable():
     class Arguments(BaseModel):
         model_config = ConfigDict(extra="forbid")
