@@ -2,6 +2,8 @@ import hashlib
 from pathlib import Path
 
 from findver_agent.config import FinOasisConfig
+from findver_agent.financial_rules.corpus import rule_record_sha256
+from findver_agent.financial_rules.models import RuleRecord
 from findver_agent.findoasis.contracts import (
     ObligationProposal,
     QuestionPhase,
@@ -242,14 +244,35 @@ def test_knowledge_skills_fail_closed_without_valid_corpus_then_open_in_order():
     assert SkillName.CHECK_RULE_APPLICABILITY not in candidates
 
     _add_paragraph_evidence(state)
-    state.rule_evidence_ledger["rule-evidence-1"] = RuleEvidenceLedgerEntry(
-        rule_evidence_id="rule-evidence-1",
+    state.resume_identity = state.resume_identity.model_copy(
+        update={
+            "rule_corpus_id": "synthetic-v1",
+            "rule_manifest_sha256": "b" * 64,
+            "rule_records_sha256": "c" * 64,
+        }
+    )
+    rule_text = "Synthetic rule text."
+    rule = RuleRecord(
         rule_id="rule-1",
-        rule_sha256="d" * 64,
+        title="Synthetic rule",
+        text=rule_text,
+        jurisdiction="US",
+        entity_scope="public issuer",
+        topic="recognition",
+        effective_from="2020-01-01",
+        source_reference="synthetic://rule-1",
+        source_sha256=hashlib.sha256(rule_text.encode()).hexdigest(),
+    )
+    state.rule_evidence_ledger["rule-evidence-0001"] = RuleEvidenceLedgerEntry(
+        rule_evidence_id="rule-evidence-0001",
+        rule_id="rule-1",
+        rule_sha256=rule_record_sha256(rule),
         corpus_id="synthetic-v1",
         manifest_sha256="b" * 64,
         records_sha256="c" * 64,
+        record=rule,
     )
+    state.next_rule_evidence_sequence = 2
     state.apply_skill_result(
         SkillResult(
             status="satisfied",
@@ -263,7 +286,7 @@ def test_knowledge_skills_fail_closed_without_valid_corpus_then_open_in_order():
             status="satisfied",
             target_obligation_id=domain.obligation_id,
             satisfied_obligation_ids=[domain.obligation_id],
-            evidence_refs=["rule-evidence-1"],
+            evidence_refs=["rule-evidence-0001"],
         )
     )
     checkable = resolve_available_skills(
@@ -271,7 +294,7 @@ def test_knowledge_skills_fail_closed_without_valid_corpus_then_open_in_order():
         _config(),
         RuntimeFacts(
             rule_corpus_valid=True,
-            read_rule_evidence_refs=("rule-evidence-1",),
+            read_rule_evidence_refs=("rule-evidence-0001",),
             applicability_metadata=RuleApplicabilityMetadata(
                 jurisdiction="US",
                 effective_date="2024-12-31",

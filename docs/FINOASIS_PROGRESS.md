@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 4 — evidence-bound FinDSL and numeric certificates
+- Phase: Phase 5 — frozen offline rule Skills and applicability certificates
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `56f45ffd7f9770c1a146cd00b14fa79a9b48deef`
+- Current committed HEAD: `ee910afa61c755955a58bbd62423de9878bfae00`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 4 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 through 3 pushed
-- Remote branch SHA: `56f45ffd7f9770c1a146cd00b14fa79a9b48deef`
+- Worktree: Phase 5 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 through 4 pushed
+- Remote branch SHA: `ee910afa61c755955a58bbd62423de9878bfae00`
 - Draft PR: not yet created
 
 ## Completed work
@@ -139,6 +139,38 @@
   FinDSL is available. IE and pre-binding prompts continue to hide the entire contract
   and all numeric reference metadata.
 
+### Phase 5
+
+- Added strict schemas for a frozen rule manifest, full rule records, predicates,
+  deterministic search hits and applicability certificates. Unknown fields, duplicate
+  IDs, malformed effective intervals, missing provenance and unbound certificate
+  references fail closed.
+- Added a confined local loader that resolves both configured members under one
+  explicit root, enforces 4 MiB file bounds, checks configured manifest/records hashes,
+  checks the manifest-to-records binding and verifies every rule-text source hash. It
+  has no network, download, dynamic import, execution or write path.
+- Added deterministic static token search filtered by jurisdiction and effective date.
+  Search returns only bounded candidate metadata; only an explicit candidate read
+  persists the complete record in the Rule Evidence Ledger with corpus and record
+  hashes.
+- Added mechanical applicability evaluation for effective date, jurisdiction, entity
+  scope, required document predicates, missing metadata and explicit selected-rule
+  conflicts. The complete certificate binds ordered rule/document references and its
+  payload hash is replay-checked against the generic certificate envelope.
+- Integrated all three Knowledge Skills transactionally. Candidate and evidence scope
+  are checked against the targeted obligation and its dependencies; only conclusive
+  `applicable` or `not_applicable` satisfies the obligation, while `undetermined`
+  remains partial regardless of model control metadata.
+- Added prompt isolation: rule search candidates are shown only when a rule read is
+  available, and hash-bound read-rule metadata is shown only for applicability. Full
+  rule text is never placed in a model prompt.
+- Added a four-record synthetic fixture covering current, expired, other-jurisdiction
+  and conflicting rules. Its manifest explicitly states that it is synthetic test data,
+  not financial, accounting, legal or regulatory guidance.
+- Added resume-time rebinding of every persisted rule record to the currently validated
+  corpus, plus tests for manifest/records/text/certificate tampering, path escape,
+  applicability mismatches, conflicts and missing dates.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -182,6 +214,15 @@
 - `git diff --check`: passed.
 - No model, network, scorer, Gold, official test input or paid API was used.
 
+## Phase 5 tests
+
+- Focused corpus, prompt, obligation seeding, routing and integration selection:
+  61 passed.
+- Full suite: 514 passed in 3.40s on Python 3.12.
+- `.venv/bin/python -m compileall -q src tests`: passed.
+- `git diff --check`: passed.
+- No model, network, scorer, Gold, official test input or paid API was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -196,8 +237,14 @@
 - Use Decimal strings as authoritative numeric storage and structured reference-only
   FinDSL operands.
 - Treat the tracked rule corpus as synthetic experimental fixture, not formal guidance.
+- Require formal production rule sources to receive separate authorization, provenance,
+  licence and subject-matter review, plus project-contract revision before use. A rule
+  certificate scorer sidecar remains unauthorized.
+- Keep complete frozen rule text in the per-question Rule Evidence Ledger only; prompts
+  receive bounded candidate or structural metadata according to the next available
+  Skill.
 
-## Files changed through Phase 4
+## Files changed through Phase 5
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
@@ -208,6 +255,10 @@
 - `src/findver_agent/financial_dsl/models.py`
 - `src/findver_agent/financial_dsl/claim_parser.py`
 - `src/findver_agent/financial_dsl/executor.py`
+- `src/findver_agent/financial_rules/__init__.py`
+- `src/findver_agent/financial_rules/models.py`
+- `src/findver_agent/financial_rules/corpus.py`
+- `src/findver_agent/financial_rules/applicability.py`
 - `src/findver_agent/findoasis/__init__.py`
 - `src/findver_agent/findoasis/contracts.py`
 - `src/findver_agent/findoasis/actions.py`
@@ -234,15 +285,20 @@
 - `tests/unit/test_report_tables_v3.py`
 - `tests/unit/test_table_region_v3.py`
 - `tests/unit/test_value_binding_v3.py`
+- `tests/unit/test_rule_corpus_v3.py`
 - `tests/integration/test_finoasis_router.py`
 - `tests/integration/test_finoasis_resume.py`
 - `tests/integration/test_finoasis_table_value.py`
+- `tests/integration/test_finoasis_rules.py`
+- `tests/fixtures/finoasis_rule_corpus/manifest.json`
+- `tests/fixtures/finoasis_rule_corpus/records.json`
 
 ## Unresolved issues and risks
 
 - Python 3.11 is unavailable locally; CI must run the 3.11 leg.
-- Rule-specific certificate schemas will refine the Phase 1 generic ledgers without
-  weakening their reference and resume invariants.
+- Formal production rule corpus sources, licences, versions, reviewer sign-off and
+  contract authorization are unavailable; only the explicitly synthetic fixture is
+  implemented and tested.
 - Table context and `html_tables` are order-aligned in all 600 tracked reports but have
   no explicit foreign key; the additive loader validates alignment and fails closed
   rather than guessing.
@@ -253,8 +309,9 @@
 
 ## Exact next step
 
-Implement Phase 5: frozen offline rule-corpus validation, deterministic Knowledge Skill
-search/read, mechanical applicability checks and rule-applicability certificates.
+Implement Phase 6: deterministic `ClaimCertificateVerifier`, certificate-aware v3
+submission, mixed proof verification, budget-exhausted fallback and bounded Review
+repair behavior.
 
 ## Safe recovery commands
 
@@ -283,4 +340,5 @@ git diff --check
 | Phase 1 | `31dab0994339927ed628fc6475f9faf6ec476448` | pushed | `feat: add typed proof obligation contracts` |
 | Phase 2 | `542de745a7f3802cd5d3aa5319888953c46dba6f` | pushed | `feat: gate skills by pending proof obligations` |
 | Phase 3 | `56f45ffd7f9770c1a146cd00b14fa79a9b48deef` | pushed | `feat: bind financial values to report evidence` |
-| Phase 4 | pending | pending | `feat: execute evidence-bound financial programs` |
+| Phase 4 | `ee910afa61c755955a58bbd62423de9878bfae00` | pushed | `feat: execute evidence-bound financial programs` |
+| Phase 5 | pending | pending | `feat: add frozen financial rule skills` |

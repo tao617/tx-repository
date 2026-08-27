@@ -13,6 +13,17 @@ from findver_agent.financial_dsl.executor import (
     execute_financial_program,
     numeric_certificate_sha256,
 )
+from findver_agent.financial_rules.applicability import (
+    RuleApplicabilityError,
+    check_rule_applicability,
+    rule_applicability_certificate_sha256,
+)
+from findver_agent.financial_rules.corpus import (
+    FrozenRuleCorpus,
+    RuleCorpusError,
+    rule_record_sha256,
+)
+from findver_agent.financial_rules.models import RuleApplicabilityResult
 from findver_agent.model_backends.base import (
     GenerationConfig,
     ModelBackend,
@@ -30,9 +41,12 @@ from .actions import (
     ActionParseError,
     BindFinancialValueArguments,
     BindFinancialValueAction,
+    CheckRuleApplicabilityAction,
     ExecuteFinancialProgramAction,
     ReadParagraphsAction,
+    ReadFinancialRulesAction,
     ReadTableRegionAction,
+    SearchFinancialRulesAction,
     SearchReportAction,
     parse_action,
 )
@@ -49,7 +63,7 @@ from .contracts import (
 )
 from .prompt_builder import PromptBuilder
 from .registry import REGISTRY, REGISTRY_SHA256
-from .router import RuntimeFacts, resolve_available_skills
+from .router import RuleApplicabilityMetadata, RuntimeFacts, resolve_available_skills
 from .seeder import seed_obligations
 from .state import (
     BoundedObservation,
@@ -58,6 +72,9 @@ from .state import (
     FinOASISStateStore,
     FinancialProgramLedgerEntry,
     NumericValueLedgerEntry,
+    RuleEvidenceLedgerEntry,
+    RuleSearchHitRecord,
+    RuleSearchRecord,
     ReportSearchHit,
     ReportSearchRecord,
     ResumeIdentity,
@@ -152,6 +169,14 @@ class FinOASISAgent:
         self.state_store = FinOASISStateStore(run_dir / "state")
         self.trace_root = run_dir / "traces"
         self.prompt_builder = PromptBuilder()
+        try:
+            self.rule_corpus = (
+                FrozenRuleCorpus.load(self.findoasis_config.rule_corpus)
+                if self.findoasis_config.rule_corpus.enabled
+                else None
+            )
+        except RuleCorpusError as error:
+            raise ValueError(f"configured frozen rule corpus is invalid: {error}") from error
 
     async def run_question(self, task: PublicTask) -> Prediction:
         session = self.report_store.open_session(task.report)
@@ -170,6 +195,7 @@ class FinOASISAgent:
             finalization_steps=self.config.finalization_steps,
             review_steps=self.config.review_steps,
         )
+        self._validate_rule_state_against_corpus(state)
         trace = TraceWriter(self.trace_root, task.example_id)
 
         if not state_path_existed:
@@ -400,6 +426,29 @@ class FinOASISAgent:
             },
         )
 
+    def _validate_rule_state_against_corpus(
+        self, state: FinOASISQuestionState
+    ) -> None:
+        """Rebind persisted rule records to the currently hash-verified corpus."""
+
+        if not state.rule_evidence_ledger:
+            return
+        if self.rule_corpus is None:
+            raise ValueError("persisted rule evidence requires a frozen rule corpus")
+        for evidence in state.rule_evidence_ledger.values():
+            try:
+                frozen = self.rule_corpus.record(evidence.rule_id)
+            except RuleCorpusError as error:
+                raise ValueError(
+                    "persisted rule evidence is absent from the frozen corpus"
+                ) from error
+            if evidence.record != frozen or evidence.rule_sha256 != rule_record_sha256(
+                frozen
+            ):
+                raise ValueError(
+                    "persisted rule evidence differs from the frozen corpus record"
+                )
+
     def _runtime_facts(self, state: FinOASISQuestionState) -> RuntimeFacts:
         candidates: list[int] = []
         for record in state.report_search_history:
@@ -411,6 +460,14 @@ class FinOASISAgent:
             for entry in state.evidence_ledger.values()
             if entry.source == "report_paragraph"
         ]
+        rule_candidates = tuple(
+            dict.fromkeys(
+                hit.rule_id
+                for record in state.rule_search_history
+                for hit in record.hits
+            )
+        )
+        applicability_metadata = self._applicability_metadata(state)
         return RuntimeFacts(
             search_candidate_paragraph_ids=tuple(candidates),
             read_paragraph_ids=tuple(dict.fromkeys(read_ids)),
@@ -423,10 +480,48 @@ class FinOASISAgent:
                 if entry.source == "table_cell"
             ),
             bound_value_refs=tuple(state.numeric_value_ledger),
+            rule_corpus_valid=self.rule_corpus is not None,
+            rule_candidate_ids=rule_candidates,
             read_rule_evidence_refs=tuple(state.rule_evidence_ledger),
-            rule_corpus_valid=False,
+            applicability_metadata=applicability_metadata,
             budget_exhausted=state.phase
             in {QuestionPhase.FINALIZATION, QuestionPhase.REVIEW},
+        )
+
+    @staticmethod
+    def _applicability_metadata(
+        state: FinOASISQuestionState,
+    ) -> RuleApplicabilityMetadata | None:
+        candidates = [
+            obligation
+            for obligation in state.obligations
+            if obligation.type is ObligationType.RULE_APPLICABILITY
+            and obligation.status is not ObligationStatus.SATISFIED
+        ]
+        if not candidates:
+            return None
+        obligation = candidates[0]
+        metadata = obligation.metadata
+        if not (
+            metadata.jurisdiction
+            and metadata.effective_date
+            and metadata.entity_scope
+        ):
+            return None
+        document_refs: list[str] = []
+        for dependency_id in obligation.dependency_ids:
+            dependency = state.obligation(dependency_id)
+            if dependency.type is ObligationType.DOCUMENT_FACT:
+                document_refs.extend(
+                    reference
+                    for reference in dependency.evidence_refs
+                    if reference in state.evidence_ledger
+                )
+        return RuleApplicabilityMetadata(
+            jurisdiction=metadata.jurisdiction,
+            effective_date=metadata.effective_date,
+            entity_scope=metadata.entity_scope,
+            document_evidence_refs=tuple(dict.fromkeys(document_refs)),
         )
 
     def _execute_action(
@@ -767,6 +862,240 @@ class FinOASISAgent:
                 status="satisfied",
                 target_obligation_id=target,
                 references=[program_id, certificate_id],
+            )
+            return
+
+        if isinstance(action, SearchFinancialRulesAction):
+            if self.rule_corpus is None:
+                raise SkillError("no validated frozen rule corpus is configured")
+            if target_obligation.type is not ObligationType.DOMAIN_RULE:
+                raise SkillError("rule search requires a domain-rule target")
+            metadata = target_obligation.metadata
+            if (
+                metadata.jurisdiction
+                and metadata.jurisdiction.casefold() not in _UNKNOWN_METADATA
+                and action.arguments.jurisdiction.casefold()
+                != metadata.jurisdiction.casefold()
+            ):
+                raise SkillError("rule search jurisdiction conflicts with obligation scope")
+            if (
+                metadata.effective_date
+                and metadata.effective_date.casefold() not in _UNKNOWN_METADATA
+                and action.arguments.as_of_date != metadata.effective_date
+            ):
+                raise SkillError("rule search date conflicts with obligation scope")
+            try:
+                hits = self.rule_corpus.search(**action.arguments.model_dump())
+            except RuleCorpusError as error:
+                raise SkillError(str(error)) from error
+            history_hits = [
+                RuleSearchHitRecord(
+                    rule_id=hit.rule_id,
+                    score=hit.score,
+                    snippet=hit.snippet,
+                )
+                for hit in hits
+            ]
+            state.rule_search_history.append(
+                RuleSearchRecord(
+                    query=action.arguments.query,
+                    jurisdiction=action.arguments.jurisdiction,
+                    as_of_date=action.arguments.as_of_date,
+                    target_obligation_id=target,
+                    step=state.step,
+                    hits=history_hits,
+                )
+            )
+            state.apply_skill_result(
+                SkillResult(
+                    status=SkillResultStatus.PARTIAL,
+                    target_obligation_id=target,
+                    partial_obligation_ids=[target],
+                    diagnostics=[f"frozen rule search returned {len(hits)} candidates"],
+                )
+            )
+            state.last_observation = BoundedObservation(
+                skill=SkillName.SEARCH_FINANCIAL_RULES,
+                status="partial",
+                target_obligation_id=target,
+                references=[hit.rule_id for hit in hits],
+            )
+            return
+
+        if isinstance(action, ReadFinancialRulesAction):
+            if self.rule_corpus is None:
+                raise SkillError("no validated frozen rule corpus is configured")
+            if target_obligation.type is not ObligationType.DOMAIN_RULE:
+                raise SkillError("rule read requires a domain-rule target")
+            candidates = {
+                hit.rule_id
+                for record in state.rule_search_history
+                if record.target_obligation_id == target
+                for hit in record.hits
+            }
+            requested = set(action.arguments.rule_ids)
+            if not requested <= candidates:
+                raise SkillError("read_financial_rules may read only search candidates")
+            already_read = {
+                evidence.rule_id for evidence in state.rule_evidence_ledger.values()
+            }
+            if requested & already_read:
+                raise SkillError("read_financial_rules cannot reread ledgered rules")
+            references: list[str] = []
+            for rule_id in action.arguments.rule_ids:
+                try:
+                    record = self.rule_corpus.record(rule_id)
+                except RuleCorpusError as error:
+                    raise SkillError(str(error)) from error
+                evidence_id = f"rule-evidence-{state.next_rule_evidence_sequence:04d}"
+                state.rule_evidence_ledger[evidence_id] = RuleEvidenceLedgerEntry(
+                    rule_evidence_id=evidence_id,
+                    rule_id=record.rule_id,
+                    rule_sha256=rule_record_sha256(record),
+                    corpus_id=self.rule_corpus.corpus_id,
+                    manifest_sha256=self.rule_corpus.manifest_sha256,
+                    records_sha256=self.rule_corpus.records_sha256,
+                    record=record,
+                )
+                state.next_rule_evidence_sequence += 1
+                references.append(evidence_id)
+            state.apply_skill_result(
+                SkillResult(
+                    status=SkillResultStatus.SATISFIED,
+                    target_obligation_id=target,
+                    satisfied_obligation_ids=[target],
+                    evidence_refs=references,
+                    diagnostics=[f"read {len(references)} frozen rule records"],
+                )
+            )
+            state.last_observation = BoundedObservation(
+                skill=SkillName.READ_FINANCIAL_RULES,
+                status="satisfied",
+                target_obligation_id=target,
+                references=references,
+            )
+            return
+
+        if isinstance(action, CheckRuleApplicabilityAction):
+            if self.rule_corpus is None:
+                raise SkillError("no validated frozen rule corpus is configured")
+            if target_obligation.type is not ObligationType.RULE_APPLICABILITY:
+                raise SkillError(
+                    "rule applicability check requires a rule-applicability target"
+                )
+            metadata = target_obligation.metadata
+            trusted_scope = (
+                metadata.jurisdiction,
+                metadata.effective_date,
+                metadata.entity_scope,
+            )
+            supplied_scope = (
+                action.arguments.jurisdiction,
+                action.arguments.effective_date,
+                action.arguments.entity_scope,
+            )
+            if trusted_scope != supplied_scope:
+                raise SkillError(
+                    "applicability scope differs from Runtime obligation metadata"
+                )
+            try:
+                rule_evidence = [
+                    state.rule_evidence_ledger[reference]
+                    for reference in action.arguments.rule_evidence_refs
+                ]
+                document_evidence = [
+                    state.evidence_ledger[reference]
+                    for reference in action.arguments.document_evidence_refs
+                ]
+            except KeyError as error:
+                raise SkillError(
+                    "applicability requires read rule and document evidence"
+                ) from error
+            allowed_rule_refs: set[str] = set()
+            allowed_document_refs: set[str] = set()
+            for dependency_id in target_obligation.dependency_ids:
+                dependency = state.obligation(dependency_id)
+                if dependency.type is ObligationType.DOMAIN_RULE:
+                    allowed_rule_refs.update(
+                        reference
+                        for reference in dependency.evidence_refs
+                        if reference in state.rule_evidence_ledger
+                    )
+                elif dependency.type is ObligationType.DOCUMENT_FACT:
+                    allowed_document_refs.update(
+                        reference
+                        for reference in dependency.evidence_refs
+                        if reference in state.evidence_ledger
+                    )
+            if not set(action.arguments.rule_evidence_refs) <= allowed_rule_refs:
+                raise SkillError(
+                    "applicability rule evidence is not attached to its domain dependency"
+                )
+            if not set(action.arguments.document_evidence_refs) <= allowed_document_refs:
+                raise SkillError(
+                    "applicability document evidence is not attached to its fact dependency"
+                )
+            combined_refs = [
+                *action.arguments.rule_evidence_refs,
+                *action.arguments.document_evidence_refs,
+            ]
+            if len(combined_refs) > 24:
+                raise SkillError("applicability certificate exceeds evidence bounds")
+            certificate_id = (
+                f"rule-certificate-{state.next_rule_certificate_sequence:04d}"
+            )
+            try:
+                certificate = check_rule_applicability(
+                    corpus=self.rule_corpus,
+                    rule_evidence=rule_evidence,
+                    document_evidence=document_evidence,
+                    effective_date=action.arguments.effective_date,
+                    jurisdiction=action.arguments.jurisdiction,
+                    entity_scope=action.arguments.entity_scope,
+                    predicate_ids=action.arguments.applicability_predicate_ids,
+                    certificate_id=certificate_id,
+                )
+            except (RuleApplicabilityError, RuleCorpusError) as error:
+                raise SkillError(str(error)) from error
+            state.rule_applicability_certificate_ledger[
+                certificate_id
+            ] = certificate
+            state.next_rule_certificate_sequence += 1
+            envelope = CertificateEnvelope(
+                certificate_id=certificate_id,
+                kind=CertificateKind.RULE_APPLICABILITY,
+                payload_sha256=rule_applicability_certificate_sha256(certificate),
+                claim_sha256=state.resume_identity.statement_sha256,
+                evidence_refs=combined_refs,
+                verified=True,
+                diagnostic=f"mechanical applicability result: {certificate.result.value}",
+            )
+            conclusive = certificate.result in {
+                RuleApplicabilityResult.APPLICABLE,
+                RuleApplicabilityResult.NOT_APPLICABLE,
+            }
+            state.apply_skill_result(
+                SkillResult(
+                    status=(
+                        SkillResultStatus.SATISFIED
+                        if conclusive
+                        else SkillResultStatus.PARTIAL
+                    ),
+                    target_obligation_id=target,
+                    satisfied_obligation_ids=[target] if conclusive else [],
+                    partial_obligation_ids=[] if conclusive else [target],
+                    evidence_refs=combined_refs,
+                    certificate=envelope,
+                    diagnostics=[
+                        f"mechanical applicability result={certificate.result.value}"
+                    ],
+                )
+            )
+            state.last_observation = BoundedObservation(
+                skill=SkillName.CHECK_RULE_APPLICABILITY,
+                status="satisfied" if conclusive else "partial",
+                target_obligation_id=target,
+                references=[certificate_id],
             )
             return
 

@@ -176,8 +176,15 @@ class CheckRuleApplicabilityArguments(BaseModel):
     jurisdiction: ShortText
     effective_date: str = Field(min_length=4, max_length=32)
     entity_scope: ShortText
+    applicability_predicate_ids: list[ReferenceId] = Field(
+        default_factory=list, max_length=32
+    )
 
-    @field_validator("rule_evidence_refs", "document_evidence_refs")
+    @field_validator(
+        "rule_evidence_refs",
+        "document_evidence_refs",
+        "applicability_predicate_ids",
+    )
     @classmethod
     def applicability_refs_are_unique(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):

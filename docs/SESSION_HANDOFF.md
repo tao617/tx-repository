@@ -2,31 +2,29 @@
 
 ## Current state
 
-Phase `findoasis-phase4-financial-dsl` completed: Added a bounded reference-only FinDSL AST, deterministic Decimal execution, exact date/boolean comparisons, parsed ClaimValueRefs, and replay-verifiable NumericCertificates.
+Phase `findoasis-phase5-frozen-rules` completed: Added a hash-frozen synthetic rule corpus, deterministic local search/read Skills, evidence-bound applicability checks, and replay-validated RuleApplicabilityCertificates.
 
-- Git commit at checkpoint start: `56f45ffd7f9770c1a146cd00b14fa79a9b48deef`
+- Git commit at checkpoint start: `ee910afa61c755955a58bbd62423de9878bfae00`
 - Changed files: 12
 
 ## Diff summary
 
 ```text
-src/findver_agent/findoasis/actions.py         |  47 +-----
- src/findver_agent/findoasis/agent.py           | 110 +++++++++++++
- src/findver_agent/findoasis/prompt_builder.py  |  68 +++++++-
- src/findver_agent/findoasis/state.py           | 215 ++++++++++++++++++++++++-
- src/findver_agent/findoasis/value_binding.py   |  39 ++++-
- tests/integration/test_finoasis_router.py      |  10 +-
- tests/integration/test_finoasis_table_value.py |  40 ++++-
- tests/unit/test_actions_v3.py                  |  14 +-
- tests/unit/test_prompt_v3.py                   |  48 ++++++
- tests/unit/test_value_binding_v3.py            |  48 +++++-
- 10 files changed, 577 insertions(+), 62 deletions(-)
+src/findver_agent/findoasis/actions.py        |   9 +-
+ src/findver_agent/findoasis/agent.py          | 333 +++++++++++++++++++++++++-
+ src/findver_agent/findoasis/prompt_builder.py |  79 ++++++
+ src/findver_agent/findoasis/seeder.py         |  37 ++-
+ src/findver_agent/findoasis/state.py          | 170 +++++++++++++
+ tests/unit/test_obligation_seeder_v3.py       |  18 ++
+ tests/unit/test_prompt_v3.py                  |  79 ++++++
+ tests/unit/test_skill_router_v3.py            |  33 ++-
+ 8 files changed, 749 insertions(+), 9 deletions(-)
 ```
 
 ## Tests passed
 
-- 499 full Agent tests passed on Python 3.12
-- 114 focused Phase 4 action, binding, FinDSL, prompt, state, routing, and integration tests passed
+- 61 focused Phase 5 corpus, prompt, seeder, router, and integration tests passed
+- 514 full Agent tests passed on Python 3.12
 - Python compileall and git diff checks passed
 
 ## Tests failed or unavailable
@@ -49,4 +47,4 @@ pytest -q
 
 ## Next action
 
-Implement Phase 5 frozen offline financial rule corpus, Knowledge Skills, and applicability certificates.
+Implement Phase 6 deterministic ClaimCertificateVerifier, certificate-aware submit gating, bounded fallback, and review repair tests.

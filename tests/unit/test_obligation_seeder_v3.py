@@ -115,6 +115,24 @@ def test_knowledge_claim_seeds_rule_and_applicability_without_numeric_path():
     ]
 
 
+def test_rule_scope_metadata_is_deterministic_and_unknowns_remain_explicit():
+    scoped = seed_obligations(
+        "Under US GAAP, a public issuer applied the rule on 2024-12-31."
+    )
+    domain_rule, applicability = scoped[1:3]
+    assert domain_rule.metadata == applicability.metadata
+    assert domain_rule.metadata.jurisdiction == "US"
+    assert domain_rule.metadata.effective_date == "2024-12-31"
+    assert domain_rule.metadata.entity_scope == "public issuer"
+
+    unknowns = seed_obligations(
+        "Under GAAP, a qualifying lease is classified as a finance lease."
+    )[1].metadata
+    assert unknowns.jurisdiction == "US"
+    assert unknowns.effective_date == "unknown"
+    assert unknowns.entity_scope == "unknown"
+
+
 def test_chinese_rule_signal_seeds_knowledge_obligations():
     assert obligation_types(
         "根据《企业会计准则》，满足定义条件的租赁应当确认为使用权资产。"

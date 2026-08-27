@@ -3,7 +3,9 @@ import hashlib
 import pytest
 
 from findver_agent.findoasis.actions import (
+    CheckRuleApplicabilityArguments,
     ExecuteFinancialProgramArguments,
+    ReadFinancialRulesArguments,
     ReadParagraphsArguments,
     ReadTableRegionArguments,
     SearchFinancialRulesArguments,
@@ -28,8 +30,13 @@ from findver_agent.findoasis.state import (
     FinOASISQuestionState,
     NumericValueLedgerEntry,
     ResumeIdentity,
+    RuleEvidenceLedgerEntry,
+    RuleSearchHitRecord,
+    RuleSearchRecord,
     TableCandidateRecord,
 )
+from findver_agent.financial_rules.corpus import rule_record_sha256
+from findver_agent.financial_rules.models import RuleRecord
 from findver_agent.schemas import PublicTask
 
 
@@ -111,6 +118,16 @@ RULE_SEARCH = contract(
     SkillName.SEARCH_FINANCIAL_RULES,
     SearchFinancialRulesArguments,
     ObligationType.DOMAIN_RULE,
+)
+RULE_READ = contract(
+    SkillName.READ_FINANCIAL_RULES,
+    ReadFinancialRulesArguments,
+    ObligationType.DOMAIN_RULE,
+)
+RULE_CHECK = contract(
+    SkillName.CHECK_RULE_APPLICABILITY,
+    CheckRuleApplicabilityArguments,
+    ObligationType.RULE_APPLICABILITY,
 )
 SUBMIT = contract(
     SkillName.SUBMIT_ANSWER,
@@ -377,6 +394,68 @@ def test_prompt_exposes_value_and_claim_refs_only_when_findsl_is_available():
     )[1]["content"]
     assert '"value_ref":"value-0001"' not in hidden
     assert '"claim_value_ref":"claim-value-0001"' not in hidden
+
+
+def test_rule_candidates_and_read_evidence_are_exposed_only_to_the_next_skill():
+    state = make_state("US GAAP requires the recognition rule in 2024.")
+    state.rule_search_history.append(
+        RuleSearchRecord(
+            query="revenue recognition",
+            jurisdiction="US",
+            as_of_date="2024-12-31",
+            target_obligation_id="obl-0001",
+            step=0,
+            hits=[
+                RuleSearchHitRecord(
+                    rule_id="rule-1",
+                    score=12,
+                    snippet="bounded synthetic candidate snippet",
+                )
+            ],
+        )
+    )
+    rule_text = "Full synthetic rule text must not enter the prompt."
+    record = RuleRecord(
+        rule_id="rule-1",
+        title="Synthetic recognition rule",
+        text=rule_text,
+        jurisdiction="US",
+        entity_scope="public issuer",
+        topic="recognition",
+        effective_from="2020-01-01",
+        source_reference="synthetic://rule-1",
+        source_sha256=hashlib.sha256(rule_text.encode()).hexdigest(),
+    )
+    state.rule_evidence_ledger["rule-evidence-0001"] = RuleEvidenceLedgerEntry(
+        rule_evidence_id="rule-evidence-0001",
+        rule_id="rule-1",
+        rule_sha256=rule_record_sha256(record),
+        corpus_id="synthetic-v1",
+        manifest_sha256="b" * 64,
+        records_sha256="c" * 64,
+        record=record,
+    )
+
+    read_prompt = PromptBuilder().build(
+        state, (RULE_READ,), phase_budget="attempt 3/6"
+    )[1]["content"]
+    assert '"rule_id":"rule-1"' in read_prompt
+    assert "bounded synthetic candidate snippet" in read_prompt
+    assert '"rule_evidence_ref":"rule-evidence-0001"' not in read_prompt
+
+    check_prompt = PromptBuilder().build(
+        state, (RULE_CHECK,), phase_budget="attempt 4/6"
+    )[1]["content"]
+    assert '"rule_evidence_ref":"rule-evidence-0001"' in check_prompt
+    assert "Synthetic recognition rule" in check_prompt
+    assert rule_text not in check_prompt
+    assert "bounded synthetic candidate snippet" not in check_prompt
+
+    hidden = PromptBuilder().build(
+        state, (SEARCH,), phase_budget="attempt 1/6"
+    )[1]["content"]
+    assert '"rule_id":"rule-1"' not in hidden
+    assert '"rule_evidence_ref":"rule-evidence-0001"' not in hidden
 
 
 def test_table_cell_prompt_injection_remains_untrusted_data():

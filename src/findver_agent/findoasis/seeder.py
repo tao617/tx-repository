@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from .contracts import ObligationProposal, ObligationType
+from .contracts import ObligationMetadata, ObligationProposal, ObligationType
 
 
 # A whole calendar date is one period, not three numeric values.  Longer period
@@ -181,6 +181,36 @@ def _runtime_id(sequence: int) -> str:
     return f"obl-{sequence:04d}"
 
 
+def _rule_scope_metadata(claim_text: str) -> ObligationMetadata:
+    if re.search(r"\b(?:u\.?s\.?\s+)?gaap\b|\bsec\b", claim_text, re.I):
+        jurisdiction = "US"
+    elif re.search(r"\bifrs\b", claim_text, re.I):
+        jurisdiction = "international"
+    else:
+        jurisdiction = "unknown"
+
+    exact_date = re.search(r"\b((?:19|20|21)\d{2}-\d{2}-\d{2})\b", claim_text)
+    if exact_date:
+        effective_date = exact_date.group(1)
+    else:
+        year = re.search(r"\b((?:19|20|21)\d{2})\b", claim_text)
+        effective_date = f"{year.group(1)}-12-31" if year else "unknown"
+
+    if re.search(r"\bpublic issuer\b", claim_text, re.I):
+        entity_scope = "public issuer"
+    elif re.search(r"\bbank\b", claim_text, re.I):
+        entity_scope = "bank"
+    elif re.search(r"\binsurer\b|\binsurance compan", claim_text, re.I):
+        entity_scope = "insurer"
+    else:
+        entity_scope = "unknown"
+    return ObligationMetadata(
+        jurisdiction=jurisdiction,
+        effective_date=effective_date,
+        entity_scope=entity_scope,
+    )
+
+
 def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
     """Return deterministic seed proposals derived only from ``claim_text``.
 
@@ -199,6 +229,7 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
         obligation_type: ObligationType,
         description: str,
         dependency_sequences: tuple[int, ...] = (),
+        metadata: ObligationMetadata | None = None,
     ) -> int:
         proposals.append(
             ObligationProposal(
@@ -208,6 +239,7 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
                 dependency_ids=[
                     _runtime_id(sequence) for sequence in dependency_sequences
                 ],
+                metadata=metadata or ObligationMetadata(),
             )
         )
         return len(proposals)
@@ -238,14 +270,17 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
 
     rule_applicability_sequence: int | None = None
     if needs_rule:
+        rule_metadata = _rule_scope_metadata(normalized)
         domain_rule_sequence = append(
             ObligationType.DOMAIN_RULE,
             "Locate the financial rule explicitly implicated by the claim.",
+            metadata=rule_metadata,
         )
         rule_applicability_sequence = append(
             ObligationType.RULE_APPLICABILITY,
             "Verify the rule's applicability using its scope and relevant report facts.",
             (document_sequence, domain_rule_sequence),
+            metadata=rule_metadata,
         )
 
     final_dependencies = [document_sequence]

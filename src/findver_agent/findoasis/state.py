@@ -25,6 +25,14 @@ from findver_agent.financial_dsl.models import (
     FinancialProgram,
     NumericCertificate,
 )
+from findver_agent.financial_rules.applicability import (
+    rule_applicability_certificate_sha256,
+)
+from findver_agent.financial_rules.corpus import rule_record_sha256
+from findver_agent.financial_rules.models import (
+    RuleApplicabilityCertificate,
+    RuleRecord,
+)
 from findver_agent.schemas import Confidence, Prediction, PublicTask
 
 from .contracts import (
@@ -276,6 +284,50 @@ class RuleEvidenceLedgerEntry(BaseModel):
     corpus_id: ShortText
     manifest_sha256: str = Field(pattern=SHA256_PATTERN)
     records_sha256: str = Field(pattern=SHA256_PATTERN)
+    record: RuleRecord
+
+    @model_validator(mode="after")
+    def record_identity_is_bound(self) -> "RuleEvidenceLedgerEntry":
+        if self.record.rule_id != self.rule_id:
+            raise ValueError("rule evidence ID differs from its record")
+        if rule_record_sha256(self.record) != self.rule_sha256:
+            raise ValueError("rule evidence hash differs from its record")
+        if _sha256_text(self.record.text) != self.record.source_sha256:
+            raise ValueError("rule evidence source hash differs from its text")
+        return self
+
+    @property
+    def text(self) -> str:
+        return self.record.text
+
+
+class RuleSearchHitRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rule_id: ReferenceId
+    score: int = Field(gt=0, le=1_000_000)
+    snippet: str = Field(min_length=1, max_length=240)
+
+
+class RuleSearchRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    query: str = Field(min_length=1, max_length=500)
+    jurisdiction: ShortText
+    as_of_date: ShortText
+    target_obligation_id: ObligationId
+    step: int = Field(ge=0)
+    hits: list[RuleSearchHitRecord] = Field(default_factory=list, max_length=10)
+
+    @field_validator("hits")
+    @classmethod
+    def hit_ids_are_unique(
+        cls, value: list[RuleSearchHitRecord]
+    ) -> list[RuleSearchHitRecord]:
+        identifiers = [hit.rule_id for hit in value]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("rule search hit IDs must be unique")
+        return value
 
 
 class SkillAvailabilityRecord(BaseModel):
@@ -466,6 +518,8 @@ class FinOASISQuestionState(BaseModel):
     next_obligation_sequence: int = Field(default=1, ge=1, le=1_000_000)
     next_value_sequence: int = Field(default=1, ge=1, le=1_000_000)
     next_program_sequence: int = Field(default=1, ge=1, le=1_000_000)
+    next_rule_evidence_sequence: int = Field(default=1, ge=1, le=1_000_000)
+    next_rule_certificate_sequence: int = Field(default=1, ge=1, le=1_000_000)
     evidence_ledger: dict[ReferenceId, EvidenceLedgerEntry] = Field(
         default_factory=dict, max_length=512
     )
@@ -484,6 +538,9 @@ class FinOASISQuestionState(BaseModel):
     rule_evidence_ledger: dict[ReferenceId, RuleEvidenceLedgerEntry] = Field(
         default_factory=dict, max_length=128
     )
+    rule_applicability_certificate_ledger: dict[
+        ReferenceId, RuleApplicabilityCertificate
+    ] = Field(default_factory=dict, max_length=128)
     certificate_ledger: dict[ReferenceId, CertificateEnvelope] = Field(
         default_factory=dict, max_length=128
     )
@@ -495,6 +552,9 @@ class FinOASISQuestionState(BaseModel):
         default_factory=list, max_length=512
     )
     report_search_history: list[ReportSearchRecord] = Field(
+        default_factory=list, max_length=64
+    )
+    rule_search_history: list[RuleSearchRecord] = Field(
         default_factory=list, max_length=64
     )
     table_candidates: list[TableCandidateRecord] = Field(
@@ -585,6 +645,31 @@ class FinOASISQuestionState(BaseModel):
                 raise ValueError("financial program IDs must be deterministic and contiguous")
         if self.next_program_sequence != len(self.financial_program_ledger) + 1:
             raise ValueError("next_program_sequence does not follow the program ledger")
+        for sequence, rule_evidence in enumerate(
+            self.rule_evidence_ledger.values(), start=1
+        ):
+            if rule_evidence.rule_evidence_id != f"rule-evidence-{sequence:04d}":
+                raise ValueError("rule evidence IDs must be deterministic and contiguous")
+        if self.next_rule_evidence_sequence != len(self.rule_evidence_ledger) + 1:
+            raise ValueError(
+                "next_rule_evidence_sequence does not follow the rule evidence ledger"
+            )
+        for sequence, rule_certificate in enumerate(
+            self.rule_applicability_certificate_ledger.values(), start=1
+        ):
+            if (
+                rule_certificate.certificate_id
+                != f"rule-certificate-{sequence:04d}"
+            ):
+                raise ValueError(
+                    "rule certificate IDs must be deterministic and contiguous"
+                )
+        if self.next_rule_certificate_sequence != (
+            len(self.rule_applicability_certificate_ledger) + 1
+        ):
+            raise ValueError(
+                "next_rule_certificate_sequence does not follow the rule certificate ledger"
+            )
 
         known_ids = set(obligation_by_id)
         for obligation in self.obligations:
@@ -779,6 +864,82 @@ class FinOASISQuestionState(BaseModel):
         }
         if numeric_envelopes - set(self.numeric_certificate_ledger):
             raise ValueError("numeric certificate envelope lacks its full payload")
+        for rule_evidence in self.rule_evidence_ledger.values():
+            corpus_identity = (
+                self.resume_identity.rule_corpus_id,
+                self.resume_identity.rule_manifest_sha256,
+                self.resume_identity.rule_records_sha256,
+            )
+            if (
+                rule_evidence.corpus_id,
+                rule_evidence.manifest_sha256,
+                rule_evidence.records_sha256,
+            ) != corpus_identity:
+                raise ValueError("rule evidence does not match resume corpus identity")
+        if set(self.rule_applicability_certificate_ledger) - set(
+            self.certificate_ledger
+        ):
+            raise ValueError("rule applicability payload lacks an envelope")
+        for certificate_id, rule_certificate in (
+            self.rule_applicability_certificate_ledger.items()
+        ):
+            if rule_certificate.certificate_id != certificate_id:
+                raise ValueError("rule certificate key does not match its identifier")
+            envelope = self.certificate_ledger[certificate_id]
+            if (
+                envelope.kind is not CertificateKind.RULE_APPLICABILITY
+                or not envelope.verified
+            ):
+                raise ValueError(
+                    "rule applicability envelope must be verified and correctly typed"
+                )
+            if envelope.payload_sha256 != rule_applicability_certificate_sha256(
+                rule_certificate
+            ):
+                raise ValueError(
+                    "rule applicability payload hash does not match envelope"
+                )
+            expected_refs = [
+                *rule_certificate.rule_evidence_refs,
+                *rule_certificate.document_evidence_refs,
+            ]
+            if envelope.evidence_refs != expected_refs:
+                raise ValueError(
+                    "rule applicability evidence differs from its envelope"
+                )
+            if (
+                rule_certificate.corpus_id,
+                rule_certificate.manifest_sha256,
+                rule_certificate.records_sha256,
+            ) != (
+                self.resume_identity.rule_corpus_id,
+                self.resume_identity.rule_manifest_sha256,
+                self.resume_identity.rule_records_sha256,
+            ):
+                raise ValueError(
+                    "rule applicability certificate has stale corpus identity"
+                )
+            if set(rule_certificate.rule_evidence_refs) - set(
+                self.rule_evidence_ledger
+            ):
+                raise ValueError("rule certificate references unread rule evidence")
+            if set(rule_certificate.document_evidence_refs) - set(
+                self.evidence_ledger
+            ):
+                raise ValueError("rule certificate references unread document evidence")
+            expected_rule_ids = [
+                self.rule_evidence_ledger[reference].rule_id
+                for reference in rule_certificate.rule_evidence_refs
+            ]
+            if rule_certificate.rule_ids != expected_rule_ids:
+                raise ValueError("rule certificate IDs differ from rule evidence")
+        rule_envelopes = {
+            certificate_id
+            for certificate_id, envelope in self.certificate_ledger.items()
+            if envelope.kind is CertificateKind.RULE_APPLICABILITY
+        }
+        if rule_envelopes - set(self.rule_applicability_certificate_ledger):
+            raise ValueError("rule applicability envelope lacks its full payload")
         for certificate in self.certificate_ledger.values():
             if set(certificate.evidence_refs) - evidence_refs:
                 raise ValueError("certificate contains a dangling evidence reference")
@@ -794,6 +955,13 @@ class FinOASISQuestionState(BaseModel):
         for record in self.report_search_history:
             if record.target_obligation_id not in known_ids:
                 raise ValueError("report search history targets an unknown obligation")
+        for record in self.rule_search_history:
+            if record.target_obligation_id not in known_ids:
+                raise ValueError("rule search history targets an unknown obligation")
+            if obligation_by_id[record.target_obligation_id].type is not (
+                ObligationType.DOMAIN_RULE
+            ):
+                raise ValueError("rule search history must target a domain-rule obligation")
         table_ids = [candidate.table_id for candidate in self.table_candidates]
         if len(table_ids) != len(set(table_ids)):
             raise ValueError("table candidate IDs must be unique")
@@ -1275,6 +1443,8 @@ __all__ = [
     "ReportSearchRecord",
     "ResumeIdentity",
     "RuleEvidenceLedgerEntry",
+    "RuleSearchHitRecord",
+    "RuleSearchRecord",
     "RuntimeErrorRecord",
     "RuntimeUsage",
     "SkillAvailabilityRecord",
