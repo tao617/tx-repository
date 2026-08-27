@@ -1,0 +1,10 @@
+{
+  "corpus_id": "finoasis-synthetic-rules-v1",
+  "schema_version": 1,
+  "source_name": "FinOASIS synthetic applicability fixtures",
+  "source_version": "1.0.0",
+  "created_at": "2026-08-28T00:00:00Z",
+  "records_sha256": "4a3085d2b0d32a320fbc8e5b99527221e1abd161a3a277239732804873fe3436",
+  "license_note": "Synthetic test data created for this repository; not financial, accounting, legal, or regulatory guidance.",
+  "provenance_note": "Hand-authored deterministic fixtures for offline FinOASIS tests; no production rule source is represented."
+}

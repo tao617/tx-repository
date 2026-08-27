@@ -295,7 +295,12 @@ class FinOASISAgent:
                 self.state_store.save(state)
                 trace.write(
                     "runtime_error",
-                    {"step": state.step, "kind": kind, "message": str(error)[:500]},
+                    {
+                        "step": state.step,
+                        "phase": state.phase.value,
+                        "kind": kind,
+                        "message": str(error)[:500],
+                    },
                 )
                 continue
 
@@ -322,7 +327,12 @@ class FinOASISAgent:
                 self.state_store.save(state)
                 trace.write(
                     "runtime_error",
-                    {"step": state.step, "kind": "parse", "message": str(error)[:500]},
+                    {
+                        "step": state.step,
+                        "phase": state.phase.value,
+                        "kind": "parse",
+                        "message": str(error)[:500],
+                    },
                 )
                 continue
 
@@ -386,7 +396,16 @@ class FinOASISAgent:
                 self.state_store.save(state)
                 trace.write(
                     "runtime_error",
-                    {"step": state.step, "kind": "skill", "message": str(error)[:500]},
+                    {
+                        "step": state.step,
+                        "phase": state.phase.value,
+                        "kind": "skill",
+                        "skill": skill_name.value,
+                        "failure_categories": self._skill_failure_categories(
+                            skill_name, str(error)
+                        ),
+                        "message": str(error)[:500],
+                    },
                 )
                 continue
 
@@ -1377,6 +1396,63 @@ class FinOASISAgent:
     def _bounded_unique(values, *, maximum: int) -> list[str]:
         bounded = [" ".join(str(value).split())[:160] for value in values]
         return list(dict.fromkeys(value for value in bounded if value))[:maximum]
+
+    @staticmethod
+    def _skill_failure_categories(skill: SkillName, message: str) -> list[str]:
+        """Return aggregate-safe failure buckets without copying task material."""
+
+        normalized = message.casefold()
+        categories: list[str] = []
+        if skill is SkillName.BIND_FINANCIAL_VALUE:
+            categories.append("binding_failure")
+        if skill is SkillName.EXECUTE_FINANCIAL_PROGRAM:
+            categories.append("program_failure")
+        if skill in {
+            SkillName.BIND_FINANCIAL_VALUE,
+            SkillName.EXECUTE_FINANCIAL_PROGRAM,
+        }:
+            if any(term in normalized for term in ("unit", "currency", "scale")):
+                categories.append("unit_failure")
+            if any(
+                term in normalized
+                for term in ("period", "quarter", "fiscal", "year")
+            ):
+                categories.append("period_failure")
+            if any(
+                term in normalized
+                for term in (
+                    "numeric type",
+                    "type is",
+                    "boolean",
+                    "date",
+                    "money",
+                    "percentage",
+                    "count",
+                    "duration",
+                    "scalar",
+                )
+            ):
+                categories.append("type_failure")
+            if any(term in normalized for term in ("relation", "claim")):
+                categories.append("relation_failure")
+        if skill in {
+            SkillName.SEARCH_FINANCIAL_RULES,
+            SkillName.READ_FINANCIAL_RULES,
+            SkillName.CHECK_RULE_APPLICABILITY,
+        } and any(
+            term in normalized
+            for term in (
+                "hash",
+                "provenance",
+                "corpus",
+                "manifest",
+                "record",
+                "source",
+                "stale",
+            )
+        ):
+            categories.append("rule_integrity_failure")
+        return list(dict.fromkeys(categories))
 
     def _add_relevant_table_candidates(
         self,

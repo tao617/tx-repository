@@ -1,0 +1,81 @@
+run:
+  mode: agent
+  backend_kind: mock
+backend:
+  type: openai_compatible
+  base_url: http://model-gateway:8080/v1
+  model: external-model-name
+  timeout_seconds: 30
+  max_retries: 0
+  model_context_window_tokens: 32768
+  transport_profile: openai_standard
+generation:
+  temperature: 0
+  top_p: 1
+  seed: 7
+  max_output_tokens: 1024
+  prompt_budget_tokens: 8192
+agent:
+  max_steps: 16
+  protocol_version: v3
+  exploration_steps: 14
+  finalization_steps: 2
+  review_steps: 0
+  review_policy: none
+  max_search_calls: 0
+  max_read_calls: 0
+  max_calculator_calls: 0
+  max_paragraphs_per_read: 12
+  max_total_unique_paragraphs: 30
+  calculator_enabled: false
+  pre_submit_review: false
+  initial_retrieval:
+    enabled: false
+  long_context:
+    enabled: false
+  findoasis:
+    experimental: true
+    official_test_authorized: false
+    real_model_execution_authorized: false
+    scorer_handoff_authorized: false
+    enabled_skills:
+      - search_report
+      - read_paragraphs
+      - read_table_region
+      - bind_financial_value
+      - execute_financial_program
+      - search_financial_rules
+      - read_financial_rules
+      - check_rule_applicability
+      - submit_answer
+    skill_budgets:
+      search_report: 4
+      read_paragraphs: 4
+      read_table_region: 4
+      bind_financial_value: 8
+      execute_financial_program: 4
+      search_financial_rules: 4
+      read_financial_rules: 4
+      check_rule_applicability: 4
+      submit_answer: 2
+    obligation_policy:
+      seeding: conservative
+      skill_exposure: dynamic
+      model_may_open_obligations: true
+      model_may_satisfy_obligations: false
+      model_may_waive_mandatory: false
+      normal_submit_requires_all_mandatory: true
+      budget_exhausted_submit: low_confidence_best_effort
+    rule_corpus:
+      enabled: true
+      rule_root: /app/configs/experimental/findoasis/synthetic_rule_corpus
+      manifest_path: manifest.json
+      records_path: records.json
+      corpus_id: finoasis-synthetic-rules-v1
+      manifest_sha256: 549461e4b4a2fb1b8357b30f03589f62562db7a4b26ac8d38074b34080a4dc33
+      records_sha256: 4a3085d2b0d32a320fbc8e5b99527221e1abd161a3a277239732804873fe3436
+      read_only: true
+      network_fallback: false
+  cross_question_memory: false
+  scorer_feedback: false
+  concurrency: 1

@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase6-claim-verifier
+current_phase: findoasis-phase7-e2e-verification
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase6-claim-verifier
-last_git_commit: b56c0640e4f95682641db19bafa177bb21e18ba4
+last_completed_phase: findoasis-phase7-e2e-verification
+last_git_commit: a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -371,17 +371,35 @@ decisions:
   certificate failures remain fatal.
 - Selective Review leaves the final obligation pending and may fall back only to a
   certificate-verified draft after replaying it against current ledgers.
+- Keep all M3 conditions experimental with official_test_authorized, real_model_execution_authorized,
+  and scorer_handoff_authorized fixed false; mark always-exposed as an ablation only.
+- Emit v3 metrics only from validated state ledgers and closed aggregate buckets;
+  never copy per-question claims, explanations, evidence text, rule text, or raw failure
+  messages into the summary.
+- Define avoidable call rate as unavailable rejections over successful plus rejected
+  Skill calls, and certificate-consumed Skill rate as terminally consumed specialist
+  certificates over successful certificate-producing specialist calls.
+- Mount the selected report root read-only through a bounded environment override
+  so the v3 Docker smoke uses tracked synthetic reports without widening Runtime targets
+  or networks.
+- 'Preserve root-controlled Docker: the user remains outside the Docker group; this
+  no-new-privileges task used the WSL host root path because interactive sudo elevation
+  is unavailable.'
 files_changed:
-- src/findver_agent/findoasis/__init__.py
+- .github/workflows/ci.yml
+- configs/experimental/
+- deploy/wsl/docker-compose.agent.yaml
+- scripts/run_finoasis_mock_smoke.sh
+- scripts/summarize_run.py
+- scripts/verify_finoasis_mock_smoke.py
 - src/findver_agent/findoasis/agent.py
-- src/findver_agent/findoasis/claim_verifier.py
-- src/findver_agent/findoasis/prompt_builder.py
-- src/findver_agent/findoasis/state.py
-- tests/integration/test_finoasis_router.py
-- tests/integration/test_finoasis_rules.py
-- tests/integration/test_finoasis_submission.py
-- tests/integration/test_finoasis_table_value.py
-- tests/unit/test_claim_verifier_v3.py
+- tests/fixtures/finoasis_smoke_reports/
+- tests/fixtures/finoasis_smoke_tasks.jsonl
+- tests/fixtures/mock_openai_server.py
+- tests/integration/test_finoasis_e2e.py
+- tests/security/test_agent_compose.py
+- tests/unit/test_ci_workflow.py
+- tests/unit/test_finoasis_configs_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -673,6 +691,9 @@ tests_passed:
 - 61 focused Phase 5 corpus, prompt, seeder, router, and integration tests passed
 - 514 full Agent tests passed on Python 3.12
 - 524 repository tests; 49 focused Phase 6 tests; compileall and diff checks
+- 529 repository tests; 11 focused config/summary/e2e tests; compileall and diff checks;
+  existing Stateful M2 Docker smoke; existing 40-task concurrent Docker smoke; new
+  four-task FinOASIS v3 Docker smoke
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -716,8 +737,12 @@ known_issues:
 - Python 3.11 is unavailable locally; repository CI must exercise 3.11 compatibility.
 - Natural-language selection of a FinDSL program or frozen rule remains model-dependent,
   and no production rule corpus is authorized.
+- Python 3.11 remains unavailable locally; GitHub CI covers both 3.11 and 3.12.
+- Docker image builds resolve declared public dependencies, while all smoke Runtime
+  model traffic is confined to the local deterministic host mock through the unchanged
+  Gateway boundary.
 next_actions:
-- Implement Phase 7 experimental configurations, aggregate-safe metrics, scripted
-  IE/numeric/knowledge/mixed tasks, CLI verification, and credential-free Docker smoke.
+- Complete Phase 8 ADR 0011, method/architecture/security/data-boundary documentation,
+  final recovery records, full audit, and Draft PR.
 blocked_items: []
-last_updated: '2026-08-28T03:08:58+08:00'
+last_updated: '2026-08-28T03:22:45+08:00'

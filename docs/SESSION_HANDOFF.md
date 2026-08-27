@@ -2,30 +2,33 @@
 
 ## Current state
 
-Phase `findoasis-phase6-claim-verifier` completed: Added a deterministic final ClaimCertificateVerifier with complete persisted certificate payloads, evidence/submission hashes, numeric and rule certificate replay, selective Review, and certificate-bound forced-finalization fallback.
+Phase `findoasis-phase7-e2e-verification` completed: Added four strict experimental v3 configs, container-bundled hash-bound synthetic rules, aggregate-safe obligation/Skill/numeric/rule/cost metrics, a deterministic four-task CLI mock path, and CI/Docker verification without real credentials.
 
-- Git commit at checkpoint start: `b56c0640e4f95682641db19bafa177bb21e18ba4`
-- Changed files: 13
+- Git commit at checkpoint start: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
+- Changed files: 25
 
 ## Diff summary
 
 ```text
-src/findver_agent/findoasis/__init__.py        |   8 +
- src/findver_agent/findoasis/agent.py           | 369 ++++++++++++++++++++++++-
- src/findver_agent/findoasis/prompt_builder.py  |  29 ++
-src/findver_agent/findoasis/state.py           | 178 +++++++++++-
-src/findver_agent/findoasis/claim_verifier.py  | 690 +++++++++++++++++++++++++
-tests/integration/test_finoasis_router.py      |  23 +-
-tests/integration/test_finoasis_rules.py       |  25 +-
-tests/integration/test_finoasis_table_value.py |  25 +-
-tests/integration/test_finoasis_submission.py  | 297 +++++++++++
-tests/unit/test_claim_verifier_v3.py           | 437 ++++++++++++++++
-10 source/test files changed; checkpoint documents also updated
+.github/workflows/ci.yml             |   5 +
+ deploy/wsl/docker-compose.agent.yaml |   3 +-
+ scripts/summarize_run.py             | 289 ++++++++++++++++++++++++++++++++++-
+ src/findver_agent/findoasis/agent.py |  82 +++++++++-
+ tests/fixtures/mock_openai_server.py | 289 ++++++++++++++++++++++++++++++++++-
+ tests/security/test_agent_compose.py |   3 +-
+tests/unit/test_ci_workflow.py       |  25 +++
+configs/experimental/findoasis/      | four strict configs plus frozen corpus
+scripts/run_finoasis_mock_smoke.sh   | credential-free container driver
+scripts/verify_finoasis_mock_smoke.py| certificate/gating/privacy verifier
+tests/fixtures/finoasis_smoke_*      | four synthetic tasks and reports
+tests/integration/test_finoasis_e2e.py
+tests/unit/test_finoasis_configs_v3.py
+25 files changed; tracked diff plus new files and checkpoint documents
 ```
 
 ## Tests passed
 
-- 524 repository tests; 49 focused Phase 6 tests; compileall and diff checks
+- 529 repository tests; 11 focused config/summary/e2e tests; compileall and diff checks; existing Stateful M2 Docker smoke; existing 40-task concurrent Docker smoke; new four-task FinOASIS v3 Docker smoke
 
 ## Tests failed or unavailable
 
@@ -47,4 +50,4 @@ pytest -q
 
 ## Next action
 
-Implement Phase 7 experimental configurations, aggregate-safe metrics, scripted IE/numeric/knowledge/mixed tasks, CLI verification, and credential-free Docker smoke.
+Complete Phase 8 ADR 0011, method/architecture/security/data-boundary documentation, final recovery records, full audit, and Draft PR.

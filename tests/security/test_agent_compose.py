@@ -35,6 +35,8 @@ def test_agent_runtime_has_only_internal_network_and_allowed_mounts():
     assert output.get("read_only") is not True
     retrieval = next(volume for volume in agent["volumes"] if volume["target"] == "/retrieval")
     assert retrieval["read_only"] is True
+    reports = next(volume for volume in agent["volumes"] if volume["target"] == "/reports")
+    assert reports["source"] == "${FINDVER_REPORTS_SOURCE:-../../financial_reports}"
     assert all(volume.get("read_only") is True for volume in agent["volumes"] if volume is not output)
 
 
@@ -57,4 +59,3 @@ def test_runtime_dockerfile_uses_whitelisted_copy_sources():
     assert "data/" not in dockerfile
     assert "financial_reports" not in dockerfile
     assert "scorer" not in dockerfile.lower()
-

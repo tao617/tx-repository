@@ -2,14 +2,14 @@
 
 ## Current checkpoint
 
-- Phase: Phase 6 — final claim certificate verification and bounded Review
+- Phase: Phase 7 — experimental configurations, aggregate metrics and Docker smoke
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
-- Current committed HEAD: `b56c0640e4f95682641db19bafa177bb21e18ba4`
+- Current committed HEAD: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: Phase 6 source/tests plus checkpoint documents are not yet committed
-- Push status: Phases 0 through 5 pushed
-- Remote branch SHA: `b56c0640e4f95682641db19bafa177bb21e18ba4`
+- Worktree: Phase 7 source/tests plus checkpoint documents are not yet committed
+- Push status: Phases 0 through 6 pushed
+- Remote branch SHA: `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c`
 - Draft PR: not yet created
 
 ## Completed work
@@ -195,6 +195,32 @@
   replay, malformed and unknown evidence, incomplete forced finalization, selective
   Review repair/fallback, and final-certificate state tampering.
 
+### Phase 7
+
+- Added four strict experimental configurations: obligation-only, numeric, all Skills
+  with synthetic rules, and an explicitly named always-exposed ablation. Every config
+  fixes Official Test, real-model and scorer-handoff authorization to false and declares
+  the complete allowlist, budgets, obligation policy and rule-corpus boundary.
+- Bundled the byte-identical frozen synthetic rule corpus under the Runtime config tree
+  for container smoke only. Its manifest and records retain the reviewed SHA-256 values
+  and explicitly disclaim production financial, accounting, legal or regulatory use.
+- Extended the aggregate-only summary with validated v3 obligation, dynamic exposure,
+  accepted/rejected Skill, certificate consumption, numeric, rule, usage and phase
+  counters. It does not emit task IDs, claims, explanations, evidence text, rule text or
+  raw failure messages.
+- Added safe failure categories to v3 trace events so numeric binding/program/unit/
+  period/type/relation and rule-integrity failures can be counted without propagating
+  arbitrary error text to aggregate output.
+- Added four tracked synthetic tasks and reports covering IE-only, table calculation,
+  frozen-rule knowledge and mixed proof paths. The deterministic mock protocol runs all
+  26 actions through the unchanged CLI/Runner and verifies dynamic gating plus final
+  certificate composition.
+- Added a read-only report-root override to the existing `/reports` mount so Docker can
+  use tracked synthetic reports without adding a mount target, network, capability or
+  Runtime environment secret.
+- Extended public CI with the new credential-free v3 Docker smoke while preserving the
+  existing Stateful M2 and 40-task concurrent smoke paths.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -255,6 +281,24 @@
 - `git diff --check`: passed.
 - No model, network, scorer, Gold, official test input or paid API was used.
 
+## Phase 7 tests
+
+- Focused config, mock protocol, aggregate privacy, security and end-to-end selection:
+  27 passed across the final focused runs.
+- Full suite: 529 passed in 4.05s on Python 3.12.
+- Existing Stateful M2 Docker smoke: passed with 9 model calls and verified Review
+  fallback.
+- Existing concurrent Docker smoke: 40/40 completed, peak concurrency 32, and its
+  unchanged three-file sealed submission verified.
+- New FinOASIS v3 Docker smoke: four tasks completed; 18/18 obligations satisfied;
+  two FinDSL programs and two rule applicability checks passed; IE exposed no Numeric
+  or Knowledge Skill; mixed final verification consumed both specialist certificates.
+- Docker Engine 29.1.3 and Compose 2.40.3 were already installed. The user remained
+  outside the Docker group and socket permissions were unchanged; the WSL host root path
+  was used because this task environment blocks interactive `sudo` elevation.
+- `.venv/bin/python -m compileall -q src scripts tests` and `git diff --check`: passed.
+- No real model credential, external model, scorer, Gold or official test input was used.
+
 ## Design decisions
 
 - Dispatch protocol v3 before legacy state/prompt logic and keep v3 action, state,
@@ -282,13 +326,29 @@
   of those specialist inputs remains an experimental model responsibility.
 - Permit incomplete fallback only at forced finalization with low confidence and an
   explicit unresolved-obligation risk; evidence-integrity failures remain fatal.
+- Define avoidable-call rate as unavailable rejections divided by successful plus
+  rejected Skill calls; define certificate-consumed Skill rate as terminally consumed
+  specialist certificates divided by successful certificate-producing specialist calls.
+- Keep the all-Skills always-exposed condition as a named ablation only; the primary
+  experimental all-Skills condition retains dynamic obligation gating.
 
-## Files changed through Phase 6
+## Files changed through Phase 7
 
 - `docs/FINOASIS_IMPLEMENTATION_PLAN.md`
 - `docs/FINOASIS_PROGRESS.md`
 - `docs/STATE.yaml`
 - `docs/SESSION_HANDOFF.md`
+- `.github/workflows/ci.yml`
+- `deploy/wsl/docker-compose.agent.yaml`
+- `configs/experimental/findoasis/M3_OBLIGATION_ONLY.yaml`
+- `configs/experimental/findoasis/M3_NUMERIC.yaml`
+- `configs/experimental/findoasis/M3_ALL_SKILLS_SYNTHETIC.yaml`
+- `configs/experimental/findoasis/M3_ALL_SKILLS_ALWAYS_EXPOSED.yaml`
+- `configs/experimental/findoasis/synthetic_rule_corpus/manifest.json`
+- `configs/experimental/findoasis/synthetic_rule_corpus/records.json`
+- `scripts/summarize_run.py`
+- `scripts/run_finoasis_mock_smoke.sh`
+- `scripts/verify_finoasis_mock_smoke.py`
 - `src/findver_agent/config.py`
 - `src/findver_agent/financial_dsl/__init__.py`
 - `src/findver_agent/financial_dsl/models.py`
@@ -327,11 +387,15 @@
 - `tests/unit/test_value_binding_v3.py`
 - `tests/unit/test_rule_corpus_v3.py`
 - `tests/unit/test_claim_verifier_v3.py`
+- `tests/unit/test_finoasis_configs_v3.py`
 - `tests/integration/test_finoasis_router.py`
 - `tests/integration/test_finoasis_resume.py`
 - `tests/integration/test_finoasis_table_value.py`
 - `tests/integration/test_finoasis_rules.py`
 - `tests/integration/test_finoasis_submission.py`
+- `tests/integration/test_finoasis_e2e.py`
+- `tests/fixtures/finoasis_smoke_tasks.jsonl`
+- `tests/fixtures/finoasis_smoke_reports/`
 - `tests/fixtures/finoasis_rule_corpus/manifest.json`
 - `tests/fixtures/finoasis_rule_corpus/records.json`
 
@@ -351,9 +415,8 @@
 
 ## Exact next step
 
-Implement Phase 7: experimental method configurations, aggregate-safe v3 metrics,
-scripted IE/numeric/knowledge/mixed tasks, CLI verification and credential-free Docker
-smoke coverage.
+Complete Phase 8: ADR 0011, method/architecture/security/data-boundary documentation,
+final recovery records and audit, then push and create the Draft PR.
 
 ## Safe recovery commands
 
@@ -384,4 +447,5 @@ git diff --check
 | Phase 3 | `56f45ffd7f9770c1a146cd00b14fa79a9b48deef` | pushed | `feat: bind financial values to report evidence` |
 | Phase 4 | `ee910afa61c755955a58bbd62423de9878bfae00` | pushed | `feat: execute evidence-bound financial programs` |
 | Phase 5 | `b56c0640e4f95682641db19bafa177bb21e18ba4` | pushed | `feat: add frozen financial rule skills` |
-| Phase 6 | pending | pending | `feat: verify proof certificates before submission` |
+| Phase 6 | `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c` | pushed | `feat: verify proof certificates before submission` |
+| Phase 7 | pending | pending | `test: add FinOASIS end-to-end verification` |

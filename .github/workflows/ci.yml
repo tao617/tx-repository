@@ -37,6 +37,7 @@ jobs:
           bash -n scripts/run_agent_with_env.sh
           bash -n scripts/run_stateful_mock_smoke.sh
           bash -n scripts/run_concurrent_mock_smoke.sh
+          bash -n scripts/run_finoasis_mock_smoke.sh
           python scripts/prepare_bclass_matrix.py --help >/dev/null
           python scripts/run_bclass_plan.py --help >/dev/null
 
@@ -59,6 +60,8 @@ jobs:
             runtime_data/public/smoke-tasks.jsonl
           cp tests/fixtures/concurrent_smoke_tasks.jsonl \
             runtime_data/public/concurrent-smoke-tasks.jsonl
+          cp tests/fixtures/finoasis_smoke_tasks.jsonl \
+            runtime_data/public/finoasis-smoke-tasks.jsonl
       - name: Run no-credential stateful container path
         env:
           GATEWAY_DIAGNOSTICS: "1"
@@ -67,3 +70,5 @@ jobs:
             "ci-stateful-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" 18080
           scripts/run_concurrent_mock_smoke.sh \
             "ci-concurrent-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" 18081
+          scripts/run_finoasis_mock_smoke.sh \
+            "ci-finoasis-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" 18082
