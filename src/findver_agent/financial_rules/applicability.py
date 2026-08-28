@@ -148,9 +148,6 @@ def check_rule_applicability(
                 in str(getattr(evidence, "exact_text")).casefold()
             ]
             satisfied = bool(matching_refs)
-            if predicate.kind == "document_not_contains":
-                satisfied = not satisfied
-                matching_refs = list(document_by_ref) if satisfied else matching_refs
             predicate_results.append(
                 RulePredicateResult(
                     rule_id=rule.rule_id,

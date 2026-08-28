@@ -6,7 +6,6 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
 
 from findver_agent.config import FinOasisRuleCorpusConfig
@@ -157,26 +156,24 @@ class FrozenRuleCorpus:
         as_of_date: str,
         top_k: int,
     ) -> tuple[RuleSearchHit, ...]:
+        """Rank by textual relevance without making applicability decisions.
+
+        Jurisdiction and as-of date remain bounded request provenance. They are
+        intentionally not filters; each hit returns frozen scope metadata for the
+        downstream applicability checker.
+        """
+
         if not query.strip():
             raise RuleCorpusError("rule search query must not be empty")
+        if not jurisdiction.strip() or not as_of_date.strip():
+            raise RuleCorpusError("rule search scope context must not be empty")
         if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= 10:
             raise RuleCorpusError("rule search top_k must be between 1 and 10")
-        try:
-            effective = date.fromisoformat(as_of_date)
-        except ValueError as error:
-            raise RuleCorpusError("rule search as_of_date must be ISO YYYY-MM-DD") from error
         query_tokens = list(dict.fromkeys(_tokens(query)))
         if not query_tokens:
             raise RuleCorpusError("rule search query has no searchable tokens")
-        jurisdiction_key = jurisdiction.strip().casefold()
         scored: list[tuple[int, str, RuleRecord]] = []
         for record in self.records:
-            if record.jurisdiction.casefold() not in {jurisdiction_key, "all"}:
-                continue
-            if effective < record.effective_from or (
-                record.effective_to is not None and effective > record.effective_to
-            ):
-                continue
             title = _tokens(record.title)
             aliases = _tokens(" ".join(record.aliases))
             topic = _tokens(record.topic)
@@ -196,6 +193,10 @@ class FrozenRuleCorpus:
                 rule_id=record.rule_id,
                 score=score,
                 snippet=" ".join(record.text.split())[:240],
+                jurisdiction=record.jurisdiction,
+                entity_scope=record.entity_scope,
+                effective_from=record.effective_from,
+                effective_to=record.effective_to,
             )
             for score, _, record in scored[:top_k]
         )

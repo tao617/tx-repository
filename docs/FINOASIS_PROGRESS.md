@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation 3 — rule claim polarity
+- Phase: Draft PR remediation 4 — rule search reachability
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `6f68a4d3b16148870d11269d36cce3aae67d8820`
+- Current committed HEAD: `8de51bb35a1ab3312b8671e13ecf80ff1c58a201`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: rule claim-polarity remediation is not yet committed
-- Push status: Phases 0 through 8, closeout and remediations 1–2 pushed
-- Remote branch SHA: `6f68a4d3b16148870d11269d36cce3aae67d8820`
+- Worktree: rule search/predicate remediation is not yet committed
+- Push status: Phases 0 through 8, closeout and remediations 1–3 pushed
+- Remote branch SHA: `8de51bb35a1ab3312b8671e13ecf80ff1c58a201`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -150,10 +150,10 @@
   explicit root, enforces 4 MiB file bounds, checks configured manifest/records hashes,
   checks the manifest-to-records binding and verifies every rule-text source hash. It
   has no network, download, dynamic import, execution or write path.
-- Added deterministic static token search filtered by jurisdiction and effective date.
-  Search returns only bounded candidate metadata; only an explicit candidate read
-  persists the complete record in the Rule Evidence Ledger with corpus and record
-  hashes.
+- Added deterministic static token search. The current implementation ranks all frozen
+  records by relevance without scope/date prefiltering and returns bounded jurisdiction,
+  entity-scope and effective-interval metadata; only an explicit candidate read persists
+  the complete record in the Rule Evidence Ledger with corpus and record hashes.
 - Added mechanical applicability evaluation for effective date, jurisdiction, entity
   scope, required document predicates, missing metadata and explicit selected-rule
   conflicts. The complete certificate binds ordered rule/document references and its
@@ -290,6 +290,22 @@
   negative-claim seeding and strict-schema tests.
 - Focused rule/prompt/integration selection: 72 passed. Full repository: 546 passed in
   4.26s.
+
+### Draft PR remediation 4
+
+- Removed `document_not_contains` from the frozen rule predicate schema and deleted
+  the partial-evidence absence branch. Version 1 now permits only positive
+  `document_contains`; any negative predicate corpus fails closed during load.
+- Changed frozen rule search to rank all records only by token relevance. Jurisdiction,
+  entity scope and effective interval are returned as bounded candidate metadata rather
+  than being used as prefilters.
+- Persisted and exposed that candidate metadata while preserving full-rule-text prompt
+  isolation and explicit read-before-check behavior.
+- Added normal Agent-path tests that retrieve an expired US rule and a current EU rule
+  under a 2024 US claim, then produce replay-valid `not_applicable` certificates from
+  the effective-date and jurisdiction checks respectively.
+- Focused rule/search/state/integration selection: 56 passed. Full repository: 548
+  passed in 5.75s.
 
 ## Baseline tests
 
@@ -508,10 +524,10 @@
 
 ## Exact next step
 
-Commit and push rule claim polarity, then disable partial-evidence
-`document_not_contains` and remove rule-search scope/date hard filtering so the
-applicability checker can issue explicit negative certificates. Do not modify or merge
-PR #1, and do not execute a real model, Official Test, scorer or production rule corpus.
+Commit and push the rule-search reachability remediation. Then narrow document-only
+certificate semantics and repair the remaining FinDSL duration/scale/currency unit
+boundaries. Do not modify or merge PR #1, and do not execute a real model, Official
+Test, scorer or production rule corpus.
 
 ## Safe recovery commands
 
@@ -548,4 +564,5 @@ git diff --check
 | Closeout | `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c` | pushed | `docs: record FinOASIS draft PR` |
 | Review remediation 1 | `09c69449d1a3fe6f84307fd386e8c9da22888f53` | pushed | trusted specialist outcomes remain visible at submission |
 | Review remediation 2 | `6f68a4d3b16148870d11269d36cce3aae67d8820` | pushed | typed one-to-one numeric operand slots and threshold path |
-| Review remediation 3 | this checkpoint commit | pending | explicit rule claim polarity and four-way label mapping |
+| Review remediation 3 | `8de51bb35a1ab3312b8671e13ecf80ff1c58a201` | pushed | explicit rule claim polarity and four-way label mapping |
+| Review remediation 4 | this checkpoint commit | pending | positive-only predicates and scope-neutral rule retrieval |

@@ -20,7 +20,7 @@ class RulePredicate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     predicate_id: ReferenceId
-    kind: Literal["document_contains", "document_not_contains"]
+    kind: Literal["document_contains"]
     term: ShortText
     required: bool = True
 
@@ -101,6 +101,10 @@ class RuleSearchHit(BaseModel):
     rule_id: ReferenceId
     score: int = Field(gt=0, le=1_000_000)
     snippet: str = Field(min_length=1, max_length=240)
+    jurisdiction: ShortText
+    entity_scope: ShortText
+    effective_from: date
+    effective_to: date | None = None
 
 
 class RuleApplicabilityResult(str, Enum):

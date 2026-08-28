@@ -126,8 +126,9 @@ from the current ledgers and requires exact certificate equality.
 The bundled corpus includes the synthetic rule “a public issuer recognizes revenue when
 the identified performance obligation is satisfied.” A Knowledge path proceeds as:
 
-1. `search_financial_rules` filters the validated corpus by tokens, jurisdiction and
-   effective date and returns bounded candidate metadata.
+1. `search_financial_rules` ranks the validated corpus only by query-token relevance;
+   it does not prefilter by jurisdiction or effective date. Each bounded candidate
+   includes jurisdiction, entity scope and effective interval metadata.
 2. `read_financial_rules` persists the selected full record with corpus and record hashes.
 3. `check_rule_applicability` mechanically checks effective interval, jurisdiction,
    entity scope, required document predicates and explicit selected-rule conflicts.
@@ -136,7 +137,10 @@ the identified performance obligation is satisfied.” A Knowledge path proceeds
 
 Full rule text is never included in the model prompt. `undetermined` remains partial.
 During submission the certificate is recomputed from the frozen corpus and current
-document evidence. The fixture is synthetic and must not be presented as guidance.
+document evidence. The first schema permits only positive `document_contains`
+predicates; proving whole-report absence requires a future full-population search
+certificate and cannot be inferred from selected paragraphs. The fixture is synthetic
+and must not be presented as guidance.
 
 ## Submission and Review
 

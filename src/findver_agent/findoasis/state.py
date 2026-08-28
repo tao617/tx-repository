@@ -314,6 +314,10 @@ class RuleSearchHitRecord(BaseModel):
     rule_id: ReferenceId
     score: int = Field(gt=0, le=1_000_000)
     snippet: str = Field(min_length=1, max_length=240)
+    jurisdiction: ShortText
+    entity_scope: ShortText
+    effective_from: ShortText
+    effective_to: ShortText | None = None
 
 
 class RuleSearchRecord(BaseModel):

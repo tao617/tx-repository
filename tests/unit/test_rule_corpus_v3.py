@@ -102,18 +102,26 @@ def test_frozen_corpus_loads_hashes_sources_and_deterministic_search():
         query="performance obligation revenue",
         jurisdiction="US",
         as_of_date="2024-12-31",
-        top_k=3,
+        top_k=10,
     )
     second = corpus.search(
         query="performance obligation revenue",
         jurisdiction="US",
         as_of_date="2024-12-31",
-        top_k=3,
+        top_k=10,
     )
     assert first == second
     assert first[0].rule_id == "synthetic-us-revenue-current"
     assert all(len(hit.snippet) <= 240 for hit in first)
-    assert "synthetic-us-revenue-expired" not in {hit.rule_id for hit in first}
+    identifiers = {hit.rule_id for hit in first}
+    assert "synthetic-us-revenue-expired" in identifiers
+    assert "synthetic-eu-revenue-current" in identifiers
+    expired = next(
+        hit for hit in first if hit.rule_id == "synthetic-us-revenue-expired"
+    )
+    assert expired.jurisdiction == "US"
+    assert expired.effective_to is not None
+    assert expired.effective_to.isoformat() == "2019-12-31"
 
 
 @pytest.mark.parametrize("member", ["manifest", "records"])
@@ -168,6 +176,18 @@ def test_path_escape_unknown_fields_duplicate_ids_and_missing_source_are_rejecte
 
     records = json.loads((FIXTURE_ROOT / "records.json").read_text())
     records["records"][0]["source_reference"] = ""
+    manifest_sha, records_sha = rewrite_corpus(root, records)
+    with pytest.raises(RuleCorpusError, match="schema"):
+        FrozenRuleCorpus.load(
+            config(
+                root,
+                manifest_sha256=manifest_sha,
+                records_sha256=records_sha,
+            )
+        )
+
+    records = json.loads((FIXTURE_ROOT / "records.json").read_text())
+    records["records"][0]["predicates"][0]["kind"] = "document_not_contains"
     manifest_sha, records_sha = rewrite_corpus(root, records)
     with pytest.raises(RuleCorpusError, match="schema"):
         FrozenRuleCorpus.load(

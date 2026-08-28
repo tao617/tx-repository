@@ -988,6 +988,14 @@ class FinOASISAgent:
                     rule_id=hit.rule_id,
                     score=hit.score,
                     snippet=hit.snippet,
+                    jurisdiction=hit.jurisdiction,
+                    entity_scope=hit.entity_scope,
+                    effective_from=hit.effective_from.isoformat(),
+                    effective_to=(
+                        hit.effective_to.isoformat()
+                        if hit.effective_to is not None
+                        else None
+                    ),
                 )
                 for hit in hits
             ]

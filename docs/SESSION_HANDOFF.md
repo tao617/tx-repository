@@ -2,27 +2,28 @@
 
 ## Current state
 
-Phase `findoasis-review-remediation-3` completed locally: every rule-applicability
-obligation now records whether the claim expects the rule to apply or not apply. Final
-verification uses that polarity instead of treating every applicable rule as entailed.
+Phase `findoasis-review-remediation-4` completed locally: rule search is now
+scope-neutral relevance ranking, while effective date, jurisdiction and entity scope
+remain deterministic applicability checks. Partial selected paragraphs can no longer
+support a `document_not_contains` predicate.
 
-- Git commit at checkpoint start: `6f68a4d3b16148870d11269d36cce3aae67d8820`
+- Git commit at checkpoint start: `8de51bb35a1ab3312b8671e13ecf80ff1c58a201`
 - Branch: `feat/findoasis-obligation-skills`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
-- Worktree: remediation 3 implementation and checkpoint docs are ready to commit
+- Worktree: remediation 4 implementation and checkpoint docs are ready to commit
 
 ## Material changes
 
-- Added mandatory closed `expected_relation` metadata to applicability obligations.
-- Seeded positive `applies` and explicit negative `does_not_apply` claims.
-- Computed rule claim truth from certificate result × expected relation.
-- Exposed trusted `claim_relation_satisfied` in Finalization and Review.
-- Covered all four applicability-result/submitted-label combinations.
+- Restricted v1 rule predicates to positive `document_contains` only.
+- Removed jurisdiction/effective-date prefiltering from frozen rule search.
+- Added scope and effective interval to bounded candidate metadata and persisted state.
+- Proved normal Agent reachability of expired and wrong-jurisdiction rules.
+- Produced replay-valid `not_applicable` certificates for both negative checks.
 
 ## Tests passed
 
-- Focused rule/prompt/integration selection: 72 passed.
-- Full repository: 546 passed in 4.26s.
+- Focused rule/search/state/integration selection: 56 passed.
+- Full repository: 548 passed in 5.75s.
 - Compileall and `git diff --check`: passed.
 
 ## Tests failed or unavailable
@@ -41,11 +42,11 @@ cat docs/PROJECT_CONTRACT.md
 cat docs/STATE.yaml
 cat docs/SESSION_HANDOFF.md
 .venv/bin/python -m pytest -q -s -p no:cacheprovider \
-  --basetemp=.pytest_cache/remediation-3
+  --basetemp=.pytest_cache/remediation-4
 ```
 
 ## Next action
 
-Commit and push remediation 3. Then disable partial-evidence `document_not_contains`
-and remove rule-search jurisdiction/date hard filtering so out-of-scope rules remain
-reachable by the deterministic applicability checker.
+Commit and push remediation 4. Then narrow document-only certificate semantics and
+repair FinDSL CAGR duration conversion, scaled scalar handling and bare-dollar currency
+validation before the final comprehensive verification checkpoint.

@@ -62,6 +62,9 @@ AST-based tests inspect FinDSL and rule modules for dynamic execution, float ari
 network, subprocess and arbitrary write capabilities. Additional tests cover rule-root
 escape, report path confinement, immutable Registry behavior, strict action/config
 schemas, malicious table inputs, excessive AST structure and state/certificate tamper.
+Rule regressions also reject partial-evidence `document_not_contains` predicates and
+route expired and wrong-jurisdiction search candidates through the normal Agent path to
+explicit `not_applicable` certificates.
 Compose tests require read-only roots, dropped capabilities, no-new-privileges, only the
 existing mount targets, no Docker socket, no ports, Agent internal network only and
 Gateway-only egress.

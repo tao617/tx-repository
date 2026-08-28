@@ -567,6 +567,10 @@ def test_rule_candidates_and_read_evidence_are_exposed_only_to_the_next_skill():
                     rule_id="rule-1",
                     score=12,
                     snippet="bounded synthetic candidate snippet",
+                    jurisdiction="EU",
+                    entity_scope="bank",
+                    effective_from="2010-01-01",
+                    effective_to="2019-12-31",
                 )
             ],
         )
@@ -597,6 +601,9 @@ def test_rule_candidates_and_read_evidence_are_exposed_only_to_the_next_skill():
         state, (RULE_READ,), phase_budget="attempt 3/6"
     )[1]["content"]
     assert '"rule_id":"rule-1"' in read_prompt
+    assert '"jurisdiction":"EU"' in read_prompt
+    assert '"entity_scope":"bank"' in read_prompt
+    assert '"effective_to":"2019-12-31"' in read_prompt
     assert "bounded synthetic candidate snippet" in read_prompt
     assert '"rule_evidence_ref":"rule-evidence-0001"' not in read_prompt
 

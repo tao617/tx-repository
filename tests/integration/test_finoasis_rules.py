@@ -267,3 +267,143 @@ async def test_rule_search_read_and_applicability_certificate_are_gated(tmp_path
     )
     with pytest.raises(ValueError, match="differs from the frozen corpus"):
         orchestrator._finoasis_agent._validate_rule_state_against_corpus(candidate)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "rule_id",
+        "rule_query",
+        "document_fact",
+        "predicate_id",
+        "failed_check",
+    ),
+    [
+        (
+            "synthetic-us-revenue-expired",
+            "expired legacy delivery rule",
+            "delivery occurred",
+            "predicate:legacy-delivery",
+            "effective_date_check",
+        ),
+        (
+            "synthetic-eu-revenue-current",
+            "EU control transfer rule",
+            "control transfers",
+            "predicate:control-transfer",
+            "jurisdiction_check",
+        ),
+    ],
+)
+async def test_scope_mismatched_rules_remain_retrievable_for_negative_certificate(
+    tmp_path,
+    rule_id,
+    rule_query,
+    document_fact,
+    predicate_id,
+    failed_check,
+):
+    reports = tmp_path / f"reports-{rule_id}"
+    reports.mkdir()
+    (reports / "report.json").write_text(
+        json.dumps(
+            {
+                "context": [
+                    {
+                        "id": 0,
+                        "type": "text",
+                        "context": f"The report states that {document_fact}.",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    task = PublicTask(
+        example_id=f"finoasis-negative-{rule_id}",
+        statement=(
+            f"Under US GAAP, the {rule_query} applied to a public issuer on "
+            f"2024-12-31 because {document_fact}."
+        ),
+        report="report.json",
+    )
+    backend = SequenceBackend(
+        [
+            action(
+                "search_report",
+                {"query": document_fact, "top_k": 1},
+                "obl-0001",
+            ),
+            action("read_paragraphs", {"paragraph_ids": [0]}, "obl-0001"),
+            action(
+                "search_financial_rules",
+                {
+                    "query": rule_query,
+                    "jurisdiction": "US",
+                    "as_of_date": "2024-12-31",
+                    "top_k": 4,
+                },
+                "obl-0002",
+            ),
+            action(
+                "read_financial_rules",
+                {"rule_ids": [rule_id]},
+                "obl-0002",
+            ),
+            action(
+                "check_rule_applicability",
+                {
+                    "rule_evidence_refs": ["rule-evidence-0001"],
+                    "document_evidence_refs": ["report-paragraph:0"],
+                    "jurisdiction": "US",
+                    "effective_date": "2024-12-31",
+                    "entity_scope": "public issuer",
+                    "applicability_predicate_ids": [predicate_id],
+                },
+                "obl-0003",
+            ),
+            action(
+                "submit_answer",
+                {
+                    "label": "refuted",
+                    "evidence_ids": [0],
+                    "explanation": (
+                        "The retrieved rule is mechanically outside the claim scope."
+                    ),
+                },
+                "obl-0004",
+            ),
+        ]
+    )
+    run_dir = tmp_path / f"run-{rule_id}"
+    rule_root = Path("tests/fixtures/finoasis_rule_corpus").resolve()
+    orchestrator = AgentOrchestrator(
+        backend=backend,
+        generation=GenerationConfig(prompt_budget_tokens=8192),
+        agent_config=rule_config(rule_root),
+        report_store=ReportStore(reports),
+        run_dir=run_dir,
+    )
+
+    prediction = await orchestrator.run_question(task)
+    state = FinOASISStateStore(run_dir / "state").load_or_create(
+        task,
+        orchestrator._finoasis_agent._resume_identity(task),
+        6,
+        exploration_steps=5,
+        finalization_steps=1,
+    )
+
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert prediction.label.value == "refuted"
+    hits = {hit.rule_id: hit for hit in state.rule_search_history[0].hits}
+    assert rule_id in hits
+    assert hits[rule_id].jurisdiction in {"US", "EU"}
+    certificate = state.rule_applicability_certificate_ledger[
+        "rule-certificate-0001"
+    ]
+    assert certificate.result is RuleApplicabilityResult.NOT_APPLICABLE
+    assert getattr(certificate, failed_check) is False
+    final = state.final_verification_certificate_ledger["final-certificate-0001"]
+    assert final.label_supported is True
+    assert not backend.responses

@@ -773,6 +773,10 @@ Choose exactly one currently allowed action. Target a listed obligation ID. Retu
                     {
                         "rule_id": hit.rule_id,
                         "score": hit.score,
+                        "jurisdiction": hit.jurisdiction,
+                        "entity_scope": hit.entity_scope,
+                        "effective_from": hit.effective_from,
+                        "effective_to": hit.effective_to,
                         "already_read": any(
                             evidence.rule_id == hit.rule_id
                             for evidence in state.rule_evidence_ledger.values()
