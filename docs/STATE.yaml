@@ -1,9 +1,19 @@
 project: findver-agent
-current_phase: findoasis-review-remediation-complete
+current_phase: findoasis-formal-human-review-ready
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-review-remediation-5-and-final-local-verification
-last_git_commit: 04ffb9c6cfdbcadd34e5af51663f7a5acc162aac
+last_completed_phase: findoasis-review-remediation-and-verification-closeout
+last_implementation_commit: 04ffb9c6cfdbcadd34e5af51663f7a5acc162aac
+last_verified_checkpoint_commit: ce657d9bad8a118bd12c25095dfe5cf288652731
+live_head_command: git rev-parse HEAD
+remote_verification:
+  branch: feat/findoasis-obligation-skills
+  checkpoint_commit: ce657d9bad8a118bd12c25095dfe5cf288652731
+  workflow_runs:
+  - 33137822373
+  - 33137820230
+  conclusion: success
+worktree_expected: clean
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -764,8 +774,15 @@ known_issues:
   and unresolved by design.
 - Production rule sources and licences, real-model evaluation, Official Test V2 access,
   certificate sidecar, and scorer handoff remain separately unauthorized.
+- Knowledge certificates currently prove versioned rule grounding and applicability,
+  not arbitrary accounting or regulatory conclusions.
+- Currency-less scaled thresholds such as 100 million parse as scaled scalars and fail
+  closed pending a separately designed contextual amount or count type.
+- Aggregate certificate status is not yet stratified into provenance-only, numeric,
+  rule and mixed-specialist verification counts.
 next_actions:
-- Push the final review checkpoint, wait for GitHub Actions on the resulting HEAD, and
-  leave Draft PR 2 ready for formal review without merging or running a real model.
+- Conduct formal human review of Draft PR 2. Draft promotion, merge, real-model work,
+  production rules, scorer access and Official Test V2 access require separate explicit
+  decisions.
 blocked_items: []
-last_updated: '2026-08-28T11:02:53+08:00'
+last_updated: '2026-08-28T11:42:01+08:00'

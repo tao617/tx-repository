@@ -63,7 +63,7 @@ The static Registry contains exactly these Skills:
 | Report | `read_paragraphs` | unread search candidate |
 | Table | `read_table_region` | structurally valid relevant table candidate |
 | Numeric | `bind_financial_value` | exact read evidence and numeric/unit obligation |
-| Numeric | `execute_financial_program` | ready numeric-operation obligation and at least two unambiguous bound values |
+| Numeric | `execute_financial_program` | ready numeric-operation obligation whose typed operand dependencies have a complete one-to-one slot assignment; non-report operands may use validated `ClaimValueRef`s or allowlisted `ConstantRef`s |
 | Knowledge | `search_financial_rules` | active domain-rule obligation and validated corpus |
 | Knowledge | `read_financial_rules` | verified search candidate |
 | Knowledge | `check_rule_applicability` | ready rule/document/scope inputs |

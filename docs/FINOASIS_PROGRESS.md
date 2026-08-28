@@ -2,15 +2,20 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation complete — final review checkpoint
+- Phase: Draft PR remediation verified — ready for formal human review
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
+- Last code-changing remediation commit: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
+- Last verified checkpoint before this documentation sync:
+  `ce657d9bad8a118bd12c25095dfe5cf288652731`
+- Live HEAD: resolve with `git rev-parse HEAD`; documentation-only commits after the
+  verified checkpoint are intentionally not SHA-pinned in this file.
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: clean before this final documentation checkpoint
-- Push status: Phases 0 through 8, closeout and remediations 1–5 pushed
-- Remote branch SHA: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
+- Worktree expected: clean after committing this documentation synchronization
+- Push status: Phases 0 through 8, remediations 1–5 and review closeout pushed
+- Remote verification: workflow runs `33137822373` and `33137820230` completed
+  successfully for checkpoint `ce657d9bad8a118bd12c25095dfe5cf288652731`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -556,13 +561,23 @@
   or remain explicitly unauthorized for scorer handoff.
 - Formal financial rule sources, licences, versions and review remain unavailable and
   out of scope.
+- The Knowledge specialist proves versioned rule grounding and applicability, not an
+  arbitrary accounting or regulatory conclusion. A broader semantic path requires a
+  separately reviewed typed conclusion schema, required fact slots and exception logic.
+- A claim threshold such as `100 million` without a currency or typed unit currently
+  parses as a scaled scalar and correctly fails closed. A contextual amount/count type
+  or trusted report-unit reconciliation is required before claiming coverage of this
+  numeric expression class in a real-model development experiment.
+- Aggregate output distinguishes final certificate status but not provenance-only,
+  numeric-relation, rule-relation and mixed-specialist verification. Add those bounded
+  counters before reporting a single headline verified-rate metric.
 
 ## Exact next step
 
-Push this final documentation checkpoint, wait for the final GitHub Actions run, and
-leave PR #2 in Draft for formal review. A later reviewer may decide whether to promote
-it from Draft; do not merge it, modify PR #1, or execute a real model, Official Test,
-scorer or production rule corpus under this checkpoint.
+Conduct formal human review of Draft PR #2. Promotion from Draft, merge, production-rule
+work and any real-model development experiment require separate explicit decisions.
+Do not modify PR #1 or access Official Test V2, a scorer or production rule corpus under
+this checkpoint.
 
 ## Safe recovery commands
 
@@ -571,6 +586,8 @@ cd /home/asus/2/tx-repository
 pwd
 git status --short
 git branch --show-current
+git rev-parse HEAD
+git rev-parse origin/feat/findoasis-obligation-skills
 git log --oneline -10
 cat AGENTS.md
 cat docs/PROJECT_CONTRACT.md
@@ -602,4 +619,7 @@ git diff --check
 | Review remediation 3 | `8de51bb35a1ab3312b8671e13ecf80ff1c58a201` | pushed | explicit rule claim polarity and four-way label mapping |
 | Review remediation 4 | `9e82f20d5662b60ddbdc7259af30acc96123859d` | pushed | positive-only predicates and scope-neutral rule retrieval |
 | Review remediation 5 | `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac` | pushed | provenance-only document scope and FinDSL unit boundaries |
-| Review closeout | this checkpoint commit | pending | comprehensive Python, compatibility and Docker verification record |
+| Review closeout | `ce657d9bad8a118bd12c25095dfe5cf288652731` | pushed and CI verified | comprehensive Python, compatibility and Docker verification record |
+
+The documentation synchronization that contains this table is intentionally identified
+by `git rev-parse HEAD` instead of embedding its own impossible-to-precompute commit SHA.

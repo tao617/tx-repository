@@ -7,9 +7,14 @@ The branch is ready for formal review but PR #2 must remain Draft until a review
 explicitly promotes it.
 
 - Last implementation commit: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
+- Last verified checkpoint before this documentation sync:
+  `ce657d9bad8a118bd12c25095dfe5cf288652731`
+- Live HEAD: resolve with `git rev-parse HEAD`
 - Branch: `feat/findoasis-obligation-skills`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
-- Worktree: final checkpoint documentation is ready to commit
+- Remote CI: workflow runs `33137822373` and `33137820230` succeeded for the verified
+  checkpoint
+- Worktree expected: clean after this documentation synchronization is committed
 
 ## Material changes
 
@@ -34,11 +39,22 @@ explicitly promotes it.
 - No product test failure.
 - No real model, Official Test V2, Private Scorer or production rule corpus was used.
 
+## Pre-experiment boundaries
+
+- Knowledge certificates cover versioned rule grounding and applicability, not arbitrary
+  accounting conclusions.
+- Currency-less scaled claim thresholds currently fail closed and need a separately
+  typed contextual amount/count design or trusted unit reconciliation.
+- Aggregate verification metrics still need provenance/numeric/rule/mixed stratification
+  before a headline verified-rate claim.
+
 ## Recovery protocol
 
 ```bash
 cd /home/asus/2/tx-repository
 git status --short
+git rev-parse HEAD
+git rev-parse origin/feat/findoasis-obligation-skills
 git log --oneline -10
 cat AGENTS.md
 cat docs/PROJECT_CONTRACT.md
@@ -50,6 +66,6 @@ cat docs/SESSION_HANDOFF.md
 
 ## Next action
 
-Push this checkpoint and confirm GitHub Actions on the resulting HEAD. Leave PR #2 in
-Draft for formal review; do not merge, access Official Test V2, invoke the Private
-Scorer, load a production rule corpus or run a real model under this checkpoint.
+Conduct formal human review of Draft PR #2. Do not promote, merge, access Official Test
+V2, invoke the Private Scorer, load a production rule corpus or run a real model without
+a separate explicit decision.
