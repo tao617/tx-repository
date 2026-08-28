@@ -128,6 +128,9 @@ Frozen hashes checked during the final audit:
 - Natural-language selection of evidence, FinDSL operands and relevant rules remains an
   experimental model responsibility. Deterministic replay proves consistency of the
   selected inputs, not that every semantically relevant input was selected.
+- Document-only final certificates explicitly state `provenance_only` and
+  `document_semantics_verified=false`; their internal `verified` result is a protocol-
+  integrity status and is not a deterministic claim-truth assertion.
 - The bundled corpus is synthetic and provides no production financial, accounting,
   legal or regulatory authority. A production corpus requires explicit authorization,
   reviewed sources, licences, version/provenance policy, domain-owner sign-off and a

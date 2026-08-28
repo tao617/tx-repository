@@ -246,6 +246,90 @@ def test_cagr_and_rounding_are_explicit_and_deterministic():
     )
 
 
+def test_cagr_converts_twenty_four_months_to_two_years():
+    common = {
+        "value-0001": value("value-0001", "121", period="FY2024"),
+        "value-0002": value("value-0002", "100", period="FY2022"),
+    }
+    years = {
+        **common,
+        "value-0003": value(
+            "value-0003",
+            "2",
+            numeric_type="duration",
+            currency="unknown",
+            unit="year",
+            period="unknown",
+        ),
+    }
+    months = {
+        **common,
+        "value-0003": value(
+            "value-0003",
+            "24",
+            numeric_type="duration",
+            currency="unknown",
+            unit="months",
+            period="unknown",
+        ),
+    }
+    root = program(
+        "cagr",
+        *years,
+        rounding={"digits": 8, "mode": "half_even"},
+    )
+
+    by_year = execute(
+        root,
+        years,
+        expected="10",
+        claim_type="percentage",
+        claim_currency="unknown",
+        claim_unit="percentage",
+    )
+    by_month = execute(
+        root,
+        months,
+        expected="10",
+        claim_type="percentage",
+        claim_currency="unknown",
+        claim_unit="percentage",
+    )
+
+    assert by_year.certificate.result == "10"
+    assert by_month.certificate.result == by_year.certificate.result
+
+
+def test_scaled_scalar_operand_is_rejected_before_operator_execution():
+    values = {
+        "value-0001": value(
+            "value-0001",
+            "10",
+            numeric_type="scalar",
+            currency="unknown",
+            unit="one",
+            scale="million",
+        ),
+        "value-0002": value(
+            "value-0002",
+            "2",
+            numeric_type="scalar",
+            currency="unknown",
+            unit="one",
+        ),
+    }
+
+    with pytest.raises(FinDSLExecutionError, match="scalar operands require scale one"):
+        execute(
+            program("multiply", *values),
+            values,
+            expected="20",
+            claim_type="scalar",
+            claim_currency="unknown",
+            claim_unit="one",
+        )
+
+
 @pytest.mark.parametrize(
     ("op", "numbers", "expected"),
     [

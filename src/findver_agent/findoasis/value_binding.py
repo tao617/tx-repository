@@ -106,6 +106,8 @@ class ValueRef(BaseModel):
                 raise ValueError("boolean ValueRef must be true or false")
         elif not re.fullmatch(DECIMAL_PATTERN, self.normalized_value):
             raise ValueError("numeric ValueRef requires a canonical Decimal string")
+        if self.numeric_type == "scalar" and _scale_family(self.scale) != "one":
+            raise ValueError("scalar ValueRef requires scale one")
         return self
 
     @property
@@ -172,6 +174,7 @@ _SCALE_ALIASES = {
 }
 
 _CURRENCY_COMPATIBILITY = {
+    "$": {"usd"},
     "us$": {"usd"},
     "c$": {"cad"},
     "a$": {"aud"},
@@ -292,6 +295,11 @@ def _validate_detected_metadata(
             raise ValueBindingError(
                 "scale metadata conflicts with the exact evidence token"
             )
+    if (
+        arguments.numeric_type == "scalar"
+        and _scale_family(arguments.scale) != "one"
+    ):
+        raise ValueBindingError("scalar values require scale one")
 
     if unit_token is None:
         return

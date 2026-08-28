@@ -114,7 +114,9 @@ Example: verify that 2024 revenue exceeds 2023 revenue.
 The executor uses Decimal precision 50 and checks AST depth (maximum 4), nodes and
 operands (maximum 32), reference uniqueness, types, units, currencies, scales, periods,
 denominators, rounding and tolerance. Percentage points are the internal percentage
-unit; 100 basis points equal one percentage point. A successful execution stores the
+unit; 100 basis points equal one percentage point. Scalar operands must use scale one;
+CAGR duration operands convert months by 12 and days by 365 into years. A successful
+execution stores the
 canonical program and a `NumericCertificate` containing ordered operands, source
 evidence, normalized snapshots, result metadata, check outcomes and claim relation.
 
@@ -154,7 +156,13 @@ deltas. `ClaimCertificateVerifier` checks:
 - canonical program, corpus, rule source, scope and envelope hashes;
 - deterministic replay outcome versus the submitted label.
 
-A verified submission receives a complete final certificate and may close immediately.
+`verified` on a final certificate means that Runtime provenance, graph, hash and any
+specialist replay checks passed. Every certificate explicitly records
+`document_verification_scope=provenance_only` and
+`document_semantics_verified=false`: for an IE-only path, natural-language
+entailment/refutation remains the model's judgment and `label_supported` is `null`.
+This status must not be described as deterministic semantic verification of arbitrary
+paragraph evidence. A protocol-verified submission may close immediately.
 Selective Review is triggered by specialist certificates, non-high confidence, risk,
 forced finalization or a prior verifier failure. The verified draft leaves the final
 obligation pending. A Review repair receives a new certificate; parse/model/Skill

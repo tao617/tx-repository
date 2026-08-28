@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 from enum import Enum
-from typing import Sequence
+from typing import Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -118,6 +118,8 @@ class ClaimVerificationCertificate(BaseModel):
         default_factory=list, max_length=256
     )
     document_check_passed: bool
+    document_verification_scope: Literal["provenance_only"] = "provenance_only"
+    document_semantics_verified: Literal[False] = False
     numeric_check_passed: bool | None
     rule_check_passed: bool | None
     label_supported: bool | None
@@ -621,7 +623,14 @@ def verify_claim_submission(
         result = ClaimVerificationResult.FAILED
     else:
         result = ClaimVerificationResult.VERIFIED
-        diagnostics.append("all deterministic final claim checks passed")
+        if numeric_support or rule_support:
+            diagnostics.append(
+                "all deterministic provenance and specialist checks passed"
+            )
+        else:
+            diagnostics.append(
+                "document provenance passed; label semantics remain model-judged"
+            )
 
     numeric_check = None if not numeric_obligations else not bool(
         set(failure_codes)

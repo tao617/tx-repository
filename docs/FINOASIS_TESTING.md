@@ -39,7 +39,8 @@ v3 pass.
 
 ### Submission
 
-- IE, numeric, knowledge and mixed verified final certificates;
+- IE provenance-only final certificates plus numeric, knowledge and mixed
+  specialist-replayed final certificates;
 - entailed and refuted specialist outcomes;
 - deterministic program and applicability replay;
 - coherent program/result/rule/envelope tampering;
@@ -65,6 +66,10 @@ schemas, malicious table inputs, excessive AST structure and state/certificate t
 Rule regressions also reject partial-evidence `document_not_contains` predicates and
 route expired and wrong-jurisdiction search candidates through the normal Agent path to
 explicit `not_applicable` certificates.
+Document-only regressions deliberately submit an unrelated but valid read paragraph and
+assert that the certificate reports provenance-only scope, false semantic verification
+and no mechanical label support. Numeric regressions equate 24 months with two years in
+CAGR, reject scaled scalar operands and reject EUR metadata for a bare-dollar value.
 Compose tests require read-only roots, dropped capabilities, no-new-privileges, only the
 existing mount targets, no Docker socket, no ports, Agent internal network only and
 Gateway-only egress.

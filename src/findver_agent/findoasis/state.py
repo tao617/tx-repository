@@ -256,6 +256,12 @@ class NumericValueLedgerEntry(BaseModel):
                 raise ValueError("boolean ledger values must be true or false")
         elif not re.fullmatch(DECIMAL_PATTERN, self.normalized_value):
             raise ValueError("numeric ledger values require canonical Decimal strings")
+        if self.numeric_type == "scalar" and self.scale.strip().casefold() not in {
+            "1",
+            "one",
+            "ones",
+        }:
+            raise ValueError("scalar ledger values require scale one")
         return self
 
 

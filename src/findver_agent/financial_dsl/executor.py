@@ -201,6 +201,23 @@ def _base_value(item: _Evaluation) -> Decimal:
     return item.value * _scale_factor(item.scale)
 
 
+def _duration_in_years(item: _Evaluation) -> Decimal:
+    if isinstance(item.value, (bool, str)):
+        raise FinDSLExecutionError("cagr duration must be numeric")
+    if item.numeric_type == "scalar":
+        return item.value
+    if item.numeric_type != "duration":
+        raise FinDSLExecutionError("cagr requires a duration or scalar operand")
+    unit = _normalized_name(item.unit)
+    if unit in {"year", "years"}:
+        return item.value
+    if unit in {"month", "months"}:
+        return item.value / Decimal(12)
+    if unit in {"day", "days"}:
+        return item.value / Decimal(365)
+    raise FinDSLExecutionError("cagr duration unit must be year, month, or day")
+
+
 def _from_base(value: Decimal, scale: str) -> Decimal:
     return value / _scale_factor(scale)
 
@@ -359,6 +376,12 @@ def _leaf(
             diagnostics=[],
         )
         kind = "constant_ref"
+    if result.numeric_type in {"scalar", "duration"} and _scale_factor(
+        result.scale
+    ) != Decimal(1):
+        raise FinDSLExecutionError(
+            f"{result.numeric_type} operands require scale one"
+        )
     result.snapshots.append(
         OperandSnapshot(
             ref=expression.ref,
@@ -698,7 +721,7 @@ class _Executor:
         elif op is FinancialOperator.CAGR:
             _require_same_dimension(items[:2])
             ending, beginning = _base_value(items[0]), _base_value(items[1])
-            years = _base_value(items[2])
+            years = _duration_in_years(items[2])
             if beginning <= 0 or ending <= 0:
                 raise FinDSLExecutionError("cagr requires positive beginning and ending values")
             if years <= 0 or items[2].numeric_type not in {"scalar", "duration"}:

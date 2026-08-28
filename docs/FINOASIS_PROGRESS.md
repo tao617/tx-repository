@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation 4 — rule search reachability
+- Phase: Draft PR remediation 5 — document scope and FinDSL units
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `8de51bb35a1ab3312b8671e13ecf80ff1c58a201`
+- Current committed HEAD: `9e82f20d5662b60ddbdc7259af30acc96123859d`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: rule search/predicate remediation is not yet committed
-- Push status: Phases 0 through 8, closeout and remediations 1–3 pushed
-- Remote branch SHA: `8de51bb35a1ab3312b8671e13ecf80ff1c58a201`
+- Worktree: document-scope and FinDSL-unit remediation is not yet committed
+- Push status: Phases 0 through 8, closeout and remediations 1–4 pushed
+- Remote branch SHA: `9e82f20d5662b60ddbdc7259af30acc96123859d`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -307,6 +307,24 @@
 - Focused rule/search/state/integration selection: 56 passed. Full repository: 548
   passed in 5.75s.
 
+### Draft PR remediation 5
+
+- Made the final document boundary explicit: every final certificate records
+  `document_verification_scope=provenance_only` and
+  `document_semantics_verified=false`. Document-only labels retain `label_supported=null`;
+  Runtime `verified` means protocol/provenance integrity, not deterministic IE truth.
+- Updated terminal Prompt and Review draft wording so the model sees the same boundary.
+  Added an integration test where a valid but unrelated paragraph receives only
+  provenance verification and no mechanical label support.
+- Converted CAGR duration operands to years (`months / 12`, `days / 365`) and proved
+  that 24 months equals two years under identical deterministic rounding.
+- Rejected non-unit scale for scalar ValueRefs at binding, durable state and FinDSL leaf
+  evaluation, preventing raw/base quantity disagreement across operators.
+- Defined bare `$` as USD in report ValueRef binding and added a regression rejecting
+  supplied EUR metadata for `$10`.
+- Focused document/numeric/prompt/integration selection: 120 passed. Full repository:
+  553 passed in 6.19s.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -524,10 +542,10 @@
 
 ## Exact next step
 
-Commit and push the rule-search reachability remediation. Then narrow document-only
-certificate semantics and repair the remaining FinDSL duration/scale/currency unit
-boundaries. Do not modify or merge PR #1, and do not execute a real model, Official
-Test, scorer or production rule corpus.
+Commit and push the document-scope/FinDSL-unit remediation. Then run the comprehensive
+Python, Docker, security and compatibility gates, update the Draft PR record and leave
+the branch ready for formal review. Do not modify or merge PR #1, and do not execute a
+real model, Official Test, scorer or production rule corpus.
 
 ## Safe recovery commands
 
@@ -565,4 +583,5 @@ git diff --check
 | Review remediation 1 | `09c69449d1a3fe6f84307fd386e8c9da22888f53` | pushed | trusted specialist outcomes remain visible at submission |
 | Review remediation 2 | `6f68a4d3b16148870d11269d36cce3aae67d8820` | pushed | typed one-to-one numeric operand slots and threshold path |
 | Review remediation 3 | `8de51bb35a1ab3312b8671e13ecf80ff1c58a201` | pushed | explicit rule claim polarity and four-way label mapping |
-| Review remediation 4 | this checkpoint commit | pending | positive-only predicates and scope-neutral rule retrieval |
+| Review remediation 4 | `9e82f20d5662b60ddbdc7259af30acc96123859d` | pushed | positive-only predicates and scope-neutral rule retrieval |
+| Review remediation 5 | this checkpoint commit | pending | provenance-only document scope and FinDSL unit boundaries |

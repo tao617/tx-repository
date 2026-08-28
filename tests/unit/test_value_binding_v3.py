@@ -302,6 +302,7 @@ def test_trusted_unit_or_period_ambiguity_blocks_mandatory_binding():
         ),
         ("$1 million", {"scale": "thousand"}, "scale metadata"),
         ("€10", {"currency": "USD"}, "currency metadata"),
+        ("$10", {"currency": "EUR", "unit": "EUR"}, "currency metadata"),
     ],
 )
 def test_explicit_evidence_markers_cannot_conflict_with_supplied_metadata(
@@ -342,6 +343,20 @@ def test_duration_and_count_literals_remain_decimal_bound():
     )
     assert count.normalized_value == "1200"
 
+
+def test_scaled_scalar_value_is_rejected_at_binding_boundary():
+    with pytest.raises(ValueBindingError, match="scalar values require scale one"):
+        bind_financial_value(
+            _arguments(
+                "10 million",
+                numeric_type="scalar",
+                currency="unknown",
+                unit="one",
+                scale="million",
+            ),
+            _evidence("The multiplier was 10 million."),
+            value_id="value-scaled-scalar",
+        )
 
 @pytest.mark.parametrize(
     ("raw_value", "numeric_type", "unit", "normalized"),

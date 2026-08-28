@@ -223,6 +223,49 @@ async def test_unknown_final_evidence_fails_and_cannot_become_fallback(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_unrelated_document_evidence_receives_provenance_not_semantic_verification(
+    tmp_path,
+):
+    agent_config = config(exploration=2, finalization=1)
+    task, _, run_dir, orchestrator = fixture(
+        tmp_path,
+        agent_config=agent_config,
+        responses=[
+            action(
+                "search_report",
+                {"query": "unrelated background", "top_k": 1},
+                "obl-0001",
+            ),
+            action("read_paragraphs", {"paragraph_ids": [1]}, "obl-0001"),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [1],
+                    "explanation": "The model selected this paragraph for its IE label.",
+                },
+                "obl-0002",
+            ),
+        ],
+    )
+
+    prediction = await orchestrator.run_question(task)
+    state = load_state(task, run_dir, orchestrator, agent_config)
+    certificate = state.final_verification_certificate_ledger[
+        "final-certificate-0001"
+    ]
+
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert certificate.document_verification_scope == "provenance_only"
+    assert certificate.document_semantics_verified is False
+    assert certificate.label_supported is None
+    assert any(
+        "label semantics remain model-judged" in diagnostic
+        for diagnostic in certificate.diagnostics
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("review_response", ["not-json", None])
 async def test_review_uses_only_a_certificate_verified_draft(
     tmp_path, review_response
@@ -275,7 +318,13 @@ async def test_review_uses_only_a_certificate_verified_draft(
     prediction = await orchestrator.run_question(task)
     state = load_state(task, run_dir, orchestrator, agent_config)
 
-    assert "Verified draft (present only when Runtime certificate-bound)" in (
+    assert "Protocol-verified draft (certificate integrity" in (
+        backend.requests[3][1]["content"]
+    )
+    assert '"document_verification_scope":"provenance_only"' in (
+        backend.requests[3][1]["content"]
+    )
+    assert '"document_semantics_verified":false' in (
         backend.requests[3][1]["content"]
     )
     assert '"certificate_ref":"final-certificate-0001"' in (
