@@ -25,8 +25,21 @@ RetrieverName = Literal[
     "hybrid-rrf",
 ]
 RetrievalTopK = Literal[3, 5, 10]
-ProtocolVersion = Literal["v1", "v2"]
+ProtocolVersion = Literal["v1", "v2", "v3"]
 ReviewPolicy = Literal["none", "mandatory", "selective"]
+FinOasisSkillName = Literal[
+    "search_report",
+    "read_paragraphs",
+    "read_table_region",
+    "bind_financial_value",
+    "execute_financial_program",
+    "search_financial_rules",
+    "read_financial_rules",
+    "check_rule_applicability",
+    "submit_answer",
+]
+
+
 class ThinkingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -125,6 +138,157 @@ class LongContextConfig(BaseModel):
     preload_as_evidence: Literal[False] = False
 
 
+class FinOasisSkillBudgetsConfig(BaseModel):
+    """Per-Skill limits for the reviewed protocol-v3 registry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    search_report: int = Field(ge=0, le=32)
+    read_paragraphs: int = Field(ge=0, le=32)
+    read_table_region: int = Field(ge=0, le=32)
+    bind_financial_value: int = Field(ge=0, le=32)
+    execute_financial_program: int = Field(ge=0, le=32)
+    search_financial_rules: int = Field(ge=0, le=32)
+    read_financial_rules: int = Field(ge=0, le=32)
+    check_rule_applicability: int = Field(ge=0, le=32)
+    submit_answer: int = Field(ge=0, le=8)
+
+
+class FinOasisObligationPolicyConfig(BaseModel):
+    """Closed policy choices; none of these are model-controlled switches."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    seeding: Literal["conservative"]
+    skill_exposure: Literal["dynamic", "always_exposed_ablation"]
+    model_may_open_obligations: Literal[True]
+    model_may_satisfy_obligations: Literal[False]
+    model_may_waive_mandatory: Literal[False]
+    normal_submit_requires_all_mandatory: Literal[True]
+    budget_exhausted_submit: Literal["low_confidence_best_effort"]
+
+
+class FinOasisRuleCorpusConfig(BaseModel):
+    """Configuration identity for a local, frozen rule corpus.
+
+    Runtime containment and hash verification are deliberately implemented by the
+    corpus loader.  This schema nevertheless rules out URLs and ambiguous absolute
+    corpus-member paths before execution is possible.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool
+    rule_root: Path | None = None
+    manifest_path: Path | None = None
+    records_path: Path | None = None
+    corpus_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    manifest_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    records_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    read_only: Literal[True]
+    network_fallback: Literal[False]
+
+    @model_validator(mode="after")
+    def corpus_identity_is_complete_or_absent(self) -> "FinOasisRuleCorpusConfig":
+        identity = (
+            self.rule_root,
+            self.manifest_path,
+            self.records_path,
+            self.corpus_id,
+            self.manifest_sha256,
+            self.records_sha256,
+        )
+        if self.enabled and any(value is None for value in identity):
+            raise ValueError("enabled rule_corpus requires complete path, ID, and hashes")
+        if not self.enabled and any(value is not None for value in identity):
+            raise ValueError("disabled rule_corpus cannot configure path, ID, or hashes")
+        if not self.enabled:
+            return self
+
+        assert self.rule_root is not None
+        assert self.manifest_path is not None
+        assert self.records_path is not None
+        if not self.rule_root.is_absolute() or self.rule_root == Path("/"):
+            raise ValueError("rule_root must be a confined absolute directory")
+        if ".." in self.rule_root.parts:
+            raise ValueError("rule_root cannot contain parent traversal")
+        for name, path in (
+            ("manifest_path", self.manifest_path),
+            ("records_path", self.records_path),
+        ):
+            if path == Path(".") or path.is_absolute() or ".." in path.parts:
+                raise ValueError(f"{name} must be a traversal-free path relative to rule_root")
+            if urlparse(str(path)).scheme:
+                raise ValueError(f"{name} must be a local path")
+        if self.manifest_path == self.records_path:
+            raise ValueError("manifest_path and records_path must be distinct")
+        return self
+
+
+class FinOasisConfig(BaseModel):
+    """Explicit opt-in boundary for experimental protocol v3."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    experimental: Literal[True]
+    official_test_authorized: Literal[False]
+    real_model_execution_authorized: Literal[False]
+    scorer_handoff_authorized: Literal[False]
+    enabled_skills: tuple[FinOasisSkillName, ...] = Field(min_length=1, max_length=9)
+    skill_budgets: FinOasisSkillBudgetsConfig
+    obligation_policy: FinOasisObligationPolicyConfig
+    rule_corpus: FinOasisRuleCorpusConfig
+
+    @model_validator(mode="after")
+    def allowlist_budgets_and_dependencies_are_consistent(self) -> "FinOasisConfig":
+        enabled = set(self.enabled_skills)
+        if len(enabled) != len(self.enabled_skills):
+            raise ValueError("enabled_skills cannot contain duplicates")
+        if "submit_answer" not in enabled:
+            raise ValueError("enabled_skills must include submit_answer")
+
+        for skill_name, budget in self.skill_budgets.model_dump().items():
+            if skill_name in enabled and budget < 1:
+                raise ValueError(f"enabled Skill {skill_name} requires a positive budget")
+            if skill_name not in enabled and budget != 0:
+                raise ValueError(f"disabled Skill {skill_name} must have a zero budget")
+
+        prerequisites = {
+            "read_financial_rules": {"search_financial_rules"},
+            "check_rule_applicability": {"read_financial_rules"},
+            "execute_financial_program": {"bind_financial_value"},
+        }
+        for skill_name, required in prerequisites.items():
+            missing = required - enabled if skill_name in enabled else set()
+            if missing:
+                names = ", ".join(sorted(missing))
+                raise ValueError(f"enabled Skill {skill_name} requires {names}")
+        if "bind_financial_value" in enabled and not enabled.intersection(
+            {"read_paragraphs", "read_table_region"}
+        ):
+            raise ValueError(
+                "enabled Skill bind_financial_value requires a report-reading Skill"
+            )
+
+        rule_skills = {
+            "search_financial_rules",
+            "read_financial_rules",
+            "check_rule_applicability",
+        }
+        if bool(enabled.intersection(rule_skills)) != self.rule_corpus.enabled:
+            raise ValueError(
+                "rule_corpus must be enabled exactly when rule Skills are enabled"
+            )
+        return self
+
+
+# Compatibility spelling for callers that mirror the lowercase ``findoasis`` package.
+FindOasisConfig = FinOasisConfig
+
+
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -145,12 +309,30 @@ class AgentConfig(BaseModel):
         default_factory=InitialRetrievalConfig
     )
     long_context: LongContextConfig = Field(default_factory=LongContextConfig)
+    findoasis: FinOasisConfig | None = None
     cross_question_memory: Literal[False] = False
     scorer_feedback: Literal[False] = False
     concurrency: int = Field(default=1, ge=1, le=32)
 
     @model_validator(mode="after")
     def protocol_settings_are_compatible(self) -> "AgentConfig":
+        if self.protocol_version in {"v1", "v2"} and self.findoasis is not None:
+            raise ValueError("findoasis configuration is valid only for protocol v3")
+        if self.protocol_version == "v3":
+            if self.findoasis is None:
+                raise ValueError("protocol v3 requires explicit findoasis configuration")
+            if self.calculator_enabled:
+                raise ValueError("protocol v3 disables the legacy calculator")
+            if self.initial_retrieval.enabled:
+                raise ValueError("protocol v3 disables legacy initial_retrieval")
+            if self.long_context.enabled:
+                raise ValueError("protocol v3 disables legacy long_context")
+            if self.pre_submit_review:
+                raise ValueError("protocol v3 does not use legacy pre_submit_review")
+            if self.review_policy == "mandatory":
+                raise ValueError("protocol v3 does not support mandatory legacy review")
+            if self.review_policy == "none" and self.review_steps != 0:
+                raise ValueError("protocol v3 without review requires review_steps=0")
         if self.protocol_version == "v1" and self.review_policy != "none":
             raise ValueError("protocol v1 uses pre_submit_review, not review_policy")
         if self.protocol_version == "v2" and self.pre_submit_review:

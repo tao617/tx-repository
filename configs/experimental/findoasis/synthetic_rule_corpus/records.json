@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "rule_id": "synthetic-us-revenue-current",
+      "title": "Synthetic current revenue recognition",
+      "text": "Synthetic current rule: a public issuer recognizes revenue when the identified performance obligation is satisfied.",
+      "aliases": ["current revenue rule", "performance obligation rule"],
+      "jurisdiction": "US",
+      "entity_scope": "public issuer",
+      "topic": "revenue recognition",
+      "effective_from": "2020-01-01",
+      "effective_to": null,
+      "source_reference": "synthetic://finoasis/rules/us-revenue-current",
+      "source_sha256": "647683e16e86b441f38b51ea8e52e803f8371868a039129224fb12b393aff71c",
+      "predicates": [
+        {
+          "predicate_id": "predicate:performance-obligation",
+          "kind": "document_contains",
+          "term": "performance obligation",
+          "required": true
+        }
+      ],
+      "conflicts_with": ["synthetic-us-revenue-conflict"]
+    },
+    {
+      "rule_id": "synthetic-us-revenue-expired",
+      "title": "Synthetic expired revenue recognition",
+      "text": "Synthetic expired rule: a public issuer recognized legacy revenue when delivery occurred.",
+      "aliases": ["expired revenue rule", "legacy delivery rule"],
+      "jurisdiction": "US",
+      "entity_scope": "public issuer",
+      "topic": "revenue recognition",
+      "effective_from": "2010-01-01",
+      "effective_to": "2019-12-31",
+      "source_reference": "synthetic://finoasis/rules/us-revenue-expired",
+      "source_sha256": "a9e3ccfbeb34893440d1087b3906e98657bf4a43eca9209442da8a7b0324d17a",
+      "predicates": [
+        {
+          "predicate_id": "predicate:legacy-delivery",
+          "kind": "document_contains",
+          "term": "delivery occurred",
+          "required": true
+        }
+      ],
+      "conflicts_with": []
+    },
+    {
+      "rule_id": "synthetic-eu-revenue-current",
+      "title": "Synthetic EU revenue recognition",
+      "text": "Synthetic EU rule: an EU public issuer recognizes revenue when control transfers.",
+      "aliases": ["EU control transfer rule"],
+      "jurisdiction": "EU",
+      "entity_scope": "public issuer",
+      "topic": "revenue recognition",
+      "effective_from": "2020-01-01",
+      "effective_to": null,
+      "source_reference": "synthetic://finoasis/rules/eu-revenue-current",
+      "source_sha256": "339295e545856b3a3b9d9e4d32a9d35ad810b93bdc7e0ba80b2540ec0de543fc",
+      "predicates": [
+        {
+          "predicate_id": "predicate:control-transfer",
+          "kind": "document_contains",
+          "term": "control transfers",
+          "required": true
+        }
+      ],
+      "conflicts_with": []
+    },
+    {
+      "rule_id": "synthetic-us-revenue-conflict",
+      "title": "Synthetic conflicting revenue recognition",
+      "text": "Synthetic conflict rule: a public issuer recognizes revenue before the performance obligation is satisfied.",
+      "aliases": ["conflicting revenue rule"],
+      "jurisdiction": "US",
+      "entity_scope": "public issuer",
+      "topic": "revenue recognition",
+      "effective_from": "2020-01-01",
+      "effective_to": null,
+      "source_reference": "synthetic://finoasis/rules/us-revenue-conflict",
+      "source_sha256": "7072a16b443cba72d74eb55991ac95fb06d70f703c584c752069f7f00641183b",
+      "predicates": [
+        {
+          "predicate_id": "predicate:before-performance",
+          "kind": "document_contains",
+          "term": "before performance",
+          "required": true
+        }
+      ],
+      "conflicts_with": ["synthetic-us-revenue-current"]
+    }
+  ]
+}

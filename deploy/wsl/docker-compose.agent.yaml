@@ -22,7 +22,7 @@ services:
         target: /public
         read_only: true
       - type: bind
-        source: ../../financial_reports
+        source: "${FINDVER_REPORTS_SOURCE:-../../financial_reports}"
         target: /reports
         read_only: true
       - type: bind
@@ -86,4 +86,3 @@ networks:
     internal: true
   gateway-egress:
     internal: false
-

@@ -16,6 +16,7 @@ from findver_agent.actions import (
 )
 from findver_agent.config import AgentConfig
 from findver_agent.fixed_retrieval import FixedRetrievalIndex
+from findver_agent.findoasis.agent import FinOASISAgent
 from findver_agent.model_backends.base import (
     GenerationConfig,
     ModelBackend,
@@ -64,6 +65,22 @@ class AgentOrchestrator:
         self.generation = generation
         self.config = agent_config
         self.report_store = report_store
+        self._finoasis_agent: FinOASISAgent | None = None
+        if self.config.protocol_version == "v3":
+            self._finoasis_agent = FinOASISAgent(
+                backend=backend,
+                generation=generation,
+                agent_config=agent_config,
+                report_store=report_store,
+                run_dir=run_dir,
+            )
+            # Compatibility handles for callers that inspect the orchestrator. The
+            # objects are protocol-v3 implementations, never legacy State/Prompt.
+            self.state_store = self._finoasis_agent.state_store
+            self.trace_root = self._finoasis_agent.trace_root
+            self.prompt_builder = self._finoasis_agent.prompt_builder
+            self.initial_retrieval = None
+            return
         self.state_store = StateStore(run_dir / "state")
         self.trace_root = run_dir / "traces"
         self.prompt_builder = PromptBuilder(generation, agent_config)
@@ -79,6 +96,8 @@ class AgentOrchestrator:
             )
 
     async def run_question(self, task: PublicTask) -> Prediction:
+        if self._finoasis_agent is not None:
+            return await self._finoasis_agent.run_question(task)
         state_path_existed = self.state_store.path_for(task.example_id).exists()
         state = self.state_store.load_or_create(
             task,

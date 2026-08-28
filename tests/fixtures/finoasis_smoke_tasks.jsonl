@@ -1,0 +1,4 @@
+{"example_id":"finoasis-smoke-ie","statement":"The report states that the synthetic issuer opened its facility in Shanghai.","report":"finoasis-ie.json"}
+{"example_id":"finoasis-smoke-numeric","statement":"Revenue increased from $1,000 in 2023 to $1,200 in 2024.","report":"finoasis-numeric.json"}
+{"example_id":"finoasis-smoke-knowledge","statement":"Under US GAAP, the recognition rule required a public issuer on 2024-12-31 to recognize revenue when the performance obligation was satisfied.","report":"finoasis-knowledge.json"}
+{"example_id":"finoasis-smoke-mixed","statement":"Under US GAAP, a public issuer on 2024-12-31 recognized revenue after the performance obligation was satisfied, and revenue increased from $1,000 in 2023 to $1,200 in 2024.","report":"finoasis-mixed.json"}

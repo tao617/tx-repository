@@ -1,0 +1,12 @@
+{
+  "context": [
+    {
+      "id": 0,
+      "type": "table",
+      "context": "The identified performance obligation was satisfied before revenue recognition.\nSYNTHETIC CONSOLIDATED RESULTS\n(in millions)\n| Metric | 2024 | 2023 |\n| Revenue | $ 1,200 | $ 1,000 |"
+    }
+  ],
+  "html_tables": [
+    "<table><tr><th>Metric</th><th>2024</th><th>2023</th></tr><tr><td>Revenue</td><td>$ 1,200</td><td>$ 1,000</td></tr></table>"
+  ]
+}

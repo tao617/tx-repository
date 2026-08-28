@@ -10,6 +10,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from findver_agent.findoasis.contracts import (
+    FinalCertificateStatus,
+    ObligationStatus,
+    ObligationType,
+    SkillName,
+)
+from findver_agent.findoasis.state import FinOASISQuestionState
+
 
 PHASES = (
     "exploration",
@@ -38,7 +46,21 @@ SAFE_TERMINATION_REASONS = {
     "review_budget_exhausted",
     "finalization_budget_exhausted",
     "iterative_rag_finalized",
+    "budget_exhausted_fallback",
+    "certificate_verified",
+    "review_verified",
 }
+FINOASIS_FAILURE_CATEGORIES = frozenset(
+    {
+        "binding_failure",
+        "program_failure",
+        "unit_failure",
+        "period_failure",
+        "type_failure",
+        "relation_failure",
+        "rule_integrity_failure",
+    }
+)
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -75,7 +97,7 @@ def _strict_valid(prediction: dict[str, Any]) -> bool:
 
 
 def _error_kind(payload: dict[str, Any], *, baseline: bool = False) -> str:
-    configured = payload.get("error_type")
+    configured = payload.get("error_type", payload.get("kind"))
     if configured in ERROR_KINDS:
         return str(configured)
     message = str(payload.get("error", "")).casefold()
@@ -96,6 +118,224 @@ def _valid_id_list(value: object) -> bool:
         and all(type(item) is int and item >= 0 for item in value)
         and len(value) == len(set(value))
     )
+
+
+def _terminal_final_certificate(state: FinOASISQuestionState):
+    reference = state.prediction_certificate_ref or state.draft_certificate_ref
+    if reference is not None:
+        return state.final_verification_certificate_ledger.get(reference)
+    if state.final_verification_certificate_ledger:
+        return list(state.final_verification_certificate_ledger.values())[-1]
+    return None
+
+
+def _finoasis_summary(
+    states: list[FinOASISQuestionState],
+    *,
+    exposed_by_skill: Counter[str],
+    exposure_attempts: int,
+    failure_categories: Counter[str],
+) -> dict[str, Any]:
+    """Build a text-free protocol-v3 aggregate from validated state ledgers."""
+
+    question_count = len(states)
+    obligation_types = tuple(item.value for item in ObligationType)
+    obligation_statuses = tuple(item.value for item in ObligationStatus)
+    skill_names = tuple(item.value for item in SkillName)
+    opened_by_type: Counter[str] = Counter()
+    status_by_type = {
+        status: Counter() for status in obligation_statuses
+    }
+    called_by_skill: Counter[str] = Counter()
+    rejected_by_skill: Counter[str] = Counter()
+    final_statuses: Counter[str] = Counter()
+    unresolved_at_submit = 0
+    total_obligations = 0
+    satisfied_obligations = 0
+    bound_values = program_executions = numeric_certificates = 0
+    relation_failures = 0
+    rule_searches = rules_read = applicability_checks = 0
+    applicability_results: Counter[str] = Counter()
+    consumed_specialist_certificates = 0
+    producer_skill_calls = 0
+    model_calls = input_tokens = output_tokens = local_skill_calls = 0
+    latency_ms = 0.0
+    phase_attempts: Counter[str] = Counter()
+
+    for state in states:
+        final_statuses[state.final_certificate_status.value] += 1
+        total_obligations += len(state.obligations)
+        for obligation in state.obligations:
+            opened_by_type[obligation.type.value] += 1
+            status_by_type[obligation.status.value][obligation.type.value] += 1
+            satisfied_obligations += int(
+                obligation.status is ObligationStatus.SATISFIED
+            )
+
+        final_certificate = _terminal_final_certificate(state)
+        if final_certificate is not None:
+            unresolved_at_submit += len(
+                set(final_certificate.unresolved_obligation_ids)
+            )
+            consumed_specialist_certificates += len(
+                set(final_certificate.numeric_certificate_refs)
+                | set(final_certificate.rule_certificate_refs)
+            )
+
+        for skill, count in state.skill_call_counts.items():
+            called_by_skill[skill.value] += count
+        for skill, count in state.skill_rejection_counts.items():
+            rejected_by_skill[skill.value] += count
+        producer_skill_calls += state.skill_call_counts.get(
+            SkillName.EXECUTE_FINANCIAL_PROGRAM, 0
+        )
+        producer_skill_calls += state.skill_call_counts.get(
+            SkillName.CHECK_RULE_APPLICABILITY, 0
+        )
+
+        bound_values += len(state.numeric_value_ledger)
+        program_executions += len(state.financial_program_ledger)
+        numeric_certificates += len(state.numeric_certificate_ledger)
+        relation_failures += sum(
+            certificate.relation_satisfied is False
+            for certificate in state.numeric_certificate_ledger.values()
+        )
+
+        rule_searches += len(state.rule_search_history)
+        rules_read += len(state.rule_evidence_ledger)
+        applicability_checks += len(
+            state.rule_applicability_certificate_ledger
+        )
+        for certificate in state.rule_applicability_certificate_ledger.values():
+            applicability_results[certificate.result.value] += 1
+
+        model_calls += state.usage.model_calls
+        input_tokens += state.usage.input_tokens
+        output_tokens += state.usage.output_tokens
+        latency_ms += state.usage.latency_ms
+        local_skill_calls += state.usage.local_skill_calls
+        phase_attempts["exploration"] += state.phase_attempts.exploration_used
+        phase_attempts["finalization"] += state.phase_attempts.finalization_used
+        phase_attempts["review"] += state.phase_attempts.review_used
+
+    rejected_total = sum(rejected_by_skill.values())
+    called_total = sum(called_by_skill.values())
+    attempted_skill_calls = called_total + rejected_total
+    program_failures = failure_categories["program_failure"]
+    program_attempts = numeric_certificates + program_failures
+    relation_failures += failure_categories["relation_failure"]
+
+    return {
+        "instrumented_questions": question_count,
+        "obligations": {
+            "total": total_obligations,
+            "mean_per_question": (
+                _mean(total_obligations, question_count) if question_count else 0.0
+            ),
+            "opened_by_type": {
+                name: int(opened_by_type[name]) for name in obligation_types
+            },
+            "satisfied_by_type": {
+                name: int(status_by_type["satisfied"][name])
+                for name in obligation_types
+            },
+            "partial_by_type": {
+                name: int(status_by_type["partial"][name])
+                for name in obligation_types
+            },
+            "conflicting_by_type": {
+                name: int(status_by_type["conflicting"][name])
+                for name in obligation_types
+            },
+            "blocked_by_type": {
+                name: int(status_by_type["blocked"][name])
+                for name in obligation_types
+            },
+            "pending_by_type": {
+                name: int(status_by_type["pending"][name])
+                for name in obligation_types
+            },
+            "unresolved_at_submit": unresolved_at_submit,
+            "satisfaction_rate": (
+                _mean(satisfied_obligations, total_obligations)
+                if total_obligations
+                else 0.0
+            ),
+            "final_certificate_status_counts": {
+                status.value: int(final_statuses[status.value])
+                for status in FinalCertificateStatus
+            },
+        },
+        "skill_routing": {
+            "exposed_count_by_skill": {
+                name: int(exposed_by_skill[name]) for name in skill_names
+            },
+            "called_count_by_skill": {
+                name: int(called_by_skill[name]) for name in skill_names
+            },
+            "rejected_unavailable_calls": rejected_total,
+            "rejected_unavailable_by_skill": {
+                name: int(rejected_by_skill[name]) for name in skill_names
+            },
+            "mean_exposed_skills_per_attempt": (
+                _mean(sum(exposed_by_skill.values()), exposure_attempts)
+                if exposure_attempts
+                else 0.0
+            ),
+            "mean_called_skills_per_question": (
+                _mean(called_total, question_count) if question_count else 0.0
+            ),
+            "avoidable_call_rate": (
+                _mean(rejected_total, attempted_skill_calls)
+                if attempted_skill_calls
+                else 0.0
+            ),
+            "certificate_consumed_skill_rate": (
+                _mean(consumed_specialist_certificates, producer_skill_calls)
+                if producer_skill_calls
+                else 0.0
+            ),
+            "certificate_consumed_specialist_calls": (
+                consumed_specialist_certificates
+            ),
+        },
+        "numeric": {
+            "bound_values": bound_values,
+            "binding_failures": failure_categories["binding_failure"],
+            "program_execution_count": program_executions,
+            "program_pass_rate": (
+                _mean(numeric_certificates, program_attempts)
+                if program_attempts
+                else 0.0
+            ),
+            "unit_failures": failure_categories["unit_failure"],
+            "period_failures": failure_categories["period_failure"],
+            "type_failures": failure_categories["type_failure"],
+            "relation_failures": relation_failures,
+        },
+        "rules": {
+            "rule_searches": rule_searches,
+            "rules_read": rules_read,
+            "applicability_checks": applicability_checks,
+            "applicable": applicability_results["applicable"],
+            "not_applicable": applicability_results["not_applicable"],
+            "undetermined": applicability_results["undetermined"],
+            "hash_or_provenance_failures": failure_categories[
+                "rule_integrity_failure"
+            ],
+        },
+        "cost": {
+            "model_calls": model_calls,
+            "local_skill_calls": local_skill_calls,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "latency_ms": round(latency_ms, 3),
+            "phase_attempts": {
+                phase: int(phase_attempts[phase])
+                for phase in ("exploration", "finalization", "review")
+            },
+        },
+    }
 
 
 def summarize(
@@ -142,6 +382,9 @@ def summarize(
     long_context_injection_attempts: Counter[str] = Counter()
     visibility_counts: Counter[str] = Counter()
     finish_reasons: Counter[str] = Counter()
+    finoasis_exposed_by_skill: Counter[str] = Counter()
+    finoasis_exposure_attempts = 0
+    finoasis_failure_categories: Counter[str] = Counter()
 
     trace_files = sorted((run_dir / "traces").glob("*.jsonl"))
     for trace_path in trace_files:
@@ -165,6 +408,22 @@ def summarize(
                     model_calls += 1
                     phase = payload.get("phase")
                     phase_attempts[str(phase) if phase in PHASES else "legacy"] += 1
+                    available_skills = payload.get("available_skills")
+                    if available_skills is not None:
+                        if (
+                            not isinstance(available_skills, list)
+                            or len(available_skills) != len(set(available_skills))
+                            or any(
+                                not isinstance(skill, str)
+                                or skill not in {item.value for item in SkillName}
+                                for skill in available_skills
+                            )
+                        ):
+                            raise ValueError(
+                                f"{trace_path.name}:{line_number} has invalid v3 Skill exposure"
+                            )
+                        finoasis_exposure_attempts += 1
+                        finoasis_exposed_by_skill.update(available_skills)
                     estimated = payload.get("estimated_input_tokens")
                     if type(estimated) is int and estimated >= 0:
                         context_request_records += 1
@@ -294,6 +553,24 @@ def summarize(
                         )
                     ):
                         provider_context_errors += 1
+                elif event_name == "runtime_error":
+                    phase = payload.get("phase")
+                    phase_name = str(phase) if phase in PHASES else "legacy"
+                    phase_errors[phase_name][_error_kind(payload)] += 1
+                    categories = payload.get("failure_categories", [])
+                    if (
+                        not isinstance(categories, list)
+                        or len(categories) != len(set(categories))
+                        or any(
+                            not isinstance(category, str)
+                            or category not in FINOASIS_FAILURE_CATEGORIES
+                            for category in categories
+                        )
+                    ):
+                        raise ValueError(
+                            f"{trace_path.name}:{line_number} has invalid v3 failure categories"
+                        )
+                    finoasis_failure_categories.update(categories)
                 elif event_name == "baseline_error":
                     phase_errors["baseline"][_error_kind(payload, baseline=True)] += 1
                     provider_context_errors += int(
@@ -344,8 +621,11 @@ def summarize(
     has_state_seed_metrics = False
     has_state_evidence_metrics = False
     has_state_review_metrics = False
+    finoasis_states: list[FinOASISQuestionState] = []
     for state_path in state_files:
         state = _load_object(state_path)
+        if state.get("schema_version") == 3:
+            finoasis_states.append(FinOASISQuestionState.model_validate(state))
         tool_counts = state.get("tool_counts")
         if isinstance(tool_counts, dict):
             has_state_tool_metrics = True
@@ -609,6 +889,13 @@ def summarize(
             ),
         },
     }
+    if finoasis_states:
+        summary["findoasis_v3"] = _finoasis_summary(
+            finoasis_states,
+            exposed_by_skill=finoasis_exposed_by_skill,
+            exposure_attempts=finoasis_exposure_attempts,
+            failure_categories=finoasis_failure_categories,
+        )
     if input_cost_per_million is not None or output_cost_per_million is not None:
         if input_cost_per_million is None or output_cost_per_million is None:
             raise ValueError("both input and output prices are required")

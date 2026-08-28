@@ -1,10 +1,19 @@
 project: findver-agent
-current_phase: official-test-v2-freeze-recorded
-current_goal: Preserve the completed evidence and official-test V2 freeze; await
-  explicit authorization for Gold-free input binding without model calls, then require
-  separate approval before any official-test API execution.
-last_completed_phase: official-test-v2-freeze-recorded
-last_git_commit: 2b4f980e48edc3c2439f3375eed0ea48718f544a
+current_phase: findoasis-formal-human-review-ready
+current_goal: Implement FinOASIS protocol v3 additively through credential-free local
+  tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
+last_completed_phase: findoasis-review-remediation-and-verification-closeout
+last_implementation_commit: 04ffb9c6cfdbcadd34e5af51663f7a5acc162aac
+last_verified_checkpoint_commit: ce657d9bad8a118bd12c25095dfe5cf288652731
+live_head_command: git rev-parse HEAD
+remote_verification:
+  branch: feat/findoasis-obligation-skills
+  checkpoint_commit: ce657d9bad8a118bd12c25095dfe5cf288652731
+  workflow_runs:
+  - 33137822373
+  - 33137820230
+  conclusion: success
+worktree_expected: clean
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -313,10 +322,91 @@ decisions:
   deepseek-v4-flash, the frozen generation and RRF settings, and Private Scorer commit
   6ec342; keep execution unauthorized until separate input-binding and API approvals.
 - Preserve the historical V1 plan and project contract without modification.
+- Implement protocol v3 in an isolated findver_agent.findoasis package and dispatch
+  before legacy state or prompt logic.
+- Preserve v1/v2 actions, state, prompt, M2, Official Test V2, sealed archive, and
+  evidence sidecar unchanged.
+- Use ADR 0011 because Draft PR 1 occupies ADR 0010.
+- Only Runtime SkillResult application may satisfy an obligation; model deltas cannot
+  satisfy or waive obligations.
+- Protocol v3 uses an independent schema-v3 state store with config, Registry, policy,
+  report, and optional corpus identity binding.
+- Official Test V2, M2, sealed archive, evidence sidecar, and canonical v1/v2 state
+  and prompt outputs are now hash-frozen by tests.
+- Seed obligations from claim text only, expose only the Registry subset justified
+  by active obligations and trusted Runtime facts, and charge every model attempt
+  before transport.
+- Store exact read report evidence with a matching SHA256; prompts may show only a
+  bounded untrusted view of ledgered text and search candidates.
+- Dispatch protocol v3 before constructing legacy StateStore, PromptBuilder, or fixed
+  retrieval objects. Unavailable v3 calls record rejection but cannot apply model
+  control metadata or mutate proof ledgers.
+- Protocol v3 dispatches before legacy StateStore, PromptBuilder, or fixed retrieval
+  construction.
+- Only exact hash-checked ledger evidence and bounded search snippets are visible
+  as untrusted prompt data.
+- Index table HTML additively by existing context position without altering legacy
+  paragraph IDs or text.
+- Persist exact selected cell text and coordinates, but never raw HTML, in protocol-v3
+  state and prompts.
+- Use deterministic table unit and scale inference only to fill unknown model metadata
+  or reject conflicts; never infer numeric text.
+- Bind all numeric values as immutable Decimal strings to one unique exact evidence
+  occurrence.
+- Represent FinDSL as a maximum-depth-4 typed AST with at most 32 nodes and 32 total
+  reference leaves; raw numeric operands are forbidden.
+- Use Decimal with precision 50, percentage-point internal representation, and 100
+  basis points per percentage point.
+- Persist canonical AST and claim relation so program hashes, leaf refs, snapshots,
+  evidence refs, and certificate payload hashes are independently replay-verifiable
+  on resume.
+- Bind ISO dates and booleans exactly for type-safe comparisons only; arithmetic remains
+  Decimal-only.
+- Treat a verified false relation as a valid numeric certificate outcome while keeping
+  relation_satisfied explicit for final claim verification.
+- Treat the tracked rule corpus as synthetic test-only data; formal production knowledge
+  sources require separate authorization, provenance review, licensing review, and
+  project-contract revision.
+- Expose rule candidates only to read_financial_rules and hash-bound rule metadata
+  only to check_rule_applicability; full rule text is never copied into prompts.
+- Only mechanically conclusive applicable or not_applicable results satisfy rule applicability;
+  undetermined remains partial and cannot be rewritten by model control.
+- Persist each final verification payload beside its envelope and bind verified predictions
+  or Review drafts to its certificate and exact submission hash.
+- Replay FinDSL and frozen rule applicability certificates during final verification;
+  map conclusive true/applicable specialist results to entailed and false/not_applicable
+  to refuted for this experimental protocol.
+- Allow incomplete fallback only during forced finalization with low confidence plus
+  unresolved_obligation risk; tamper, unknown evidence, label contradiction, and invalid
+  certificate failures remain fatal.
+- Selective Review leaves the final obligation pending and may fall back only to a
+  certificate-verified draft after replaying it against current ledgers.
+- Keep all M3 conditions experimental with official_test_authorized, real_model_execution_authorized,
+  and scorer_handoff_authorized fixed false; mark always-exposed as an ablation only.
+- Emit v3 metrics only from validated state ledgers and closed aggregate buckets;
+  never copy per-question claims, explanations, evidence text, rule text, or raw failure
+  messages into the summary.
+- Define avoidable call rate as unavailable rejections over successful plus rejected
+  Skill calls, and certificate-consumed Skill rate as terminally consumed specialist
+  certificates over successful certificate-producing specialist calls.
+- Mount the selected report root read-only through a bounded environment override
+  so the v3 Docker smoke uses tracked synthetic reports without widening Runtime targets
+  or networks.
+- 'Preserve root-controlled Docker: the user remains outside the Docker group; this
+  no-new-privileges task used the WSL host root path because interactive sudo elevation
+  is unavailable.'
+- Keep protocol v3 experimental and additive; require deterministic certificate replay
+  but state explicitly that replay does not prove semantic completeness of model-selected
+  evidence, operands, or rules.
+- 'Use Draft PR #2 for FinOASIS review; do not modify, close, merge, or redirect independent
+  Draft PR #1.'
+- Terminal prompts always include bounded code-generated specialist result projections;
+  full payload diagnostics and rule text remain state-only.
 files_changed:
-- docs/OFFICIAL_TEST_V2_FREEZE_PLAN.md
-- docs/adr/0009-official-test-v2-confirmation.md
-- experiments/official_test_v2_freeze.yaml
+- docs/FINOASIS_PROGRESS.md
+- src/findver_agent/findoasis/prompt_builder.py
+- tests/integration/test_finoasis_e2e.py
+- tests/unit/test_prompt_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -593,11 +683,50 @@ tests_passed:
   hashes, a 1,700-example population, and all execution gates false.
 - Git diff verification confirmed docs/PROJECT_CONTRACT.md and the historical docs/EXPERIMENT_PLAN.md
   are unchanged.
+- 289 baseline tests passed on Python 3.12
+- compileall and git diff checks passed
+- 93 focused v3 and compatibility tests passed
+- 341 full Agent tests passed on Python 3.12
+- 391 full Agent tests passed on Python 3.12
+- Focused v3 routing and resume integration tests passed
+- Python compileall and git diff checks passed
+- 455 full Agent tests passed on Python 3.12
+- 90 focused Phase 3 tests passed
+- 499 full Agent tests passed on Python 3.12
+- 114 focused Phase 4 action, binding, FinDSL, prompt, state, routing, and integration
+  tests passed
+- 61 focused Phase 5 corpus, prompt, seeder, router, and integration tests passed
+- 514 full Agent tests passed on Python 3.12
+- 524 repository tests; 49 focused Phase 6 tests; compileall and diff checks
+- 529 repository tests; 11 focused config/summary/e2e tests; compileall and diff checks;
+  existing Stateful M2 Docker smoke; existing 40-task concurrent Docker smoke; new
+  four-task FinOASIS v3 Docker smoke
+- Python 3.12.3 compileall and 530 tests; Python 3.11.16 isolated Docker compileall
+  and 530 tests; focused 84-test security gate; Stateful M2, concurrent 40-task, and
+  FinOASIS 4-task Docker smokes; diff, frozen-interface, archive, Runtime-bundle,
+  secret, and container-cleanup checks.
+- Local Python 3.12.3 and isolated Python 3.11.16 each passed compileall and 530 tests;
+  all three Docker smokes and final audit gates passed. Initial GitHub CI jobs are
+  running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
+- 19 focused prompt and FinOASIS end-to-end tests; clean baseline compileall and 530
+  tests.
+- >-
+  Final remediation gate: 553 full repository tests; 113 focused compatibility,
+  security and v3 regressions; compileall and shell syntax; Stateful M2, concurrent
+  40-task and credential-free FinOASIS v3 Docker smokes. No real model, scorer, Gold,
+  production rule corpus or Official Test V2 input was used.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
 - 'Single-example valid_output_rate was 0: all 6 Exploration and 2 Finalization responses
   failed the unchanged strict JSON action parser, terminating with finalization_budget_exhausted.'
+- No product tests failed. Two discarded Python 3.11 harness attempts omitted repository-path/Git
+  prerequisites; the corrected CI-equivalent harness passed all 530 tests. One discarded
+  Python 3.12 invocation lost a sandbox temporary capture file before collection;
+  the documented no-capture invocation passed all 530 tests.
+- No product test failure.
+- No product test failure. One sandbox capture-file cleanup occurred before collection;
+  the documented no-capture run passed.
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -626,9 +755,34 @@ known_issues:
 - Exact official task, report, embedding, BM25, and Hybrid artifact hashes are intentionally
   unbound; this blocks plan preparation and execution until separately authorized
   input access.
+- Python 3.11 is unavailable locally; compatibility will be verified by CI.
+- Sandboxed Starlette TestClient threads hang; local pytest must run outside the sandbox
+  with repository-scoped basetemp.
+- Python 3.11 is unavailable locally; repository CI must exercise the supported Python
+  3.11 leg.
+- Formal production financial rule sources, certificate scorer sidecar, licensing,
+  and review remain unauthorized and out of scope.
+- Python 3.11 is unavailable locally; repository CI must exercise 3.11 compatibility.
+- Natural-language selection of a FinDSL program or frozen rule remains model-dependent,
+  and no production rule corpus is authorized.
+- Python 3.11 remains unavailable locally; GitHub CI covers both 3.11 and 3.12.
+- Docker image builds resolve declared public dependencies, while all smoke Runtime
+  model traffic is confined to the local deterministic host mock through the unchanged
+  Gateway boundary.
+- Production financial rule sources, licences, version policy, domain-owner approval,
+  real-model evaluation, Official Test V2 use, and scorer handoff remain unauthorized
+  and unresolved by design.
+- Production rule sources and licences, real-model evaluation, Official Test V2 access,
+  certificate sidecar, and scorer handoff remain separately unauthorized.
+- Knowledge certificates currently prove versioned rule grounding and applicability,
+  not arbitrary accounting or regulatory conclusions.
+- Currency-less scaled thresholds such as 100 million parse as scaled scalars and fail
+  closed pending a separately designed contextual amount or count type.
+- Aggregate certificate status is not yet stratified into provenance-only, numeric,
+  rule and mixed-specialist verification counts.
 next_actions:
-- Await explicit authorization for the Gold-free official-input binding preflight;
-  after exact 1,700-task and retrieval hashes plus five non-executing plans are reviewed,
-  request separate approval before any Model-A API call.
+- Conduct formal human review of Draft PR 2. Draft promotion, merge, real-model work,
+  production rules, scorer access and Official Test V2 access require separate explicit
+  decisions.
 blocked_items: []
-last_updated: '2026-08-19T20:13:38+08:00'
+last_updated: '2026-08-28T11:42:01+08:00'
