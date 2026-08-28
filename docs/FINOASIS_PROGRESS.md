@@ -2,14 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Phase 8 complete — Draft PR and CI verification
+- Phase: Draft PR remediation 1 — specialist outcome visibility
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
+- Current committed HEAD: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: this Draft-PR recovery metadata is not yet committed
-- Push status: Phases 0 through 8 pushed
-- Remote branch SHA: `bfd75227908dd160c62300e650add46f58e17b4a`
+- Worktree: specialist outcome prompt/test remediation is not yet committed
+- Push status: Phases 0 through 8 and closeout pushed
+- Remote branch SHA: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -240,6 +241,18 @@
 - Verified the full repository on Python 3.12.3 and an isolated CI-equivalent Python
   3.11.16 container. Both executed 530 passing tests.
 
+### Draft PR remediation 1
+
+- Added an always-visible, bounded Runtime projection of verified numeric and rule
+  specialist certificate outcomes. Finalization and Review now receive canonical
+  result/relation/check fields even when the corresponding execution Skill is hidden.
+- Kept arbitrary diagnostics, full rule text, hidden Registry contracts and unavailable
+  Skill schemas out of the projection.
+- Added terminal-phase prompt tests for numeric and rule results plus an end-to-end
+  backend that has no final label until it reads a false Runtime numeric relation from
+  the next prompt.
+- Focused prompt and end-to-end selection: 19 passed.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -455,9 +468,9 @@
 
 ## Exact next step
 
-Push this final recovery-record commit and verify Draft PR #2 CI status without
-modifying or merging PR #1. Any real-model, Official Test, scorer or production-rule
-follow-up still requires the separate authorizations recorded above.
+Commit and push the specialist-outcome remediation, then implement typed numeric operand
+requirements/slots and single-threshold seeding. Do not modify or merge PR #1, and do
+not execute a real model, Official Test, scorer or production rule corpus.
 
 ## Safe recovery commands
 
@@ -491,4 +504,5 @@ git diff --check
 | Phase 6 | `a16f3c695c81ab61bcc2bcd16b031d2397f0dd9c` | pushed | `feat: verify proof certificates before submission` |
 | Phase 7 | `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d` | pushed | `test: add FinOASIS end-to-end verification` |
 | Phase 8 | `bfd75227908dd160c62300e650add46f58e17b4a` | pushed | `docs: finalize FinOASIS implementation record` |
-| Closeout | this recovery-record commit | pending | records Draft PR #2 and final remote state |
+| Closeout | `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c` | pushed | `docs: record FinOASIS draft PR` |
+| Review remediation 1 | this commit | pending | trusted specialist outcomes remain visible at submission |

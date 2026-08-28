@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-phase8-draft-pr-created
+current_phase: findoasis-review-remediation-1
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-phase8-draft-pr-created
-last_git_commit: bfd75227908dd160c62300e650add46f58e17b4a
+last_completed_phase: findoasis-review-remediation-1
+last_git_commit: 1e31013a6c9f965e0e0f1ebb0735b894a3ea691c
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -390,8 +390,13 @@ decisions:
   evidence, operands, or rules.
 - 'Use Draft PR #2 for FinOASIS review; do not modify, close, merge, or redirect independent
   Draft PR #1.'
+- Terminal prompts always include bounded code-generated specialist result projections;
+  full payload diagnostics and rule text remain state-only.
 files_changed:
 - docs/FINOASIS_PROGRESS.md
+- src/findver_agent/findoasis/prompt_builder.py
+- tests/integration/test_finoasis_e2e.py
+- tests/unit/test_prompt_v3.py
 tests_passed:
 - 9 unit tests
 - three JSON Schemas validate
@@ -693,6 +698,8 @@ tests_passed:
 - Local Python 3.12.3 and isolated Python 3.11.16 each passed compileall and 530 tests;
   all three Docker smokes and final audit gates passed. Initial GitHub CI jobs are
   running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
+- 19 focused prompt and FinOASIS end-to-end tests; clean baseline compileall and 530
+  tests.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -703,6 +710,8 @@ tests_failed:
   Python 3.12 invocation lost a sandbox temporary capture file before collection;
   the documented no-capture invocation passed all 530 tests.
 - No product test failure.
+- No product test failure. One sandbox capture-file cleanup occurred before collection;
+  the documented no-capture run passed.
 known_issues:
 - repository_uses_python_3_12_while_original_instruction_mentions_python_3_11
 - Original baseline reads gold-bearing datasets and uses LLM-based output extraction;
@@ -750,7 +759,10 @@ known_issues:
   and unresolved by design.
 - Production rule sources and licences, real-model evaluation, Official Test V2 access,
   certificate sidecar, and scorer handoff remain separately unauthorized.
+- Operand completion still uses a fixed two-ValueRef count and rule polarity remains
+  unbound until the next remediation steps.
 next_actions:
-- 'Push this recovery-only closeout commit and verify all Draft PR #2 CI checks.'
+- Commit and push remediation 1, then implement typed operand requirements/slots and
+  single-threshold numeric seeding.
 blocked_items: []
-last_updated: '2026-08-28T03:39:28+08:00'
+last_updated: '2026-08-28T10:23:57+08:00'

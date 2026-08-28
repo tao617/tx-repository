@@ -2,27 +2,28 @@
 
 ## Current state
 
-Phase `findoasis-phase8-draft-pr-created` completed: FinOASIS protocol v3 implementation and Phase 8 audit are complete. Commit bfd75227908dd160c62300e650add46f58e17b4a is pushed and Draft PR #2 targets main; PR #1 is unchanged.
+Phase `findoasis-review-remediation-1` completed: Added bounded trusted numeric/rule certificate outcome projections that remain visible during Finalization and Review, without exposing arbitrary diagnostics or hidden Skills. Added a mock backend whose final label is derived only from the prior Runtime numeric outcome.
 
-- Git commit at checkpoint start: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Changed files: 3
+- Git commit at checkpoint start: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
+- Changed files: 4
 
 ## Diff summary
 
 ```text
-docs/FINOASIS_PROGRESS.md | Draft PR and final remote ledger
-docs/SESSION_HANDOFF.md   | closeout recovery state
-docs/STATE.yaml           | closeout decision, tests, risks and next action
-3 recovery-only files changed; no implementation or test source changed
+docs/FINOASIS_PROGRESS.md                     |  30 +++++--
+ src/findver_agent/findoasis/prompt_builder.py |  61 +++++++++++++
+ tests/integration/test_finoasis_e2e.py        | 118 +++++++++++++++++++++++++-
+ tests/unit/test_prompt_v3.py                  | 102 +++++++++++++++++++++-
+ 4 files changed, 301 insertions(+), 10 deletions(-)
 ```
 
 ## Tests passed
 
-- Local Python 3.12.3 and isolated Python 3.11.16 each passed compileall and 530 tests; all three Docker smokes and final audit gates passed. Initial GitHub CI jobs are running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
+- 19 focused prompt and FinOASIS end-to-end tests; clean baseline compileall and 530 tests.
 
 ## Tests failed or unavailable
 
-- No product test failure.
+- No product test failure. One sandbox capture-file cleanup occurred before collection; the documented no-capture run passed.
 
 ## Recovery protocol
 
@@ -40,4 +41,4 @@ pytest -q
 
 ## Next action
 
-Push this recovery-only closeout commit and verify all Draft PR #2 CI checks.
+Commit and push remediation 1, then implement typed operand requirements/slots and single-threshold numeric seeding.

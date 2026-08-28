@@ -35,8 +35,14 @@ from findver_agent.findoasis.state import (
     RuleSearchRecord,
     TableCandidateRecord,
 )
+from findver_agent.financial_dsl.models import NumericCertificate, OperandSnapshot
 from findver_agent.financial_rules.corpus import rule_record_sha256
-from findver_agent.financial_rules.models import RuleRecord
+from findver_agent.financial_rules.models import (
+    RuleApplicabilityCertificate,
+    RuleApplicabilityResult,
+    RulePredicateResult,
+    RuleRecord,
+)
 from findver_agent.schemas import PublicTask
 
 
@@ -256,6 +262,100 @@ def test_review_is_certificate_conflict_focused():
     assert "effective date, jurisdiction" in user
     assert "obligations=1" in user
     assert "unverified draft" in user
+
+
+@pytest.mark.parametrize("phase", [QuestionPhase.FINALIZATION, QuestionPhase.REVIEW])
+def test_specialist_outcomes_remain_visible_in_terminal_phases_without_diagnostics(
+    phase,
+):
+    state = make_state()
+    state.phase = phase
+    state.numeric_certificate_ledger["numeric-certificate-0001"] = NumericCertificate(
+        certificate_id="numeric-certificate-0001",
+        program_id="program-0001",
+        program_sha256=HASH,
+        operator="pct_change",
+        operand_refs=["value-0001", "value-0002"],
+        source_evidence_refs=["ev-1", "ev-2"],
+        type_checks_passed=True,
+        unit_checks_passed=True,
+        period_checks_passed=True,
+        normalized_operands=[
+            OperandSnapshot(
+                ref="value-0001",
+                kind="value_ref",
+                normalized_value="100",
+                numeric_type="money",
+                currency="USD",
+                unit="USD",
+                scale="million",
+                period="2024",
+            ),
+            OperandSnapshot(
+                ref="value-0002",
+                kind="value_ref",
+                normalized_value="120",
+                numeric_type="money",
+                currency="USD",
+                unit="USD",
+                scale="million",
+                period="2023",
+            ),
+        ],
+        result="-16.6667",
+        result_type="percentage",
+        result_currency="unknown",
+        result_unit="percentage",
+        result_scale="one",
+        result_period="cross_period",
+        claim_relation="program_boolean",
+        relation_satisfied=False,
+        diagnostics=["SECRET NUMERIC DIAGNOSTIC"],
+    )
+    state.rule_applicability_certificate_ledger["rule-certificate-0001"] = (
+        RuleApplicabilityCertificate(
+            certificate_id="rule-certificate-0001",
+            corpus_id="synthetic-v1",
+            manifest_sha256="b" * 64,
+            records_sha256="c" * 64,
+            rule_evidence_refs=["rule-evidence-0001"],
+            rule_ids=["rule-1"],
+            document_evidence_refs=["ev-1"],
+            effective_date="2024-12-31",
+            jurisdiction="US",
+            entity_scope="public issuer",
+            effective_date_check=True,
+            jurisdiction_check=True,
+            entity_scope_check=True,
+            predicates=[
+                RulePredicateResult(
+                    rule_id="rule-1",
+                    predicate_id="predicate-1",
+                    satisfied=True,
+                    evidence_refs=["ev-1"],
+                )
+            ],
+            conflict_rule_ids=[],
+            result=RuleApplicabilityResult.APPLICABLE,
+            diagnostics=["SECRET RULE DIAGNOSTIC"],
+        )
+    )
+
+    user = PromptBuilder().build(
+        state,
+        (SUBMIT,),
+        phase_budget=f"{phase.value} attempt 1/1",
+    )[1]["content"]
+
+    assert "Runtime-verified specialist outcomes" in user
+    assert '"certificate_ref":"numeric-certificate-0001"' in user
+    assert '"result":"-16.6667"' in user
+    assert '"relation_satisfied":false' in user
+    assert '"certificate_ref":"rule-certificate-0001"' in user
+    assert '"result":"applicable"' in user
+    assert '"effective_date_check":true' in user
+    assert "SECRET NUMERIC DIAGNOSTIC" not in user
+    assert "SECRET RULE DIAGNOSTIC" not in user
 
 
 def test_prompt_shows_only_bounded_read_evidence_and_hides_diagnostic_text():

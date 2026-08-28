@@ -11,7 +11,10 @@ from findver_agent.orchestrator import AgentOrchestrator
 from findver_agent.report_store import ReportStore
 from findver_agent.runner import load_public_tasks, run_batch
 from scripts.summarize_run import summarize
-from tests.fixtures.mock_openai_server import FINOASIS_V3_RESPONSES
+from tests.fixtures.mock_openai_server import (
+    FINOASIS_NUMERIC_RESPONSES,
+    FINOASIS_V3_RESPONSES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +31,75 @@ class SequenceBackend:
         del messages, config
         return ModelResponse(
             content=self.responses.pop(0),
+            input_tokens=1,
+            output_tokens=1,
+            latency_ms=0.125,
+        )
+
+    async def aclose(self):
+        return None
+
+
+class SpecialistOutcomeBackend:
+    """Choose the final label only from Runtime's persisted outcome projection."""
+
+    model_name = "certificate-outcome-only-model"
+    model_context_window_tokens = 32768
+
+    def __init__(self):
+        program = json.loads(FINOASIS_NUMERIC_RESPONSES[5])
+        program["arguments"]["program"]["op"] = "less_than"
+        self.responses = [
+            *FINOASIS_NUMERIC_RESPONSES[:5],
+            json.dumps(program, separators=(",", ":")),
+        ]
+        self.final_prompt: str | None = None
+
+    async def generate(self, messages, config):
+        del config
+        if self.responses:
+            content = self.responses.pop(0)
+        else:
+            user = messages[1]["content"]
+            self.final_prompt = user
+            outcome_json = user.split(
+                "Runtime-verified specialist outcomes "
+                "(trusted bounded certificate projections):\n",
+                maxsplit=1,
+            )[1].split("\n\nRecent report-search candidates", maxsplit=1)[0]
+            outcomes = json.loads(outcome_json)
+            numeric = [item for item in outcomes if item["kind"] == "numeric"]
+            assert len(numeric) == 1
+            assert numeric[0]["operator"] == "less_than"
+            label = (
+                "entailed" if numeric[0]["relation_satisfied"] else "refuted"
+            )
+            content = json.dumps(
+                {
+                    "action": "submit_answer",
+                    "arguments": {
+                        "label": label,
+                        "evidence_ids": [0],
+                        "explanation": (
+                            "The trusted Runtime certificate outcome determines the "
+                            "comparison label."
+                        ),
+                    },
+                    "control": {
+                        "target_obligation_id": "obl-0005",
+                        "open_obligations": [],
+                        "obligation_deltas": [],
+                        "confidence": "high",
+                        "risk_flags": ["calculation"],
+                        "expected_skill_effect": (
+                            "submit the label implied by the specialist outcome"
+                        ),
+                    },
+                },
+                separators=(",", ":"),
+            )
+        return ModelResponse(
+            content=content,
             input_tokens=1,
             output_tokens=1,
             latency_ms=0.125,
@@ -231,3 +303,47 @@ async def test_four_task_mock_run_verifies_dynamic_ie_numeric_rule_and_mixed_pat
     assert [task.example_id for task in load_public_tasks(tasks_path)] == [
         prediction["example_id"] for prediction in predictions
     ]
+
+
+async def test_final_label_can_be_selected_only_from_prior_runtime_numeric_outcome(
+    tmp_path,
+):
+    task_path = tmp_path / "tasks.jsonl"
+    task_path.write_text(
+        json.dumps(
+            {
+                "example_id": "certificate-outcome-finalization",
+                "statement": "Revenue in 2024 was lower than revenue in 2023.",
+                "report": "finoasis-numeric.json",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config = _config()
+    assert config.agent is not None
+    backend = SpecialistOutcomeBackend()
+    run_dir = tmp_path / "outcome-run"
+    orchestrator = AgentOrchestrator(
+        backend=backend,
+        generation=config.generation,
+        agent_config=config.agent,
+        report_store=ReportStore(
+            ROOT / "tests" / "fixtures" / "finoasis_smoke_reports"
+        ),
+        run_dir=run_dir,
+    )
+
+    task = load_public_tasks(task_path)[0]
+    prediction = await orchestrator.run_question(task)
+
+    assert prediction.label.value == "refuted"
+    assert not backend.responses
+    assert backend.final_prompt is not None
+    assert '"result":"false"' in backend.final_prompt
+    assert '"relation_satisfied":false' in backend.final_prompt
+    value_section = backend.final_prompt.split(
+        "Evidence-bound financial values (available only to FinDSL by reference):\n",
+        maxsplit=1,
+    )[1].split("\n\nRuntime-parsed claim values", maxsplit=1)[0]
+    assert json.loads(value_section) == []
