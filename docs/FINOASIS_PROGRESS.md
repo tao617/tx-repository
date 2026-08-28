@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation 5 — document scope and FinDSL units
+- Phase: Draft PR remediation complete — final review checkpoint
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `9e82f20d5662b60ddbdc7259af30acc96123859d`
+- Current committed HEAD: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: document-scope and FinDSL-unit remediation is not yet committed
-- Push status: Phases 0 through 8, closeout and remediations 1–4 pushed
-- Remote branch SHA: `9e82f20d5662b60ddbdc7259af30acc96123859d`
+- Worktree: clean before this final documentation checkpoint
+- Push status: Phases 0 through 8, closeout and remediations 1–5 pushed
+- Remote branch SHA: `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -325,6 +325,23 @@
 - Focused document/numeric/prompt/integration selection: 120 passed. Full repository:
   553 passed in 6.19s.
 
+### Final remediation verification
+
+- Re-ran the full Python 3.12 repository suite: 553 passed in 6.19 seconds.
+- Re-ran compileall, launcher shell syntax, compatibility freezes, security boundaries
+  and focused v3 regressions: 113 passed. The frozen rule manifest and records hashes
+  remained unchanged.
+- Re-ran the existing Stateful M2 Docker smoke: 8 actions, 9 model calls and verified
+  selective-Review fallback.
+- Re-ran the existing concurrent Docker smoke: 40/40 examples completed with configured
+  and peak concurrency 32; the three-file sealed archive verified.
+- Re-ran the credential-free FinOASIS v3 Docker smoke successfully through the local
+  deterministic mock Gateway.
+- All three smokes stopped and removed their containers and networks. Docker socket
+  ownership and permissions were not modified.
+- No real model, production rule corpus, scorer, Gold or Official Test V2 input was
+  accessed.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -542,10 +559,10 @@
 
 ## Exact next step
 
-Commit and push the document-scope/FinDSL-unit remediation. Then run the comprehensive
-Python, Docker, security and compatibility gates, update the Draft PR record and leave
-the branch ready for formal review. Do not modify or merge PR #1, and do not execute a
-real model, Official Test, scorer or production rule corpus.
+Push this final documentation checkpoint, wait for the final GitHub Actions run, and
+leave PR #2 in Draft for formal review. A later reviewer may decide whether to promote
+it from Draft; do not merge it, modify PR #1, or execute a real model, Official Test,
+scorer or production rule corpus under this checkpoint.
 
 ## Safe recovery commands
 
@@ -584,4 +601,5 @@ git diff --check
 | Review remediation 2 | `6f68a4d3b16148870d11269d36cce3aae67d8820` | pushed | typed one-to-one numeric operand slots and threshold path |
 | Review remediation 3 | `8de51bb35a1ab3312b8671e13ecf80ff1c58a201` | pushed | explicit rule claim polarity and four-way label mapping |
 | Review remediation 4 | `9e82f20d5662b60ddbdc7259af30acc96123859d` | pushed | positive-only predicates and scope-neutral rule retrieval |
-| Review remediation 5 | this checkpoint commit | pending | provenance-only document scope and FinDSL unit boundaries |
+| Review remediation 5 | `04ffb9c6cfdbcadd34e5af51663f7a5acc162aac` | pushed | provenance-only document scope and FinDSL unit boundaries |
+| Review closeout | this checkpoint commit | pending | comprehensive Python, compatibility and Docker verification record |

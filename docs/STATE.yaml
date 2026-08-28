@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-review-remediation-5
+current_phase: findoasis-review-remediation-complete
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-review-remediation-5
-last_git_commit: 9e82f20d5662b60ddbdc7259af30acc96123859d
+last_completed_phase: findoasis-review-remediation-5-and-final-local-verification
+last_git_commit: 04ffb9c6cfdbcadd34e5af51663f7a5acc162aac
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -700,6 +700,11 @@ tests_passed:
   running and earlier push-triggered Python 3.11/3.12 jobs succeeded.
 - 19 focused prompt and FinOASIS end-to-end tests; clean baseline compileall and 530
   tests.
+- >-
+  Final remediation gate: 553 full repository tests; 113 focused compatibility,
+  security and v3 regressions; compileall and shell syntax; Stateful M2, concurrent
+  40-task and credential-free FinOASIS v3 Docker smokes. No real model, scorer, Gold,
+  production rule corpus or Official Test V2 input was used.
 tests_failed:
 - pytest unavailable before development environment bootstrap
 - None.
@@ -760,7 +765,7 @@ known_issues:
 - Production rule sources and licences, real-model evaluation, Official Test V2 access,
   certificate sidecar, and scorer handoff remain separately unauthorized.
 next_actions:
-- Commit and push remediation 5, then run comprehensive Python, Docker, security and
-  compatibility gates and update the Draft PR record.
+- Push the final review checkpoint, wait for GitHub Actions on the resulting HEAD, and
+  leave Draft PR 2 ready for formal review without merging or running a real model.
 blocked_items: []
-last_updated: '2026-08-28T10:56:41+08:00'
+last_updated: '2026-08-28T11:02:53+08:00'
