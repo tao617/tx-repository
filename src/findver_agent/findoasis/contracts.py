@@ -145,6 +145,7 @@ class ObligationMetadata(BaseModel):
     effective_date: ShortText | None = None
     entity_scope: ShortText | None = None
     relation: ShortText | None = None
+    expected_relation: Literal["applies", "does_not_apply"] | None = None
     source_hint: ShortText | None = None
     operand_slots: list[OperandSlot] = Field(default_factory=list, max_length=16)
     ambiguity_flags: list[ShortText] = Field(default_factory=list, max_length=8)
@@ -191,6 +192,13 @@ class ObligationProposal(BaseModel):
             and not self.metadata.operand_slots
         ):
             raise ValueError("numeric operand obligations require operand slots")
+        if (
+            self.type is ObligationType.RULE_APPLICABILITY
+            and self.metadata.expected_relation is None
+        ):
+            raise ValueError(
+                "rule applicability obligations require an expected relation"
+            )
         return self
 
 
@@ -240,6 +248,13 @@ class Obligation(BaseModel):
             and not self.metadata.operand_slots
         ):
             raise ValueError("numeric operand obligations require operand slots")
+        if (
+            self.type is ObligationType.RULE_APPLICABILITY
+            and self.metadata.expected_relation is None
+        ):
+            raise ValueError(
+                "rule applicability obligations require an expected relation"
+            )
         return self
 
 

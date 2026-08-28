@@ -111,6 +111,8 @@ def _open(state, obligation_type, *, dependencies=(), mandatory=True, metadata=N
                 )
             ]
         )
+    if obligation_type == "rule_applicability" and metadata is None:
+        metadata = ObligationMetadata(expected_relation="applies")
     return state.open_obligation(
         ObligationProposal(
             type=obligation_type,

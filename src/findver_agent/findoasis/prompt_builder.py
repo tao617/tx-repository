@@ -14,9 +14,12 @@ from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel
 
+from findver_agent.financial_rules.models import RuleApplicabilityResult
+
 from .contracts import (
     FinalCertificateStatus,
     ObligationStatus,
+    ObligationType,
     QuestionPhase,
     SkillContract,
     SkillName,
@@ -542,6 +545,7 @@ Choose exactly one currently allowed action. Target a listed obligation ID. Retu
                         slot.model_dump(mode="json")
                         for slot in obligation.metadata.operand_slots
                     ],
+                    "expected_relation": obligation.metadata.expected_relation,
                 }
                 for obligation in visible
             ],
@@ -599,6 +603,12 @@ Choose exactly one currently allowed action. Target a listed obligation ID. Retu
                 -MAX_VISIBLE_SPECIALIST_CERTIFICATES_PER_KIND:
             ]
         ]
+        rule_relations = {
+            certificate_ref: obligation.metadata.expected_relation
+            for obligation in state.obligations
+            if obligation.type is ObligationType.RULE_APPLICABILITY
+            for certificate_ref in obligation.certificate_refs
+        }
         rules = [
             {
                 "certificate_ref": certificate.certificate_id,
@@ -606,6 +616,18 @@ Choose exactly one currently allowed action. Target a listed obligation ID. Retu
                 "rule_evidence_refs": certificate.rule_evidence_refs,
                 "document_evidence_refs": certificate.document_evidence_refs,
                 "result": certificate.result.value,
+                "expected_relation": rule_relations.get(certificate.certificate_id),
+                "claim_relation_satisfied": (
+                    (
+                        certificate.result
+                        is RuleApplicabilityResult.APPLICABLE
+                    )
+                    == (
+                        rule_relations.get(certificate.certificate_id) == "applies"
+                    )
+                    if rule_relations.get(certificate.certificate_id) is not None
+                    else None
+                ),
                 "effective_date_check": certificate.effective_date_check,
                 "jurisdiction_check": certificate.jurisdiction_check,
                 "entity_scope_check": certificate.entity_scope_check,

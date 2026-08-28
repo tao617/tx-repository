@@ -553,9 +553,11 @@ def verify_claim_submission(
                 )
                 continue
             rule_refs.append(reference)
-            rule_support.append(
+            expected_applies = metadata.expected_relation == "applies"
+            certificate_applies = (
                 certificate.result is RuleApplicabilityResult.APPLICABLE
             )
+            rule_support.append(certificate_applies is expected_applies)
 
     expected_support = selected_label is Label.ENTAILED
     if numeric_support and any(value is not expected_support for value in numeric_support):

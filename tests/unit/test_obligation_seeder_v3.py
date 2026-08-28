@@ -158,7 +158,8 @@ def test_rule_scope_metadata_is_deterministic_and_unknowns_remain_explicit():
         "Under US GAAP, a public issuer applied the rule on 2024-12-31."
     )
     domain_rule, applicability = scoped[1:3]
-    assert domain_rule.metadata == applicability.metadata
+    assert domain_rule.metadata.expected_relation is None
+    assert applicability.metadata.expected_relation == "applies"
     assert domain_rule.metadata.jurisdiction == "US"
     assert domain_rule.metadata.effective_date == "2024-12-31"
     assert domain_rule.metadata.entity_scope == "public issuer"
@@ -169,6 +170,19 @@ def test_rule_scope_metadata_is_deterministic_and_unknowns_remain_explicit():
     assert unknowns.jurisdiction == "US"
     assert unknowns.effective_date == "unknown"
     assert unknowns.entity_scope == "unknown"
+
+
+def test_negative_rule_claim_seeds_explicit_non_applicability_relation():
+    proposals = seed_obligations(
+        "Under US GAAP, the stated rule does not apply to the public issuer."
+    )
+    applicability = next(
+        proposal
+        for proposal in proposals
+        if proposal.type is ObligationType.RULE_APPLICABILITY
+    )
+
+    assert applicability.metadata.expected_relation == "does_not_apply"
 
 
 def test_chinese_rule_signal_seeds_knowledge_obligations():

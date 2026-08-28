@@ -284,6 +284,23 @@ def _rule_scope_metadata(claim_text: str) -> ObligationMetadata:
     )
 
 
+def _rule_expected_relation(claim_text: str) -> str:
+    negative_patterns = (
+        re.compile(
+            r"\b(?:does|do|did|is|are|was|were)\s+not\s+"
+            r"(?:apply|applicable)\b|\bnot\s+applicable\b|"
+            r"\binapplicable\b|\bnot\s+subject\s+to\b",
+            re.IGNORECASE,
+        ),
+        re.compile(r"(?:不适用|并不适用|不受.{0,16}(?:规则|准则|法规).{0,8}约束)"),
+    )
+    return (
+        "does_not_apply"
+        if any(pattern.search(claim_text) for pattern in negative_patterns)
+        else "applies"
+    )
+
+
 def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
     """Return deterministic seed proposals derived only from ``claim_text``.
 
@@ -345,6 +362,9 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
     rule_applicability_sequence: int | None = None
     if needs_rule:
         rule_metadata = _rule_scope_metadata(normalized)
+        applicability_metadata = rule_metadata.model_copy(
+            update={"expected_relation": _rule_expected_relation(normalized)}
+        )
         domain_rule_sequence = append(
             ObligationType.DOMAIN_RULE,
             "Locate the financial rule explicitly implicated by the claim.",
@@ -354,7 +374,7 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
             ObligationType.RULE_APPLICABILITY,
             "Verify the rule's applicability using its scope and relevant report facts.",
             (document_sequence, domain_rule_sequence),
-            metadata=rule_metadata,
+            metadata=applicability_metadata,
         )
 
     final_dependencies = [document_sequence]

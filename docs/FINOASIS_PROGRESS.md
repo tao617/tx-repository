@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation 2 — typed numeric operand slots
+- Phase: Draft PR remediation 3 — rule claim polarity
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
+- Current committed HEAD: `6f68a4d3b16148870d11269d36cce3aae67d8820`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: typed numeric operand-slot remediation is not yet committed
-- Push status: Phases 0 through 8, closeout and remediation 1 pushed
-- Remote branch SHA: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
+- Worktree: rule claim-polarity remediation is not yet committed
+- Push status: Phases 0 through 8, closeout and remediations 1–2 pushed
+- Remote branch SHA: `6f68a4d3b16148870d11269d36cce3aae67d8820`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -275,6 +275,22 @@
   required program refs and unattached global ValueRefs.
 - Focused selections: 114 passed and 57 passed. Full repository: 543 passed in 4.85s.
 
+### Draft PR remediation 3
+
+- Added a closed `expected_relation` field (`applies` or `does_not_apply`) to
+  rule-applicability obligations and made it mandatory for both Runtime-seeded and
+  model-proposed obligations.
+- Added conservative English and Chinese non-applicability detection; positive and
+  broader knowledge claims default to the explicit `applies` relation.
+- Changed final rule support from `APPLICABLE == entailed` to the truth table formed by
+  certificate result × expected relation × submitted label.
+- Added the expected relation and derived `claim_relation_satisfied` value to the
+  bounded trusted specialist projection shown in Finalization and Review.
+- Added complete applicable/not-applicable × entailed/refuted regression coverage plus
+  negative-claim seeding and strict-schema tests.
+- Focused rule/prompt/integration selection: 72 passed. Full repository: 546 passed in
+  4.26s.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -492,8 +508,9 @@
 
 ## Exact next step
 
-Commit and push the typed operand-slot remediation, then implement explicit rule-claim
-polarity with all four applicability-result/label combinations. Do not modify or merge
+Commit and push rule claim polarity, then disable partial-evidence
+`document_not_contains` and remove rule-search scope/date hard filtering so the
+applicability checker can issue explicit negative certificates. Do not modify or merge
 PR #1, and do not execute a real model, Official Test, scorer or production rule corpus.
 
 ## Safe recovery commands
@@ -530,4 +547,5 @@ git diff --check
 | Phase 8 | `bfd75227908dd160c62300e650add46f58e17b4a` | pushed | `docs: finalize FinOASIS implementation record` |
 | Closeout | `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c` | pushed | `docs: record FinOASIS draft PR` |
 | Review remediation 1 | `09c69449d1a3fe6f84307fd386e8c9da22888f53` | pushed | trusted specialist outcomes remain visible at submission |
-| Review remediation 2 | this checkpoint commit | pending | typed one-to-one numeric operand slots and threshold path |
+| Review remediation 2 | `6f68a4d3b16148870d11269d36cce3aae67d8820` | pushed | typed one-to-one numeric operand slots and threshold path |
+| Review remediation 3 | this checkpoint commit | pending | explicit rule claim polarity and four-way label mapping |

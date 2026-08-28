@@ -310,6 +310,21 @@ def test_specialist_outcomes_remain_visible_in_terminal_phases_without_diagnosti
 ):
     state = make_state()
     state.phase = phase
+    domain = state.open_obligation(
+        ObligationProposal(
+            type=ObligationType.DOMAIN_RULE,
+            description="Read the implicated rule.",
+        )
+    )
+    applicability = state.open_obligation(
+        ObligationProposal(
+            type=ObligationType.RULE_APPLICABILITY,
+            description="Check the negative applicability claim.",
+            dependency_ids=["obl-0001", domain.obligation_id],
+            metadata=ObligationMetadata(expected_relation="does_not_apply"),
+        )
+    )
+    applicability.certificate_refs = ["rule-certificate-0001"]
     state.numeric_certificate_ledger["numeric-certificate-0001"] = NumericCertificate(
         certificate_id="numeric-certificate-0001",
         program_id="program-0001",
@@ -393,6 +408,8 @@ def test_specialist_outcomes_remain_visible_in_terminal_phases_without_diagnosti
     assert '"relation_satisfied":false' in user
     assert '"certificate_ref":"rule-certificate-0001"' in user
     assert '"result":"applicable"' in user
+    assert '"expected_relation":"does_not_apply"' in user
+    assert '"claim_relation_satisfied":false' in user
     assert '"effective_date_check":true' in user
     assert "SECRET NUMERIC DIAGNOSTIC" not in user
     assert "SECRET RULE DIAGNOSTIC" not in user

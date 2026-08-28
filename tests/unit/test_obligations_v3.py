@@ -76,6 +76,11 @@ def test_model_obligation_proposal_has_no_runtime_fields_or_satisfaction_escape(
             type="numeric_operand",
             description="Bind an unspecified collection of values.",
         )
+    with pytest.raises(ValidationError, match="require an expected relation"):
+        ObligationProposal(
+            type="rule_applicability",
+            description="Check whether the rule applies.",
+        )
 
     with pytest.raises(ValidationError):
         ObligationProposal.model_validate(

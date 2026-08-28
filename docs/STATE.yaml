@@ -1,9 +1,9 @@
 project: findver-agent
-current_phase: findoasis-review-remediation-2
+current_phase: findoasis-review-remediation-3
 current_goal: Implement FinOASIS protocol v3 additively through credential-free local
   tests while preserving v1/v2, M2 and Official Test V2 artifacts unchanged.
-last_completed_phase: findoasis-review-remediation-2
-last_git_commit: 09c69449d1a3fe6f84307fd386e8c9da22888f53
+last_completed_phase: findoasis-review-remediation-3
+last_git_commit: 6f68a4d3b16148870d11269d36cce3aae67d8820
 fixed_constraints:
 - runtime_has_no_gold_feedback_or_scorer_access
 - separate_agent_and_scorer_compose_projects
@@ -759,9 +759,8 @@ known_issues:
   and unresolved by design.
 - Production rule sources and licences, real-model evaluation, Official Test V2 access,
   certificate sidecar, and scorer handoff remain separately unauthorized.
-- Rule polarity remains unbound until the next remediation step.
 next_actions:
-- Commit and push remediation 2, then implement explicit rule-claim polarity and its
-  four result/label combinations.
+- Commit and push remediation 3, then disable partial-evidence document_not_contains
+  and remove rule-search scope/date hard filtering.
 blocked_items: []
-last_updated: '2026-08-28T10:34:09+08:00'
+last_updated: '2026-08-28T10:41:09+08:00'

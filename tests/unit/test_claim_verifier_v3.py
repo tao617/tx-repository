@@ -66,7 +66,9 @@ def corpus():
     )
 
 
-def mixed_state(*, numeric_true=True, rule_applicable=True):
+def mixed_state(
+    *, numeric_true=True, rule_applicable=True, expected_relation="applies"
+):
     task = PublicTask(
         example_id="mixed-verifier",
         statement=(
@@ -129,6 +131,7 @@ def mixed_state(*, numeric_true=True, rule_applicable=True):
         jurisdiction="US",
         effective_date="2024-12-31",
         entity_scope="public issuer",
+        expected_relation=expected_relation,
     )
     domain = state.open_obligation(
         ObligationProposal(
@@ -284,6 +287,7 @@ def mixed_state(*, numeric_true=True, rule_applicable=True):
             jurisdiction="EU",
             effective_date="2024-12-31",
             entity_scope="public issuer",
+            expected_relation=expected_relation,
         )
     state.rule_applicability_certificate_ledger[rule_certificate.certificate_id] = (
         rule_certificate
@@ -328,14 +332,21 @@ def verify(state, frozen, *, label="entailed", evidence_ids=(0,), **updates):
 
 
 @pytest.mark.parametrize(
-    ("numeric_true", "rule_applicable", "label"),
-    [(True, True, "entailed"), (False, False, "refuted")],
+    ("expected_relation", "rule_applicable", "label"),
+    [
+        ("applies", True, "entailed"),
+        ("does_not_apply", True, "refuted"),
+        ("applies", False, "refuted"),
+        ("does_not_apply", False, "entailed"),
+    ],
 )
-def test_mixed_numeric_and_rule_certificates_jointly_support_label(
-    numeric_true, rule_applicable, label
+def test_rule_result_and_claim_polarity_jointly_support_all_label_combinations(
+    expected_relation, rule_applicable, label
 ):
     state, frozen = mixed_state(
-        numeric_true=numeric_true, rule_applicable=rule_applicable
+        numeric_true=label == "entailed",
+        rule_applicable=rule_applicable,
+        expected_relation=expected_relation,
     )
     certificate = verify(state, frozen, label=label)
 

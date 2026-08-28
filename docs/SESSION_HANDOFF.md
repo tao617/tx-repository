@@ -2,31 +2,28 @@
 
 ## Current state
 
-Phase `findoasis-review-remediation-2` completed locally: numeric operand obligations
-now carry bounded typed slots, bind ValueRefs one-to-one, gate FinDSL on the exact
-attached slots, and require the executed program to consume every required report
-operand. A one-report-value plus ClaimValueRef threshold path is covered end to end.
+Phase `findoasis-review-remediation-3` completed locally: every rule-applicability
+obligation now records whether the claim expects the rule to apply or not apply. Final
+verification uses that polarity instead of treating every applicable rule as entailed.
 
-- Git commit at checkpoint start: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
+- Git commit at checkpoint start: `6f68a4d3b16148870d11269d36cce3aae67d8820`
 - Branch: `feat/findoasis-obligation-skills`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
-- Worktree: remediation 2 implementation and checkpoint docs are ready to commit
+- Worktree: remediation 3 implementation and checkpoint docs are ready to commit
 
 ## Material changes
 
-- Added strict `OperandSlot` metadata and deterministic bounded one-to-one matching.
-- Replaced all fixed two-value completion and loose global-ledger readiness checks.
-- Enforced required/allowed ValueRefs before persisting a FinDSL execution.
-- Seeded one typed report slot for explicit single-threshold comparisons.
-- Kept report-period validation while exempting periodless claim thresholds.
-- Added focused and end-to-end regression coverage, including three-operand programs.
+- Added mandatory closed `expected_relation` metadata to applicability obligations.
+- Seeded positive `applies` and explicit negative `does_not_apply` claims.
+- Computed rule claim truth from certificate result × expected relation.
+- Exposed trusted `claim_relation_satisfied` in Finalization and Review.
+- Covered all four applicability-result/submitted-label combinations.
 
 ## Tests passed
 
-- Focused operand/FinDSL/routing/prompt/integration selections: 114 passed.
-- Final focused checkpoint selection: 57 passed.
-- Full repository: 543 passed in 4.85s.
-- `git diff --check`: passed.
+- Focused rule/prompt/integration selection: 72 passed.
+- Full repository: 546 passed in 4.26s.
+- Compileall and `git diff --check`: passed.
 
 ## Tests failed or unavailable
 
@@ -44,10 +41,11 @@ cat docs/PROJECT_CONTRACT.md
 cat docs/STATE.yaml
 cat docs/SESSION_HANDOFF.md
 .venv/bin/python -m pytest -q -s -p no:cacheprovider \
-  --basetemp=.pytest_cache/remediation-2
+  --basetemp=.pytest_cache/remediation-3
 ```
 
 ## Next action
 
-Commit and push remediation 2, then implement explicit rule claim polarity and all
-four applicability-result/label combinations before moving to later P1 fixes.
+Commit and push remediation 3. Then disable partial-evidence `document_not_contains`
+and remove rule-search jurisdiction/date hard filtering so out-of-scope rules remain
+reachable by the deterministic applicability checker.
