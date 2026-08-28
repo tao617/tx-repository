@@ -70,13 +70,51 @@ def test_explicit_numeric_comparison_seeds_numeric_dependency_chain():
 
 
 def test_two_explicit_periods_can_seed_temporal_numeric_comparison():
-    assert obligation_types("Revenue was lower in 2023 than in 2024.") == [
+    proposals = seed_obligations("Revenue was lower in 2023 than in 2024.")
+    assert [proposal.type for proposal in proposals] == [
         ObligationType.DOCUMENT_FACT,
         ObligationType.NUMERIC_OPERAND,
         ObligationType.UNIT_PERIOD,
         ObligationType.NUMERIC_OPERATION,
         ObligationType.FINAL_VERIFICATION,
     ]
+    assert [
+        (slot.metric, slot.period) for slot in proposals[1].metadata.operand_slots
+    ] == [("revenue", "2023"), ("revenue", "2024")]
+
+
+def test_single_report_value_plus_claim_threshold_seeds_one_typed_slot():
+    proposals = seed_obligations("FY2024 operating margin was above 10%.")
+
+    assert [proposal.type for proposal in proposals] == [
+        ObligationType.DOCUMENT_FACT,
+        ObligationType.NUMERIC_OPERAND,
+        ObligationType.UNIT_PERIOD,
+        ObligationType.NUMERIC_OPERATION,
+        ObligationType.FINAL_VERIFICATION,
+    ]
+    assert len(proposals[1].metadata.operand_slots) == 1
+    slot = proposals[1].metadata.operand_slots[0]
+    assert slot.slot_id == "operand-slot-0001"
+    assert slot.metric == "operating margin"
+    assert slot.period == "fy2024"
+
+    assert ObligationType.NUMERIC_OPERAND in obligation_types(
+        "Revenue was above 10 million."
+    )
+
+
+def test_rule_effective_date_does_not_create_an_extra_numeric_operand():
+    proposals = seed_obligations(
+        "Under GAAP on 2024-12-31, revenue was lower in 2023 than in 2024."
+    )
+    numeric = next(
+        proposal
+        for proposal in proposals
+        if proposal.type is ObligationType.NUMERIC_OPERAND
+    )
+
+    assert [slot.period for slot in numeric.metadata.operand_slots] == ["2024", "2023"]
 
 
 def test_chinese_numeric_comparison_is_not_missed():

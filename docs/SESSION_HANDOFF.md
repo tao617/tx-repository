@@ -2,43 +2,52 @@
 
 ## Current state
 
-Phase `findoasis-review-remediation-1` completed: Added bounded trusted numeric/rule certificate outcome projections that remain visible during Finalization and Review, without exposing arbitrary diagnostics or hidden Skills. Added a mock backend whose final label is derived only from the prior Runtime numeric outcome.
+Phase `findoasis-review-remediation-2` completed locally: numeric operand obligations
+now carry bounded typed slots, bind ValueRefs one-to-one, gate FinDSL on the exact
+attached slots, and require the executed program to consume every required report
+operand. A one-report-value plus ClaimValueRef threshold path is covered end to end.
 
-- Git commit at checkpoint start: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
-- Changed files: 4
+- Git commit at checkpoint start: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
+- Branch: `feat/findoasis-obligation-skills`
+- Draft PR: `https://github.com/tao617/tx-repository/pull/2`
+- Worktree: remediation 2 implementation and checkpoint docs are ready to commit
 
-## Diff summary
+## Material changes
 
-```text
-docs/FINOASIS_PROGRESS.md                     |  30 +++++--
- src/findver_agent/findoasis/prompt_builder.py |  61 +++++++++++++
- tests/integration/test_finoasis_e2e.py        | 118 +++++++++++++++++++++++++-
- tests/unit/test_prompt_v3.py                  | 102 +++++++++++++++++++++-
- 4 files changed, 301 insertions(+), 10 deletions(-)
-```
+- Added strict `OperandSlot` metadata and deterministic bounded one-to-one matching.
+- Replaced all fixed two-value completion and loose global-ledger readiness checks.
+- Enforced required/allowed ValueRefs before persisting a FinDSL execution.
+- Seeded one typed report slot for explicit single-threshold comparisons.
+- Kept report-period validation while exempting periodless claim thresholds.
+- Added focused and end-to-end regression coverage, including three-operand programs.
 
 ## Tests passed
 
-- 19 focused prompt and FinOASIS end-to-end tests; clean baseline compileall and 530 tests.
+- Focused operand/FinDSL/routing/prompt/integration selections: 114 passed.
+- Final focused checkpoint selection: 57 passed.
+- Full repository: 543 passed in 4.85s.
+- `git diff --check`: passed.
 
 ## Tests failed or unavailable
 
-- No product test failure. One sandbox capture-file cleanup occurred before collection; the documented no-capture run passed.
+- No product test failure.
+- No real model, Official Test V2, Private Scorer or production rule corpus was used.
 
 ## Recovery protocol
 
 ```bash
-pwd
+cd /home/asus/2/tx-repository
 git status --short
 git log --oneline -10
 cat AGENTS.md
 cat docs/PROJECT_CONTRACT.md
 cat docs/STATE.yaml
 cat docs/SESSION_HANDOFF.md
-find docs/adr -maxdepth 1 -type f -print | sort
-pytest -q
+.venv/bin/python -m pytest -q -s -p no:cacheprovider \
+  --basetemp=.pytest_cache/remediation-2
 ```
 
 ## Next action
 
-Commit and push remediation 1, then implement typed operand requirements/slots and single-threshold numeric seeding.
+Commit and push remediation 2, then implement explicit rule claim polarity and all
+four applicability-result/label combinations before moving to later P1 fixes.

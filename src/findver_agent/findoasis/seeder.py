@@ -16,7 +16,12 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from .contracts import ObligationMetadata, ObligationProposal, ObligationType
+from .contracts import (
+    OperandSlot,
+    ObligationMetadata,
+    ObligationProposal,
+    ObligationType,
+)
 
 
 # A whole calendar date is one period, not three numeric values.  Longer period
@@ -79,6 +84,30 @@ _NUMERIC_RELATION_PATTERNS = (
         r"合计|总计|平均|占比|相比|比较|高于|低于|等于|约为|大约|"
         r"近似|复合年增长率|每股)"
     ),
+)
+
+_THRESHOLD_RELATION_PATTERNS = (
+    re.compile(
+        r"\b(?:above|below|over|under|exceed(?:s|ed)?|at\s+least|at\s+most|"
+        r"no\s+(?:more|less)\s+than|greater\s+than|less\s+than|"
+        r"higher\s+than|lower\s+than)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:高于|低于|超过|不低于|不高于|至少|至多)"),
+    re.compile(r"(?:^|\s)(?:[<>]=?)(?:\s|$)"),
+)
+
+_METRIC_PATTERNS = (
+    ("operating income", re.compile(r"\boperating\s+income\b", re.I)),
+    ("net income", re.compile(r"\bnet\s+income\b", re.I)),
+    ("operating margin", re.compile(r"\boperating\s+margin\b", re.I)),
+    ("gross margin", re.compile(r"\bgross\s+margin\b", re.I)),
+    ("revenue", re.compile(r"\brevenue\b|收入", re.I)),
+    ("expenses", re.compile(r"\bexpenses?\b|费用", re.I)),
+    ("assets", re.compile(r"\bassets?\b|资产", re.I)),
+    ("liabilities", re.compile(r"\bliabilit(?:y|ies)\b|负债", re.I)),
+    ("cash flow", re.compile(r"\bcash\s+flow\b|现金流", re.I)),
+    ("earnings per share", re.compile(r"\b(?:earnings\s+per\s+share|eps)\b", re.I)),
 )
 
 _RULE_SIGNAL_PATTERNS = (
@@ -167,9 +196,53 @@ def _numeric_signal(claim_text: str) -> bool:
         )
     value_text = _FILING_FORM_RE.sub(" ", "".join(without_periods))
     value_count = sum(1 for _ in _VALUE_TOKEN_RE.finditer(value_text))
-    has_two_quantities = value_count >= 2 or len(period_matches) >= 2
-    return has_two_quantities and any(
-        pattern.search(claim_text) for pattern in _NUMERIC_RELATION_PATTERNS
+    relation = any(pattern.search(claim_text) for pattern in _NUMERIC_RELATION_PATTERNS)
+    threshold = value_count >= 1 and any(
+        pattern.search(claim_text) for pattern in _THRESHOLD_RELATION_PATTERNS
+    )
+    return threshold or (
+        relation and (value_count >= 2 or len(period_matches) >= 2)
+    )
+
+
+def _operand_metadata(claim_text: str) -> ObligationMetadata:
+    periods: list[str] = []
+    for match in _PERIOD_TOKEN_RE.finditer(claim_text):
+        period = match.group(0)
+        if re.search(
+            r"[-/]\d{1,2}[-/]\d{1,2}|"
+            r"\b(?:january|february|march|april|may|june|july|august|"
+            r"september|october|november|december)\b|月.*日",
+            period,
+            re.I,
+        ):
+            year = re.search(r"(?:19|20|21)\d{2}", period)
+            period = year.group(0) if year else period
+        if period not in periods:
+            periods.append(period)
+    metrics = [
+        name for name, pattern in _METRIC_PATTERNS if pattern.search(claim_text)
+    ]
+    pairs: list[tuple[str, str]]
+    if metrics and periods:
+        pairs = [(metric, period) for metric in metrics for period in periods]
+    elif metrics:
+        pairs = [(metric, "unknown") for metric in metrics]
+    elif periods:
+        pairs = [("unknown", period) for period in periods]
+    else:
+        pairs = [("unknown", "unknown")]
+    if len(pairs) > 16:
+        pairs = pairs[:16]
+    return ObligationMetadata(
+        operand_slots=[
+            OperandSlot(
+                slot_id=f"operand-slot-{sequence:04d}",
+                metric=metric,
+                period=period,
+            )
+            for sequence, (metric, period) in enumerate(pairs, start=1)
+        ]
     )
 
 
@@ -255,6 +328,7 @@ def seed_obligations(claim_text: str) -> tuple[ObligationProposal, ...]:
             ObligationType.NUMERIC_OPERAND,
             "Bind each report value required by the claim to exact report evidence.",
             (document_sequence,),
+            metadata=_operand_metadata(normalized),
         )
         unit_period_sequence = append(
             ObligationType.UNIT_PERIOD,

@@ -60,6 +60,7 @@ from .contracts import (
     CertificateEnvelope,
     CertificateKind,
     FinalCertificateStatus,
+    Obligation,
     ObligationStatus,
     ObligationType,
     QuestionPhase,
@@ -67,6 +68,7 @@ from .contracts import (
     SkillResult,
     SkillResultStatus,
 )
+from .operand_slots import match_operand_slots
 from .prompt_builder import PromptBuilder
 from .registry import REGISTRY, REGISTRY_SHA256
 from .router import RuleApplicabilityMetadata, RuntimeFacts, resolve_available_skills
@@ -906,6 +908,7 @@ class FinOASISAgent:
                 for snapshot in certificate.normalized_operands
                 if snapshot.kind == "constant_ref"
             ]
+            self._validate_program_operand_refs(state, target_obligation, value_refs)
             state.financial_program_ledger[program_id] = (
                 FinancialProgramLedgerEntry(
                     program_id=program_id,
@@ -1604,7 +1607,14 @@ class FinOASISAgent:
         partial: list[str] = []
 
         if obligation.type is ObligationType.NUMERIC_OPERAND:
-            if len(value_refs) >= 2:
+            matched = match_operand_slots(
+                obligation.metadata.operand_slots,
+                {
+                    reference: state.numeric_value_ledger[reference]
+                    for reference in value_refs
+                },
+            )
+            if matched is not None:
                 satisfied.append(target)
                 unit_obligations = [
                     item
@@ -1619,7 +1629,7 @@ class FinOASISAgent:
                     not in {"unknown", "unspecified", "n/a"}
                     and state.numeric_value_ledger[reference].period.casefold()
                     not in {"unknown", "unspecified", "n/a"}
-                    for reference in value_refs
+                    for reference in matched.values()
                 )
                 for unit in unit_obligations:
                     (satisfied if metadata_ready else partial).append(
@@ -1647,10 +1657,54 @@ class FinOASISAgent:
                 partial_obligation_ids=partial,
                 evidence_refs=[value_id],
                 diagnostics=[
-                    f"bound exact Decimal value {value_id}; operand_count={len(value_refs)}"
+                    f"bound exact Decimal value {value_id}; "
+                    f"matched_slots={len(matched or {})}/"
+                    f"{len(obligation.metadata.operand_slots)}"
                 ],
             )
         )
+
+    @staticmethod
+    def _validate_program_operand_refs(
+        state: FinOASISQuestionState,
+        operation: Obligation,
+        program_value_refs: list[str],
+    ) -> None:
+        by_id = {
+            obligation.obligation_id: obligation for obligation in state.obligations
+        }
+        operand_dependencies = [
+            by_id[dependency_id]
+            for dependency_id in operation.dependency_ids
+            if by_id[dependency_id].type is ObligationType.NUMERIC_OPERAND
+        ]
+        if not operand_dependencies:
+            raise SkillError("numeric operation has no typed operand dependency")
+        allowed: set[str] = set()
+        referenced = set(program_value_refs)
+        for obligation in operand_dependencies:
+            attached = {
+                reference: state.numeric_value_ledger[reference]
+                for reference in obligation.evidence_refs
+                if reference in state.numeric_value_ledger
+            }
+            matched = match_operand_slots(
+                obligation.metadata.operand_slots,
+                {
+                    reference: value
+                    for reference, value in attached.items()
+                    if reference in referenced
+                },
+            )
+            if matched is None:
+                raise SkillError(
+                    "financial program does not consume every required operand slot"
+                )
+            allowed.update(attached)
+        if referenced - allowed:
+            raise SkillError(
+                "financial program references a ValueRef outside its operand dependencies"
+            )
 
     def _apply_model_control(
         self, state: FinOASISQuestionState, action: Action

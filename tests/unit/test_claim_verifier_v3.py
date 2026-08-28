@@ -25,6 +25,7 @@ from findver_agent.findoasis.contracts import (
     CertificateEnvelope,
     CertificateKind,
     ObligationMetadata,
+    OperandSlot,
     ObligationProposal,
     QuestionPhase,
     SkillResult,
@@ -94,6 +95,20 @@ def mixed_state(*, numeric_true=True, rule_applicable=True):
             type="numeric_operand",
             description="Bind both values.",
             dependency_ids=[fact.obligation_id],
+            metadata=ObligationMetadata(
+                operand_slots=[
+                    OperandSlot(
+                        slot_id="revenue-2024",
+                        metric="revenue",
+                        period="2024",
+                    ),
+                    OperandSlot(
+                        slot_id="revenue-2023",
+                        metric="revenue",
+                        period="2023",
+                    ),
+                ]
+            ),
         )
     )
     units = state.open_obligation(

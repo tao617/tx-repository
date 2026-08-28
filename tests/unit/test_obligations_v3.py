@@ -4,7 +4,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from findver_agent.findoasis.contracts import (
     MAX_SKILL_RESULT_BYTES,
     OBLIGATION_DELTA_ADAPTER,
+    OperandSlot,
     Obligation,
+    ObligationMetadata,
     ObligationProposal,
     ObligationStatus,
     ObligationType,
@@ -62,9 +64,18 @@ def test_model_obligation_proposal_has_no_runtime_fields_or_satisfaction_escape(
     proposal = ObligationProposal(
         type="numeric_operand",
         description="Bind both report values used in the comparison.",
+        metadata=ObligationMetadata(
+            operand_slots=[OperandSlot(slot_id="revenue-2024", period="FY2024")]
+        ),
     )
     assert "obligation_id" not in proposal.model_dump()
     assert "status" not in proposal.model_dump()
+
+    with pytest.raises(ValidationError, match="require operand slots"):
+        ObligationProposal(
+            type="numeric_operand",
+            description="Bind an unspecified collection of values.",
+        )
 
     with pytest.raises(ValidationError):
         ObligationProposal.model_validate(

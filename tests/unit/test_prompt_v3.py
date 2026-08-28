@@ -13,6 +13,8 @@ from findver_agent.findoasis.actions import (
     SubmitAnswerArguments,
 )
 from findver_agent.findoasis.contracts import (
+    OperandSlot,
+    ObligationMetadata,
     ObligationProposal,
     ObligationStatus,
     ObligationType,
@@ -74,6 +76,44 @@ def make_state(statement: str = "Revenue increased in 2025.") -> FinOASISQuestio
         )
     )
     return state
+
+
+def test_pending_numeric_obligation_exposes_typed_operand_slots():
+    state = make_state("Revenue was lower in 2023 than in 2024.")
+    state.open_obligation(
+        ObligationProposal(
+            type=ObligationType.NUMERIC_OPERAND,
+            description="Bind each required period-specific revenue value.",
+            dependency_ids=["obl-0001"],
+            metadata=ObligationMetadata(
+                operand_slots=[
+                    OperandSlot(
+                        slot_id="revenue-2023",
+                        metric="revenue",
+                        period="2023",
+                    ),
+                    OperandSlot(
+                        slot_id="revenue-2024",
+                        metric="revenue",
+                        period="2024",
+                    ),
+                ]
+            ),
+        )
+    )
+
+    rendered = "\n".join(
+        message["content"]
+        for message in PromptBuilder().build(
+            state,
+            (SEARCH,),
+            phase_budget="attempt 1/6",
+        )
+    )
+
+    assert '"slot_id":"revenue-2023"' in rendered
+    assert '"metric":"revenue"' in rendered
+    assert '"period":"2024"' in rendered
 
 
 def contract(

@@ -25,6 +25,7 @@ from .contracts import (
     ShortText,
     SkillName,
 )
+from .operand_slots import match_operand_slots
 from .registry import REGISTRY, SkillRegistry
 from .state import FinOASISQuestionState
 
@@ -432,15 +433,6 @@ class SkillAvailabilityResolver:
         refs = set(facts.bound_value_refs or tuple(state.numeric_value_ledger))
         if not refs or refs - set(state.numeric_value_ledger):
             return False
-        for reference in refs:
-            value = state.numeric_value_ledger[reference]
-            if value.ambiguity_flags:
-                return False
-            if value.period.casefold() in _UNKNOWN_METADATA:
-                return False
-            if value.unit.casefold() in _UNKNOWN_METADATA:
-                return False
-
         by_id = {
             obligation.obligation_id: obligation for obligation in state.obligations
         }
@@ -450,11 +442,23 @@ class SkillAvailabilityResolver:
                 for dependency_id in operation.dependency_ids
                 if by_id[dependency_id].type is ObligationType.NUMERIC_OPERAND
             ]
-            if any(
-                not (set(item.evidence_refs) & refs)
-                for item in operand_dependencies
-            ):
-                return False
+            for item in operand_dependencies:
+                attached = set(item.evidence_refs) & refs
+                values = {
+                    reference: state.numeric_value_ledger[reference]
+                    for reference in attached
+                }
+                matched = match_operand_slots(item.metadata.operand_slots, values)
+                if matched is None:
+                    return False
+                for reference in matched.values():
+                    value = state.numeric_value_ledger[reference]
+                    if value.ambiguity_flags:
+                        return False
+                    if value.period.casefold() in _UNKNOWN_METADATA:
+                        return False
+                    if value.unit.casefold() in _UNKNOWN_METADATA:
+                        return False
         return True
 
     @staticmethod

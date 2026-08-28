@@ -94,6 +94,37 @@ class FinalCertificateStatus(str, Enum):
     FAILED = "failed"
 
 
+class OperandSlot(BaseModel):
+    """One required report-value slot for a numeric proof obligation.
+
+    ``"unknown"`` is an explicit wildcard for metadata the conservative seeder
+    cannot infer.  Runtime matching remains one-to-one: one ValueRef cannot fill
+    two required slots, even when both slots contain wildcards.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    slot_id: ReferenceId
+    metric: ShortText = "unknown"
+    entity: ShortText = "unknown"
+    period: ShortText = "unknown"
+    numeric_type: Literal[
+        "unknown",
+        "money",
+        "percentage",
+        "basis_points",
+        "count",
+        "ratio",
+        "scalar",
+        "duration",
+        "date",
+        "boolean",
+    ] = "unknown"
+    currency: ShortText = "unknown"
+    unit: ShortText = "unknown"
+    scale: ShortText = "unknown"
+
+
 class ObligationMetadata(BaseModel):
     """Bounded, typed metadata shared by initial obligation families.
 
@@ -115,6 +146,7 @@ class ObligationMetadata(BaseModel):
     entity_scope: ShortText | None = None
     relation: ShortText | None = None
     source_hint: ShortText | None = None
+    operand_slots: list[OperandSlot] = Field(default_factory=list, max_length=16)
     ambiguity_flags: list[ShortText] = Field(default_factory=list, max_length=8)
 
     @field_validator("ambiguity_flags")
@@ -122,6 +154,14 @@ class ObligationMetadata(BaseModel):
     def ambiguity_flags_are_unique(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
             raise ValueError("ambiguity_flags must be unique")
+        return value
+
+    @field_validator("operand_slots")
+    @classmethod
+    def operand_slot_ids_are_unique(cls, value: list[OperandSlot]) -> list[OperandSlot]:
+        slot_ids = [slot.slot_id for slot in value]
+        if len(slot_ids) != len(set(slot_ids)):
+            raise ValueError("operand slot IDs must be unique")
         return value
 
 
@@ -143,6 +183,15 @@ class ObligationProposal(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("proposal lists must contain unique values")
         return value
+
+    @model_validator(mode="after")
+    def numeric_operands_have_typed_slots(self) -> "ObligationProposal":
+        if (
+            self.type is ObligationType.NUMERIC_OPERAND
+            and not self.metadata.operand_slots
+        ):
+            raise ValueError("numeric operand obligations require operand slots")
+        return self
 
 
 class Obligation(BaseModel):
@@ -186,6 +235,11 @@ class Obligation(BaseModel):
             raise ValueError(
                 "a satisfied obligation requires evidence or a certificate"
             )
+        if (
+            self.type is ObligationType.NUMERIC_OPERAND
+            and not self.metadata.operand_slots
+        ):
+            raise ValueError("numeric operand obligations require operand slots")
         return self
 
 

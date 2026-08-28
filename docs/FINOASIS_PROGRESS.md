@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-- Phase: Draft PR remediation 1 — specialist outcome visibility
+- Phase: Draft PR remediation 2 — typed numeric operand slots
 - Branch: `feat/findoasis-obligation-skills`
 - Baseline remote `main`: `1ff41509fd40834ccca131d5100af580d46dbe9d`
 - Final implementation-record commit: `bfd75227908dd160c62300e650add46f58e17b4a`
-- Current committed HEAD: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
+- Current committed HEAD: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
 - Remote main checked: 2026-08-28, after `git fetch --all --prune` and `git pull --ff-only`
-- Worktree: specialist outcome prompt/test remediation is not yet committed
-- Push status: Phases 0 through 8 and closeout pushed
-- Remote branch SHA: `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c`
+- Worktree: typed numeric operand-slot remediation is not yet committed
+- Push status: Phases 0 through 8, closeout and remediation 1 pushed
+- Remote branch SHA: `09c69449d1a3fe6f84307fd386e8c9da22888f53`
 - Draft PR: `https://github.com/tao617/tx-repository/pull/2`
 
 ## Completed work
@@ -253,6 +253,28 @@
   the next prompt.
 - Focused prompt and end-to-end selection: 19 passed.
 
+### Draft PR remediation 2
+
+- Replaced the fixed two-ValueRef completion rule with bounded typed `OperandSlot`
+  metadata and deterministic one-to-one slot matching. Explicit metric, entity,
+  period, numeric type, currency, unit and scale requirements fail closed; `unknown`
+  remains an explicit wildcard without allowing one ValueRef to fill two slots.
+- Changed dynamic Skill gating to validate only ValueRefs attached to each numeric
+  operand dependency. FinDSL execution now rejects missing required slot refs and
+  global ledger values that are not attached to those dependencies.
+- Added conservative threshold seeding for one report value plus one parsed claim
+  value, while continuing to under-seed ordinary single-value IE statements. Full
+  applicability dates are year-normalized before numeric-period de-duplication.
+- Exposed typed slots in the bounded pending-obligation Prompt projection so a model
+  can bind the requested metric/period rather than guessing cardinality.
+- Allowed claim threshold operands, which deliberately have no report period, to
+  participate in comparisons without weakening period checks for evidence-backed
+  report operands.
+- Added regression coverage for one report value plus one ClaimValueRef, one-to-one
+  slot cardinality, metric/period mismatch, `sum`, `average`, `within_range`, missing
+  required program refs and unattached global ValueRefs.
+- Focused selections: 114 passed and 57 passed. Full repository: 543 passed in 4.85s.
+
 ## Baseline tests
 
 - `.venv/bin/python -m compileall -q src scripts tests`: passed.
@@ -414,6 +436,7 @@
 - `src/findver_agent/financial_rules/applicability.py`
 - `src/findver_agent/findoasis/__init__.py`
 - `src/findver_agent/findoasis/contracts.py`
+- `src/findver_agent/findoasis/operand_slots.py`
 - `src/findver_agent/findoasis/actions.py`
 - `src/findver_agent/findoasis/state.py`
 - `src/findver_agent/findoasis/seeder.py`
@@ -427,6 +450,7 @@
 - `src/findver_agent/report_store.py`
 - `src/findver_agent/orchestrator.py`
 - `tests/unit/test_obligations_v3.py`
+- `tests/unit/test_operand_slots_v3.py`
 - `tests/unit/test_actions_v3.py`
 - `tests/unit/test_state_v3.py`
 - `tests/unit/test_finoasis_config.py`
@@ -468,9 +492,9 @@
 
 ## Exact next step
 
-Commit and push the specialist-outcome remediation, then implement typed numeric operand
-requirements/slots and single-threshold seeding. Do not modify or merge PR #1, and do
-not execute a real model, Official Test, scorer or production rule corpus.
+Commit and push the typed operand-slot remediation, then implement explicit rule-claim
+polarity with all four applicability-result/label combinations. Do not modify or merge
+PR #1, and do not execute a real model, Official Test, scorer or production rule corpus.
 
 ## Safe recovery commands
 
@@ -505,4 +529,5 @@ git diff --check
 | Phase 7 | `e13ff6a9ba35ca3be8553697f6f91620bcfcdb7d` | pushed | `test: add FinOASIS end-to-end verification` |
 | Phase 8 | `bfd75227908dd160c62300e650add46f58e17b4a` | pushed | `docs: finalize FinOASIS implementation record` |
 | Closeout | `1e31013a6c9f965e0e0f1ebb0735b894a3ea691c` | pushed | `docs: record FinOASIS draft PR` |
-| Review remediation 1 | this commit | pending | trusted specialist outcomes remain visible at submission |
+| Review remediation 1 | `09c69449d1a3fe6f84307fd386e8c9da22888f53` | pushed | trusted specialist outcomes remain visible at submission |
+| Review remediation 2 | this checkpoint commit | pending | typed one-to-one numeric operand slots and threshold path |

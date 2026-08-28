@@ -5,6 +5,8 @@ from findver_agent.config import FinOasisConfig
 from findver_agent.financial_rules.corpus import rule_record_sha256
 from findver_agent.financial_rules.models import RuleRecord
 from findver_agent.findoasis.contracts import (
+    OperandSlot,
+    ObligationMetadata,
     ObligationProposal,
     QuestionPhase,
     SkillName,
@@ -98,13 +100,24 @@ def _state(statement="Revenue increased."):
     return state
 
 
-def _open(state, obligation_type, *, dependencies=(), mandatory=True):
+def _open(state, obligation_type, *, dependencies=(), mandatory=True, metadata=None):
+    if obligation_type == "numeric_operand" and metadata is None:
+        metadata = ObligationMetadata(
+            operand_slots=[
+                OperandSlot(
+                    slot_id="operating-margin-2024",
+                    metric="operating margin",
+                    period="FY2024",
+                )
+            ]
+        )
     return state.open_obligation(
         ObligationProposal(
             type=obligation_type,
             description=f"Resolve the {obligation_type} proof requirement.",
             dependency_ids=list(dependencies),
             mandatory=mandatory,
+            metadata=metadata or ObligationMetadata(),
         )
     )
 

@@ -267,3 +267,106 @@ async def test_table_values_bind_before_numeric_program_is_exposed(tmp_path):
     ] = ["tampered certificate"]
     with pytest.raises(ValidationError, match="payload hash"):
         FinOASISQuestionState.model_validate(tampered)
+
+
+@pytest.mark.asyncio
+async def test_one_report_value_and_one_claim_threshold_complete_numeric_proof(
+    tmp_path,
+):
+    report = {
+        "context": [
+            {
+                "id": 0,
+                "type": "text",
+                "context": "The FY2024 operating margin was 12.5%.",
+            }
+        ]
+    }
+    reports = tmp_path / "threshold-reports"
+    reports.mkdir()
+    (reports / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    task = PublicTask(
+        example_id="finoasis-threshold",
+        statement="FY2024 operating margin was above 10%.",
+        report="report.json",
+    )
+    backend = SequenceBackend(
+        [
+            action(
+                "search_report",
+                {"query": "FY2024 operating margin", "top_k": 1},
+                "obl-0001",
+            ),
+            action("read_paragraphs", {"paragraph_ids": [0]}, "obl-0001"),
+            action(
+                "bind_financial_value",
+                {
+                    "evidence_ref": "report-paragraph:0",
+                    "raw_value": "12.5%",
+                    "metric": "Operating Margin",
+                    "entity": "issuer",
+                    "period": "FY2024",
+                    "numeric_type": "percentage",
+                    "currency": "unknown",
+                    "unit": "percentage",
+                    "scale": "one",
+                },
+                "obl-0002",
+            ),
+            action(
+                "execute_financial_program",
+                {
+                    "program": {
+                        "op": "greater_than",
+                        "args": [
+                            {"kind": "value_ref", "ref": "value-0001"},
+                            {
+                                "kind": "claim_value_ref",
+                                "ref": "claim-value-0001",
+                            },
+                        ],
+                    }
+                },
+                "obl-0004",
+            ),
+            action(
+                "submit_answer",
+                {
+                    "label": "entailed",
+                    "evidence_ids": [0],
+                    "explanation": "The bound margin exceeds the parsed threshold.",
+                },
+                "obl-0005",
+            ),
+        ]
+    )
+    run_dir = tmp_path / "threshold-run"
+    config = numeric_config().model_copy(
+        update={"max_steps": 5, "exploration_steps": 4, "finalization_steps": 1}
+    )
+    orchestrator = AgentOrchestrator(
+        backend=backend,
+        generation=GenerationConfig(prompt_budget_tokens=8192),
+        agent_config=config,
+        report_store=ReportStore(reports),
+        run_dir=run_dir,
+    )
+
+    prediction = await orchestrator.run_question(task)
+    state = FinOASISStateStore(run_dir / "state").load_or_create(
+        task,
+        orchestrator._finoasis_agent._resume_identity(task),
+        5,
+        exploration_steps=4,
+        finalization_steps=1,
+    )
+
+    assert prediction.status is PredictionStatus.COMPLETED
+    assert state.obligation("obl-0002").status is ObligationStatus.SATISFIED
+    assert len(state.obligation("obl-0002").metadata.operand_slots) == 1
+    program = state.financial_program_ledger["program-0001"]
+    assert program.operand_value_refs == ["value-0001"]
+    assert program.claim_value_refs == ["claim-value-0001"]
+    assert state.numeric_certificate_ledger[
+        "numeric-certificate-0001"
+    ].relation_satisfied is True

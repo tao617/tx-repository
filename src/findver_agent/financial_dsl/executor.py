@@ -227,12 +227,14 @@ def _require_periods(items: list[_Evaluation], *, allow_cross: bool) -> str:
         item.period
         for item in items
         if item.numeric_type not in {"scalar", "duration", "date", "boolean"}
+        and item.evidence_refs
         and item.period.casefold() not in _UNKNOWN
     ]
     period_bearing = [
         item
         for item in items
         if item.numeric_type not in {"scalar", "duration", "date", "boolean"}
+        and item.evidence_refs
     ]
     if not periods:
         return "unknown"

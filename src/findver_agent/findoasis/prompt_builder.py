@@ -538,6 +538,10 @@ Choose exactly one currently allowed action. Target a listed obligation ID. Retu
                         obligation.description,
                         MAX_OBLIGATION_DESCRIPTION_CHARACTERS,
                     ),
+                    "operand_slots": [
+                        slot.model_dump(mode="json")
+                        for slot in obligation.metadata.operand_slots
+                    ],
                 }
                 for obligation in visible
             ],
